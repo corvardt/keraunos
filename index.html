@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="ico.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#dedee0" media="(prefers-color-scheme: light)" />
+    <meta name="description" content="Keraunos — live global lightning strike detection, streamed from the Blitzortung network." />
+    <title>Keraunos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Resolve the medium before first paint so the tube never flashes on paper.
+      // The cookie is set on `.unmod.fun`, so it is shared with the index and
+      // every other project; localStorage is read only for returning readers.
+      (function () {
+        var c = document.cookie.match(/(?:^|;\s*)unmod-theme=(dark|light)/);
+        var t =
+          (c && c[1]) ||
+          localStorage.getItem('keraunos-theme') ||
+          localStorage.getItem('lightning-theme');
+        if (t !== 'dark' && t !== 'light') {
+          t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        }
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
