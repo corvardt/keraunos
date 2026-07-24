@@ -1,6 +1,6 @@
 # Keraunos
 
-κεραυνός — the thunderbolt.
+κεραυνός: the thunderbolt.
 
 Live lightning strikes from the [Blitzortung](https://www.blitzortung.org/) network,
 streamed over WebSocket and plotted on a d3 world map. Rendered as a phosphor
@@ -19,7 +19,7 @@ npm run lint
 No configuration or API keys are required.
 
 `KeraunosSeeker.cjs` is a standalone Node client that prints the same stream to
-the terminal — `node KeraunosSeeker.cjs`.
+the terminal: `node KeraunosSeeker.cjs`.
 
 ## Using it
 
@@ -28,7 +28,7 @@ the terminal — `node KeraunosSeeker.cjs`.
 | **Point** | The map reads out the place under the pointer, its coordinates, and the strike count for that 1° cell |
 | **Pick** | Click the map, a feed row, or a ranked place to narrow the feed to it; click a storm cell to narrow to the cell rather than the country. Click again or press `esc` to clear |
 | **Move** | Drag to pan, wheel or pinch to zoom to ~200 km; the region names across the top of the tube jump straight there |
-| **Here** | Asks the browser for your location — only when pressed — and frames the map on it, then reads out how far away the nearest strike is. Session only: not stored, not sent anywhere |
+| **Here** | Asks the browser for your location (only when pressed) and frames the map on it, then reads out how far away the nearest strike is. Session only: not stored, not sent anywhere |
 | **Link** | Zoomed in, the address carries the view as `#lon/lat/k`, so a view can be handed to someone |
 | **Hold** | The feed stops advancing while the pointer rests on it, and queues arrivals behind |
 | **Keys** | `k` key panel · `c` configuration · `t` tube/paper · `+` `-` zoom · `0` whole world · `esc` close or clear |
@@ -45,12 +45,12 @@ persistence, and which panels are shown. It is stored in `localStorage`.
 | `src/lib/view.js` | Pan/zoom as a screen transform over the fitted world; clamping, region framing, visible extent |
 | `src/lib/storms.js` | Clusters strikes into cells and tracks them between passes to derive motion |
 | `src/lib/geo.js` | Bounding-box-indexed point-in-polygon lookup shared by the map and the place log, and great-circle distance |
-| `src/lib/sun.js` | Solar position and the terminator — lightning is a daily rhythm before it is anything else |
+| `src/lib/sun.js` | Solar position and the terminator; lightning is a daily rhythm before it is anything else |
 | `src/lib/capitals.js` | Capitals as sparse orientation marks; checked against the country polygons by `npm run check:capitals` |
 | `src/lib/world.json` | Country boundaries; the only geometry the first frame needs |
-| `src/lib/us.json`, `src/lib/water.geo.json` | US states and named seas — fetched after mount, see below |
-| `scripts/shrink-geo.cjs` | Rounds the boundary data to a precision the tube can show — `npm run shrink:geo` |
-| `scripts/build-water.cjs` | Regenerates the above from the raw `src/lib/water.json` dump — `npm run build:water` |
+| `src/lib/us.json`, `src/lib/water.geo.json` | US states and named seas, fetched after mount (see below) |
+| `scripts/shrink-geo.cjs` | Rounds the boundary data to a precision the tube can show (`npm run shrink:geo`) |
+| `scripts/build-water.cjs` | Regenerates the above from the raw `src/lib/water.json` dump (`npm run build:water`) |
 
 ## Notes on the labels
 
@@ -59,14 +59,14 @@ label set competes with the strikes for the same eye, and this is not an atlas:
 the only moment a place name earns its space is when something is happening
 there and you need to know where "there" is. A capital therefore surfaces when
 a burning cell is within 400 km of it and fades on the same four-minute decay
-as the smudge underneath. A quiet map carries no names at all — pointing at it
+as the smudge underneath. A quiet map carries no names at all; pointing at it
 already names whatever is under the cursor, in the corner, on demand.
 
 That radius is a real distance, not a span in degrees. Four degrees of
 longitude is 445 km over Nairobi and 223 km over Oslo, so a degree box would
 let a storm place itself from twice as far away in the tropics as in
-Scandinavia. The lookup still walks a box of 1° cells — it has to, that is how
-the bins are keyed — but the box widens with latitude to contain the circle it
+Scandinavia. The lookup still walks a box of 1° cells (it has to; that is how
+the bins are keyed), but the box widens with latitude to contain the circle it
 stands in for, and each candidate is checked against the true distance.
 
 What survives is then collision-culled in prominence order, so a squall over
@@ -81,7 +81,7 @@ label per frame is not a cost worth paying for something that changes at 2 Hz.
 
 The view is a plain screen transform over a fitted Mercator: `screen = k·p + t`.
 Mercator is linear in scale and translate, so that composition folds back into a
-real projection — every caller, `invert` included, keeps working without knowing
+real projection; every caller, `invert` included, keeps working without knowing
 a view exists.
 
 The land matrix is built for the visible extent at a spacing that follows the
@@ -91,7 +91,7 @@ ocean and wrong once the tube is all land, where a continent fills in as a solid
 field. The gap therefore opens gently with zoom, about 5px to 13px across the
 range. Building it is tens of milliseconds, so it waits for the view to
 settle; in between, the finished bitmap is drawn through the delta transform
-rather than re-plotted. `GRID_MARGIN` trades pre-built land against that cost —
+rather than re-plotted. `GRID_MARGIN` trades pre-built land against that cost;
 it is area-proportional, so raising it is more expensive than it looks.
 
 Strikes are held in degrees rather than pixels and projected per frame, so the
@@ -99,7 +99,7 @@ view can move underneath a strike that is still burning.
 
 ## Notes on cost
 
-The tree re-renders on a handful of independent clocks — strikes flush twice a
+The tree re-renders on a handful of independent clocks: strikes flush twice a
 second, the feed releases a row every 130ms, storms recluster every two seconds.
 Left alone, every one of those re-renders the map. The components are therefore
 memoised and the handlers App passes down are stable, so a feed row arriving
@@ -122,13 +122,13 @@ actually resolve rather than about compression.
 
 Coordinates are rounded to three decimals, which is 111 m against a dot matrix
 that samples at 11 km. `shrink:geo` measures before it writes and fails if
-rounding changed a single lookup out of sixty thousand — the whole argument for
+rounding changed a single lookup out of sixty thousand; the whole argument for
 doing it is that it changes nothing, so it should stop being quiet the moment
 that is untrue. Vertex count, by contrast, is already low and cannot be cut: at
 a 10 km tolerance Helsinki, Tallinn, Algiers and Beirut all end up offshore.
 
 Only `world.json` is needed to draw the first frame, since the land matrix is
-built from it. The US states and the named seas are fetched after mount — they
+built from it. The US states and the named seas are fetched after mount; they
 are more than a third of the bundle and nothing can be named before a strike
 arrives, which cannot happen before the socket opens. Until they land `locate`
 answers at the resolution it has: "USA" rather than "Texas", "open water"
