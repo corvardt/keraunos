@@ -11,6 +11,7 @@ export const DEFAULTS = {
   shake: true,
   // map
   storms: true,
+  trails: true,
   bounds: false,
   graticule: true,
   persistence: "normal",

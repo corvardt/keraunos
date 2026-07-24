@@ -54,6 +54,14 @@ const storm = (
   </svg>
 );
 
+const track = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    <path d="M2 12c3 .5 5-1 7-3" className="stroke-text" fill="none" strokeWidth="1" opacity="0.25" />
+    <path d="M9 9c2-2 3-2.5 5-3" className="stroke-text" fill="none" strokeWidth="1" opacity="0.55" />
+    <path d="M14 6h7" className="stroke-text" fill="none" strokeWidth="1" strokeDasharray="3 3" opacity="0.5" />
+  </svg>
+);
+
 const land = (
   <svg viewBox="0 0 24 16" className="h-4 w-6">
     {[5, 9, 13, 17].map((x) =>
@@ -86,6 +94,12 @@ export default function Legend({ onClose }) {
           A cluster of strikes grouped by proximity, labelled with its strike count and — once
           tracked long enough — its ground speed. The arrow gives the bearing of travel: the
           direction is to scale, the length is not.
+        </Entry>
+        <Entry mark={track} term="Cell track">
+          The path a storm cell has taken, brightening toward the present, with its next half hour
+          dashed on ahead. Both are drawn to scale — a cell covers only a few kilometres in the
+          time shown, so the track appears once you are close enough for that to be more than a
+          pixel, and not before.
         </Entry>
         <Entry mark={land} term="Land">
           A dot matrix, not a coastline, so that lit strikes stay the only solid marks on screen.

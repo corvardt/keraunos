@@ -70,6 +70,7 @@ export default function Settings({ settings, set, reset, onClose }) {
 
       <Group title="Map">
         <Toggle label="Storm cells" value={settings.storms} onChange={(v) => set("storms", v)} />
+        <Toggle label="Cell tracks" value={settings.trails} onChange={(v) => set("trails", v)} />
         <Toggle label="Cell bounds" value={settings.bounds} onChange={(v) => set("bounds", v)} />
         <Toggle label="Graticule" value={settings.graticule} onChange={(v) => set("graticule", v)} />
         <Choice

@@ -209,3 +209,17 @@ export function motion(storm) {
     uy: storm.vlat / Math.hypot(storm.vlon, storm.vlat),
   };
 }
+
+/**
+ * Where the cell reaches in `seconds` if it holds its present course, measured
+ * from the recent centroid rather than the windowed one — the forecast starts
+ * from where the cell is, not from where it has been on average.
+ *
+ * Gated on `motion` deliberately: a course too short-baselined to state as a
+ * speed is too short-baselined to extrapolate, and drawing it anyway would put
+ * a confident line on the map that the readout beside it declines to back.
+ */
+export function forecast(storm, seconds) {
+  if (!motion(storm)) return null;
+  return [storm.tlon + storm.vlon * seconds, storm.tlat + storm.vlat * seconds];
+}

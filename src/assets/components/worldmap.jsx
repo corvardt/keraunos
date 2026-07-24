@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { indexFeatures, findFeature } from "../../lib/geo.js";
 import { readMedium } from "../../lib/theme.js";
-import { motion } from "../../lib/storms.js";
+import { motion, forecast } from "../../lib/storms.js";
 import { PERSISTENCE } from "../../lib/settings.js";
 import {
   LAT_LIMIT,
@@ -39,6 +39,17 @@ const SHAKE_HITS = 9; // hits that earn a knock on the tube
 const HIT_WINDOW = 2500; // window those hits have to land in
 const MAX_PARTICLES = 700; // ceiling on the live loop during a severe storm
 const ARROW_PX = 17; // storm bearing arrow; a fixed length, not a distance
+// The trail holds a centroid every 20s for 25 minutes — 75 points, far more
+// than a track needs to read as a curve, and each one costs a projection every
+// frame. Subsampled to this, a point every minute or so.
+const TRAIL_POINTS = 30;
+const TRAIL_TIERS = 3; // alpha steps along the trail; the taper is what says which end is now
+// A cell doing 45 km/h covers 19 km in the whole 25-minute trail: under one
+// pixel at world zoom, where there are also the most cells on screen. Below
+// this the track is a smudge on top of its own ring, so it isn't drawn at all
+// — which is also what keeps the cost off the zoomed-out view.
+const TRAIL_MIN_PX = 8;
+const FORECAST_S = 1800; // how far ahead the projected track runs (30 min)
 
 const WHEEL_K = 0.0016; // wheel delta to zoom exponent
 const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
@@ -691,6 +702,57 @@ const WorldMap = ({
 
         // Null until the cell has been watched long enough to mean anything.
         const track = motion(storm);
+
+        // Where it has been, and where that course takes it. Both are drawn to
+        // scale, unlike the bearing arrow below — which is why both disappear
+        // when the scale makes them meaningless rather than being faked up to
+        // a visible length.
+        if (track && settings.trails && storm.trail.length > 1) {
+          const points = [];
+          const stride = Math.max(1, Math.ceil(storm.trail.length / TRAIL_POINTS));
+          for (let i = 0; i < storm.trail.length; i += stride) {
+            const xy = projection([storm.trail[i].lon, storm.trail[i].lat]);
+            if (xy && isFinite(xy[0]) && isFinite(xy[1])) points.push(xy);
+          }
+          // The trail records a centroid every 20s; this instant's is newer
+          // than the last recorded one, and it is where the cell actually is.
+          const head = projection([storm.tlon, storm.tlat]);
+          if (head && isFinite(head[0]) && isFinite(head[1])) points.push(head);
+
+          const tail = points[0];
+          const span = points.length > 1 ? Math.hypot(head[0] - tail[0], head[1] - tail[1]) : 0;
+          if (span >= TRAIL_MIN_PX) {
+            // Stroked in tiers rather than per segment: a fade needs one alpha
+            // per stroke, and thirty strokes a cell is thirty times the cost
+            // for a gradient nobody is reading that closely.
+            ctx.lineWidth = 1;
+            const last = points.length - 1;
+            for (let tier = 0; tier < TRAIL_TIERS; tier++) {
+              const from = Math.floor((tier * last) / TRAIL_TIERS);
+              const to = Math.floor(((tier + 1) * last) / TRAIL_TIERS);
+              if (to <= from) continue;
+              ctx.globalAlpha = (0.1 + 0.14 * tier) * (0.6 + weight * 0.4);
+              ctx.beginPath();
+              ctx.moveTo(points[from][0], points[from][1]);
+              for (let i = from + 1; i <= to; i++) ctx.lineTo(points[i][0], points[i][1]);
+              ctx.stroke();
+            }
+
+            // Dashed, because it has not happened. Solid past, broken future.
+            const ahead = forecast(storm, FORECAST_S);
+            const projected = ahead && projection(ahead);
+            if (projected && isFinite(projected[0]) && isFinite(projected[1])) {
+              ctx.setLineDash([3, 4]);
+              ctx.globalAlpha = 0.28 + weight * 0.22;
+              ctx.beginPath();
+              ctx.moveTo(head[0], head[1]);
+              ctx.lineTo(projected[0], projected[1]);
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
+          }
+        }
+
         if (track) {
           // Direction is to scale; length is not. Fifteen minutes of real
           // motion is a fraction of a pixel here, so the arrow is a bearing.
@@ -815,6 +877,7 @@ const WorldMap = ({
     reduceMotion,
     settings.shake,
     settings.storms,
+    settings.trails,
     width,
     height,
   ]);

@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "build:water": "node scripts/build-water.cjs",
+    "check:storms": "node scripts/check-storms.cjs",
     "preview": "vite preview"
   },
   "dependencies": {
