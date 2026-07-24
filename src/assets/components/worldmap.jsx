@@ -42,6 +42,10 @@ const SHAKE_HITS = 9; // hits that earn a knock on the tube
 const HIT_WINDOW = 2500; // window those hits have to land in
 const MAX_PARTICLES = 700; // ceiling on the live loop during a severe storm
 const ARROW_PX = 17; // storm bearing arrow; a fixed length, not a distance
+// Rings below this are not drawn — and therefore not clickable. Both the
+// renderer and the hit test read it, because a cell you cannot see is a cell
+// you cannot have meant to pick.
+const STORM_MIN_PX = 3;
 // The trail holds a centroid every 20s for an hour — 180 points, far more than
 // a track needs to read as a curve, and each one costs a projection every
 // frame. Subsampled to this, a point every couple of minutes.
@@ -362,19 +366,33 @@ const WorldMap = ({
   };
 
   /**
-   * The storm cell under a point, or null. Tested in degrees, matching how the
-   * ring is drawn — its radius is a longitude span, so the test is exact on
-   * the axis the drawing is exact on and forgiving on the other, which is the
-   * right way round for something a finger has to hit.
+   * The storm cell under a point, or null.
+   *
+   * Tested against the ring as drawn, in screen space, rather than against the
+   * radius in degrees: the ring is a circle of pixels, and Mercator stretches
+   * latitude, so a degree-space test drifts from the drawn shape the further
+   * north you go. Cells too small to have been drawn are skipped on the same
+   * threshold the renderer uses — otherwise clicking apparently empty ocean at
+   * world zoom silently filters the feed to a cell with no ring to explain it.
    *
    * Smallest wins: a cell inside a larger one is the more specific answer.
    */
   const pickStorm = (point) => {
-    if (!settings.storms) return null;
+    if (!settings.storms || !projection) return null;
     let best = null;
+    let smallest = Infinity;
     for (const storm of storms) {
-      const away = Math.hypot(point.lon - storm.lon, point.lat - storm.lat);
-      if (away <= storm.radius && (!best || storm.radius < best.radius)) best = storm;
+      const centre = projection([storm.lon, storm.lat]);
+      const edge = projection([storm.lon + storm.radius, storm.lat]);
+      if (!centre || !edge || !isFinite(centre[0]) || !isFinite(centre[1]) || !isFinite(edge[0])) {
+        continue;
+      }
+      const r = Math.abs(edge[0] - centre[0]);
+      if (r < STORM_MIN_PX || r >= smallest) continue;
+      if (Math.hypot(point.x - centre[0], point.y - centre[1]) <= r) {
+        smallest = r;
+        best = storm;
+      }
     }
     if (!best) return null;
     return {
@@ -916,7 +934,7 @@ const WorldMap = ({
         const edge = projection([storm.lon + storm.radius, storm.lat]);
         if (!centre || !edge || !isFinite(centre[0]) || !isFinite(centre[1])) continue;
         const r = Math.abs(edge[0] - centre[0]);
-        if (r < 3) continue;
+        if (r < STORM_MIN_PX) continue;
 
         const weight = Math.min(1, Math.log10(storm.count) / 2.4);
         ctx.globalAlpha = 0.25 + weight * 0.35;
