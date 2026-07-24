@@ -70,6 +70,20 @@ const land = (
   </svg>
 );
 
+const capital = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    <rect x="4" y="7" width="2" height="2" className="fill-text" opacity="0.9" />
+    <rect x="8.5" y="6" width="11" height="4" className="fill-text" opacity="0.18" />
+  </svg>
+);
+
+const daylight = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    <path d="M3 1c4 2 6 5 6 7s-2 5-6 7Z" className="fill-text" opacity="0.16" />
+    <path d="M3 1c4 2 6 5 6 7s-2 5-6 7" className="stroke-text" fill="none" strokeWidth="1" opacity="0.4" />
+  </svg>
+);
+
 export default function Legend({ onClose }) {
   return (
     <Panel title="Key" width={420} onClose={onClose}>
@@ -101,6 +115,18 @@ export default function Legend({ onClose }) {
           time shown, so the track appears once you are close enough for that to be more than a
           pixel, and not before.
         </Entry>
+        <Entry mark={capital} term="Capital">
+          Named only while a cell within 400 km of it is burning, and fading as that burn does. The
+          map is an instrument rather than an atlas, and a place name earns its space at exactly one
+          moment: when something is happening there. A quiet map carries none — point at it instead,
+          and it names whatever is under the cursor.
+        </Entry>
+        <Entry mark={daylight} term="Daylight">
+          The terminator, and the hemisphere it divides — light added on the tube, ink laid down on
+          paper, so the lit side is the pale one in both. It is here because lightning is a daily
+          rhythm before it is anything else: the strike band is afternoon convection, and it walks
+          around the planet a step behind this line.
+        </Entry>
         <Entry mark={land} term="Land">
           A dot matrix, not a coastline, so that lit strikes stay the only solid marks on screen.
           It is rebuilt for whatever is on screen as you zoom, opening out a little as you close
@@ -119,6 +145,11 @@ export default function Legend({ onClose }) {
           Clusters currently being tracked. Not grid squares: a cluster needs at least 12 strikes
           across adjacent ~45 km bins to count.
         </Entry>
+        <Entry term="Nearest strike">
+          Appears only once you have pressed <span className="text-text">here</span>: how far away
+          the closest strike of the last few minutes fell. A dash means nothing has landed within
+          2,000 km, at which point the figure has stopped being about your weather.
+        </Entry>
         <Entry term="Most active">
           The places holding the most strikes across the cells still burning on the map — roughly
           the last few minutes, not the whole session. Counted from cells of 3 strikes or more, so
@@ -134,7 +165,17 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry term="Picking">
           Clicking the map — or a feed row, or a ranked place — narrows the feed to that place.
-          Click it again, or press escape, to let it go.
+          Clicking a storm cell picks the cell instead, and narrows to what fell inside it rather
+          than to the country underneath. Click it again, or press escape, to let it go.
+        </Entry>
+        <Entry term="Latency">
+          The median of the last half-second of arrivals, not the last one. A single measurement of
+          a detection network swings by whole seconds and says nothing you can watch.
+        </Entry>
+        <Entry term="Linking">
+          Zoom in and the address carries the view — longitude, latitude, magnification. Hand it to
+          someone and the tube opens where you left it. The whole world writes nothing, being where
+          it starts.
         </Entry>
         <Entry term="Moving">
           Drag to pan, wheel or pinch to zoom, up to about a 200 km span. The named regions across

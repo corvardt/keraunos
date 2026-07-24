@@ -219,6 +219,16 @@
   user-select: none;
 }
 
+/* A strip that scrolls without saying so — a scrollbar laid over the tube
+   reads as part of the instrument, and it is not. */
+.no-bar {
+  scrollbar-width: none;
+}
+
+.no-bar::-webkit-scrollbar {
+  display: none;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

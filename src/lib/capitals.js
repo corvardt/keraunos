@@ -1,0 +1,177 @@
+// Capitals, as sparse orientation marks.
+//
+// The map is a dot matrix with no coastline, which is legible as a planet and
+// useless as an atlas — at 6× zoom over central Africa there is nothing to say
+// which part of central Africa. A handful of named points fixes that without
+// the map becoming a reference chart: they are drawn dim, small, and culled
+// hard, so they stay underneath the strikes rather than competing with them.
+//
+// Each row is [name, country, lon, lat, tier]. `tier` is prominence, not
+// population: it decides who wins when two labels want the same pixels.
+//
+// `country` is never read at runtime. It is here so the coordinates can be
+// checked against the country polygons the app already ships — a transposed
+// sign puts a capital in the wrong country, and that is a test rather than a
+// proofread. See scripts/check-capitals.cjs.
+
+const CAPITALS = [
+  // ── Europe ──
+  ["London", "England", -0.13, 51.51, 1],
+  ["Paris", "France", 2.35, 48.86, 1],
+  ["Berlin", "Germany", 13.4, 52.52, 1],
+  ["Madrid", "Spain", -3.7, 40.42, 1],
+  ["Rome", "Italy", 12.5, 41.9, 1],
+  ["Moscow", "Russia", 37.62, 55.75, 1],
+  ["Kyiv", "Ukraine", 30.52, 50.45, 1],
+  ["Lisbon", "Portugal", -9.14, 38.72, 2],
+  ["Dublin", "Ireland", -6.26, 53.35, 2],
+  ["Amsterdam", "Netherlands", 4.9, 52.37, 2],
+  ["Brussels", "Belgium", 4.35, 50.85, 2],
+  ["Vienna", "Austria", 16.37, 48.21, 2],
+  ["Bern", "Switzerland", 7.45, 46.95, 2],
+  ["Prague", "Czech Republic", 14.42, 50.08, 2],
+  ["Warsaw", "Poland", 21.01, 52.23, 2],
+  ["Budapest", "Hungary", 19.04, 47.5, 2],
+  ["Bucharest", "Romania", 26.1, 44.43, 2],
+  ["Sofia", "Bulgaria", 23.32, 42.7, 2],
+  ["Athens", "Greece", 23.73, 37.98, 2],
+  ["Belgrade", "Republic of Serbia", 20.46, 44.79, 2],
+  ["Zagreb", "Croatia", 15.98, 45.81, 2],
+  ["Sarajevo", "Bosnia and Herzegovina", 18.41, 43.86, 2],
+  ["Skopje", "Macedonia", 21.43, 41.99, 2],
+  ["Tirana", "Albania", 19.82, 41.33, 2],
+  ["Ljubljana", "Slovenia", 14.51, 46.06, 2],
+  ["Bratislava", "Slovakia", 17.11, 48.15, 2],
+  ["Stockholm", "Sweden", 18.07, 59.33, 2],
+  ["Oslo", "Norway", 10.75, 59.91, 2],
+  ["Copenhagen", "Denmark", 12.57, 55.68, 2],
+  ["Helsinki", "Finland", 24.94, 60.17, 2],
+  ["Reykjavik", "Iceland", -21.94, 64.15, 2],
+  ["Tallinn", "Estonia", 24.75, 59.44, 2],
+  ["Riga", "Latvia", 24.11, 56.95, 2],
+  ["Vilnius", "Lithuania", 25.28, 54.69, 2],
+  ["Minsk", "Belarus", 27.57, 53.9, 2],
+  ["Chisinau", "Moldova", 28.86, 47.01, 2],
+
+  // ── Africa ──
+  ["Cairo", "Egypt", 31.24, 30.04, 1],
+  ["Abuja", "Nigeria", 7.49, 9.06, 1],
+  ["Nairobi", "Kenya", 36.82, -1.29, 1],
+  ["Pretoria", "South Africa", 28.19, -25.75, 1],
+  ["Rabat", "Morocco", -6.84, 34.02, 2],
+  ["Algiers", "Algeria", 3.06, 36.75, 2],
+  ["Tunis", "Tunisia", 10.18, 36.81, 2],
+  ["Tripoli", "Libya", 13.19, 32.89, 2],
+  ["Khartoum", "Sudan", 32.53, 15.5, 2],
+  ["Addis Ababa", "Ethiopia", 38.75, 9.03, 2],
+  ["Asmara", "Eritrea", 38.93, 15.34, 2],
+  ["Mogadishu", "Somalia", 45.34, 2.05, 2],
+  ["Kampala", "Uganda", 32.58, 0.35, 2],
+  ["Kigali", "Rwanda", 30.06, -1.94, 2],
+  ["Dodoma", "United Republic of Tanzania", 35.74, -6.17, 2],
+  ["Kinshasa", "Democratic Republic of the Congo", 15.31, -4.32, 2],
+  ["Luanda", "Angola", 13.23, -8.84, 2],
+  ["Lusaka", "Zambia", 28.28, -15.39, 2],
+  ["Harare", "Zimbabwe", 31.05, -17.83, 2],
+  ["Maputo", "Mozambique", 32.58, -25.97, 2],
+  ["Windhoek", "Namibia", 17.08, -22.56, 2],
+  ["Gaborone", "Botswana", 25.91, -24.65, 2],
+  ["Antananarivo", "Madagascar", 47.52, -18.88, 2],
+  ["Accra", "Ghana", -0.19, 5.6, 2],
+  ["Yamoussoukro", "Ivory Coast", -5.28, 6.82, 2],
+  ["Dakar", "Senegal", -17.44, 14.72, 2],
+  ["Bamako", "Mali", -8.0, 12.65, 2],
+  ["Ouagadougou", "Burkina Faso", -1.52, 12.37, 2],
+  ["Niamey", "Niger", 2.11, 13.51, 2],
+  ["N'Djamena", "Chad", 15.05, 12.11, 2],
+  ["Bangui", "Central African Republic", 18.56, 4.36, 2],
+  ["Yaounde", "Cameroon", 11.5, 3.87, 2],
+  ["Libreville", "Gabon", 9.45, 0.39, 2],
+
+  // ── Asia ──
+  ["Beijing", "China", 116.41, 39.9, 1],
+  ["Tokyo", "Japan", 139.69, 35.69, 1],
+  ["New Delhi", "India", 77.21, 28.61, 1],
+  ["Seoul", "South Korea", 126.98, 37.57, 1],
+  ["Jakarta", "Indonesia", 106.85, -6.21, 1],
+  ["Bangkok", "Thailand", 100.5, 13.76, 1],
+  ["Manila", "Philippines", 120.98, 14.6, 1],
+  ["Islamabad", "Pakistan", 73.05, 33.68, 1],
+  ["Tehran", "Iran", 51.39, 35.69, 1],
+  ["Riyadh", "Saudi Arabia", 46.72, 24.71, 1],
+  ["Ankara", "Turkey", 32.85, 39.93, 1],
+  ["Singapore", "Singapore", 103.82, 1.35, 1],
+  ["Dhaka", "Bangladesh", 90.41, 23.81, 2],
+  ["Hanoi", "Vietnam", 105.83, 21.03, 2],
+  ["Phnom Penh", "Cambodia", 104.92, 11.56, 2],
+  ["Vientiane", "Laos", 102.6, 17.97, 2],
+  ["Naypyidaw", "Myanmar", 96.13, 19.75, 2],
+  ["Kuala Lumpur", "Malaysia", 101.69, 3.14, 2],
+  ["Kathmandu", "Nepal", 85.32, 27.72, 2],
+  ["Colombo", "Sri Lanka", 79.86, 6.93, 2],
+  ["Kabul", "Afghanistan", 69.21, 34.53, 2],
+  ["Tashkent", "Uzbekistan", 69.24, 41.3, 2],
+  ["Astana", "Kazakhstan", 71.43, 51.13, 2],
+  ["Bishkek", "Kyrgyzstan", 74.6, 42.87, 2],
+  ["Dushanbe", "Tajikistan", 68.79, 38.56, 2],
+  ["Ashgabat", "Turkmenistan", 58.38, 37.95, 2],
+  ["Ulaanbaatar", "Mongolia", 106.92, 47.89, 2],
+  ["Baghdad", "Iraq", 44.36, 33.31, 2],
+  ["Damascus", "Syria", 36.29, 33.51, 2],
+  ["Amman", "Jordan", 35.93, 31.95, 2],
+  ["Beirut", "Lebanon", 35.5, 33.89, 2],
+  ["Kuwait City", "Kuwait", 47.98, 29.37, 2],
+  ["Doha", "Qatar", 51.53, 25.29, 2],
+  ["Abu Dhabi", "United Arab Emirates", 54.37, 24.45, 2],
+  ["Muscat", "Oman", 58.41, 23.59, 2],
+  ["Sanaa", "Yemen", 44.21, 15.35, 2],
+  ["Baku", "Azerbaijan", 49.87, 40.41, 2],
+  ["Tbilisi", "Georgia", 44.79, 41.72, 2],
+  ["Yerevan", "Armenia", 44.51, 40.18, 2],
+
+  // ── The Americas ──
+  ["Washington", "USA", -77.04, 38.91, 1],
+  ["Ottawa", "Canada", -75.7, 45.42, 1],
+  ["Mexico City", "Mexico", -99.13, 19.43, 1],
+  ["Brasilia", "Brazil", -47.93, -15.78, 1],
+  ["Buenos Aires", "Argentina", -58.38, -34.6, 1],
+  ["Santiago", "Chile", -70.65, -33.46, 2],
+  ["Lima", "Peru", -77.04, -12.05, 2],
+  ["Bogota", "Colombia", -74.07, 4.71, 2],
+  ["Caracas", "Venezuela", -66.9, 10.48, 2],
+  ["Quito", "Ecuador", -78.47, -0.18, 2],
+  ["La Paz", "Bolivia", -68.15, -16.5, 2],
+  ["Asuncion", "Paraguay", -57.58, -25.26, 2],
+  ["Montevideo", "Uruguay", -56.18, -34.9, 2],
+  ["Georgetown", "Guyana", -58.16, 6.8, 2],
+  ["Paramaribo", "Suriname", -55.17, 5.85, 2],
+  ["Havana", "Cuba", -82.38, 23.11, 2],
+  ["Santo Domingo", "Dominican Republic", -69.93, 18.49, 2],
+  ["Port-au-Prince", "Haiti", -72.34, 18.54, 2],
+  ["Kingston", "Jamaica", -76.79, 17.97, 2],
+  ["Guatemala City", "Guatemala", -90.51, 14.63, 2],
+  ["Tegucigalpa", "Honduras", -87.19, 14.07, 2],
+  ["San Salvador", "El Salvador", -89.19, 13.69, 2],
+  ["Managua", "Nicaragua", -86.25, 12.11, 2],
+  ["San Jose", "Costa Rica", -84.09, 9.93, 2],
+  ["Panama City", "Panama", -79.52, 8.98, 2],
+  ["Belmopan", "Belize", -88.77, 17.25, 2],
+
+  // ── Oceania ──
+  ["Canberra", "Australia", 149.13, -35.28, 1],
+  ["Wellington", "New Zealand", 174.78, -41.29, 1],
+  ["Port Moresby", "Papua New Guinea", 147.18, -9.44, 2],
+  ["Suva", "Fiji", 178.44, -18.14, 2],
+];
+
+// Sorted by prominence, because placement order *is* collision priority: when
+// a storm over the Low Countries lights both, the first one placed is the one
+// that survives, and that should be the better-known city rather than whichever
+// happens to sit earlier in the file.
+export default CAPITALS.map(([name, country, lon, lat, tier]) => ({
+  name,
+  country,
+  lon,
+  lat,
+  tier,
+})).sort((a, b) => a.tier - b.tier);

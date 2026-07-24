@@ -11,7 +11,7 @@ import Settings from "./assets/components/settings.jsx";
 import Legend from "./assets/components/legend.jsx";
 import Clock from "./assets/components/clock.jsx";
 //libs and utils
-import { indexFeatures, findFeature } from "./lib/geo.js";
+import { indexFeatures, findFeature, distanceKm } from "./lib/geo.js";
 import { useTheme } from "./lib/theme.js";
 import { useSettings } from "./lib/settings.js";
 import { detectStorms, trackStorms } from "./lib/storms.js";
@@ -37,10 +37,25 @@ const REGION_MIN = 3; // strikes a cell needs before it is worth geocoding
 // while the socket keeps delivering, and the backlog would otherwise grow for
 // as long as the tab is left alone and then land in one frame on return.
 const MAX_QUEUE = 800;
+// Past this there is no news in a nearest-strike figure, and skipping it early
+// keeps the scan off the ~99% of the planet that isn't near you.
+const WATCH_MAX_KM = 2000;
+const WATCH_MAX_DEG = WATCH_MAX_KM / 111.32;
 
 // The feed reports whatever the network gives it; a malformed delay reads "—"
 // rather than throwing inside a render.
 const seconds = (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed(1) : null);
+
+// The last strike of a batch, taken alone, swings by whole seconds from one
+// flush to the next — it is one measurement of a network, not a reading. The
+// median of the batch holds still enough to be watched.
+function medianDelay(batch) {
+  const values = batch
+    .map((data) => Number(data.delay))
+    .filter(Number.isFinite)
+    .sort((a, b) => a - b);
+  return values.length ? seconds(values[values.length >> 1]) : null;
+}
 
 // What makes two picks the same pick: the named place, at the same 1° cell.
 // A feed row clicked twice is byte-identical here; a ranked place is its
@@ -69,6 +84,9 @@ function App() {
   // While the pointer rests on the feed it stops advancing, so a row can be
   // read to the end. Arrivals keep queueing behind it.
   const [hold, setHold] = useState(false);
+  // The reader's own position, if they asked for it. Session only.
+  const [here, setHere] = useState(null);
+  const [watch, setWatch] = useState(null);
 
   // Picking the same thing twice is how you let go of it. Identity is the
   // place *and* the cell, not the place alone: two storms over Brazil are both
@@ -99,7 +117,10 @@ function App() {
   const nextId = useRef(0);
   const rates = useRef(Array(SAMPLES).fill(0));
   const feedQueue = useRef([]);
-  // Cell key → place name. Cells never move, so this is filled once each.
+  // Cell key → place name. Cells never move, so this is filled once each, and
+  // never evicted — it doesn't need to be. There are only 360×180 one-degree
+  // cells on earth, so this is bounded by the grid itself rather than by the
+  // length of the session.
   const placeCache = useRef(new Map());
   const history = useRef([]);
   const tracked = useRef([]);
@@ -162,7 +183,7 @@ function App() {
         rate: next.reduce((sum, n) => sum + n, 0),
         total: total.current,
         storms: tracked.current.length,
-        delay: batch.length ? seconds(batch[batch.length - 1].delay) : null,
+        delay: batch.length ? medianDelay(batch) : null,
       });
 
       // Burn-in releases: cells untouched for BURN_MS are dropped, and the
@@ -255,9 +276,25 @@ function App() {
       const found = detectStorms(history.current, now, STORM_WINDOW_MS);
       tracked.current = trackStorms(tracked.current, found, now);
       setStorms(tracked.current);
+
+      // Distance to the closest strike still in the window. Only ever computed
+      // for a reader who asked to be located, and computed here rather than on
+      // the flush because it reads the same history the clustering walks.
+      if (!here) return;
+      let nearest = Infinity;
+      for (const strike of history.current) {
+        // A degree box first: the trigonometry is the expensive part, and
+        // almost every strike on earth is nowhere near the reader.
+        if (Math.abs(strike.lat - here.lat) > WATCH_MAX_DEG) continue;
+        const spread = Math.abs(strike.lon - here.lon);
+        if (Math.min(spread, 360 - spread) > WATCH_MAX_DEG / Math.max(0.05, Math.cos((here.lat * Math.PI) / 180))) continue;
+        const km = distanceKm(here.lon, here.lat, strike.lon, strike.lat);
+        if (km < nearest) nearest = km;
+      }
+      setWatch({ nearest: nearest <= WATCH_MAX_KM ? nearest : null });
     }, STORM_EVERY_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [here]);
 
   // A storm can deliver dozens of strikes per flush. Releasing them on a steady
   // beat keeps the feed readable and lets each row animate in on its own.
@@ -342,6 +379,8 @@ function App() {
             locate={locate}
             focus={focus}
             selection={selection}
+            here={here}
+            onHere={setHere}
             onSelect={select}
           />
         </div>
@@ -352,6 +391,7 @@ function App() {
           settings={settings}
           regions={regions}
           selection={selection}
+          watch={watch}
           hold={hold}
           onSelect={select}
           onFocus={setFocus}

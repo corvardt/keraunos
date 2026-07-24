@@ -14,6 +14,8 @@ export const DEFAULTS = {
   trails: true,
   bounds: false,
   graticule: true,
+  daylight: true,
+  capitals: true,
   persistence: "normal",
   // panel
   feed: true,

@@ -1,10 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { indexFeatures, findFeature } from "../../lib/geo.js";
+import { indexFeatures, findFeature, distanceKm } from "../../lib/geo.js";
 import { readMedium } from "../../lib/theme.js";
 import { motion, forecast } from "../../lib/storms.js";
 import { PERSISTENCE } from "../../lib/settings.js";
 import {
   LAT_LIMIT,
+  MIN_K,
   clampView,
   fitProjection,
   viewForBounds,
@@ -12,6 +13,8 @@ import {
   zoomAbout,
   zoomed,
 } from "../../lib/view.js";
+import { terminator } from "../../lib/sun.js";
+import capitals from "../../lib/capitals.js";
 import { Ticks } from "./crt.jsx";
 import GeoData from "../../lib/world.json";
 
@@ -50,6 +53,20 @@ const TRAIL_TIERS = 3; // alpha steps along the trail; the taper is what says wh
 // — which is also what keeps the cost off the zoomed-out view.
 const TRAIL_MIN_PX = 8;
 const FORECAST_S = 1800; // how far ahead the projected track runs (30 min)
+// The terminator moves 15° an hour — a fraction of a pixel a minute at world
+// zoom. Recomputing it per frame would be absurd; it rides the land layer,
+// which this clock rebuilds.
+const SUN_TICK_MS = 60000;
+// How near a burning cell has to be before it names the capital it is near.
+// A real distance rather than a span in degrees: four degrees of longitude is
+// 445 km over Nairobi and 223 km over Oslo, so a degree box would let a storm
+// place itself from twice as far away in the tropics as in Scandinavia for no
+// reason anyone could defend.
+const CAPITAL_NEAR_KM = 400;
+const KM_PER_DEG = 111.32;
+const CAPITAL_PAD = 3; // clear space demanded around a label before it is drawn
+// #lon/lat/k — where the tube is pointed, so a view can be handed to someone.
+const HASH_RE = /^#(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/;
 
 const WHEEL_K = 0.0016; // wheel delta to zoom exponent
 const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
@@ -108,6 +125,11 @@ function makeBolt(scale = 1) {
   return points;
 }
 
+// Cell keys run [-180, 180). Suva sits at 178°E and looks for burning cells a
+// couple of degrees east of it, which are named -179 and -178 — without this
+// the search falls off the end of the world and the label never lights.
+const wrapLon = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
+
 /** 40.31°N rather than 40.31 — a bearing reads faster than a signed number. */
 function coord(value, axis) {
   const hemisphere = axis === "lat" ? (value < 0 ? "S" : "N") : value < 0 ? "W" : "E";
@@ -161,6 +183,8 @@ const WorldMap = ({
   locate,
   focus,
   selection,
+  here,
+  onHere,
   onSelect,
 }) => {
   const containerRef = useRef(null);
@@ -208,6 +232,44 @@ const WorldMap = ({
     setView((prev) => clampView(prev, base, width, height));
   }, [base, width, height]);
 
+  // ── Deep links ───────────────────────────────────────────────────────────
+  // Read once, in render rather than an effect: the hash is written back as
+  // soon as the view settles, so anything reading it later reads its own
+  // output rather than what the reader arrived with.
+  const link = useRef(undefined);
+  if (link.current === undefined) {
+    const match = window.location.hash.match(HASH_RE);
+    link.current = match ? { lon: +match[1], lat: +match[2], k: +match[3] } : null;
+  }
+
+  const linked = useRef(false);
+  useEffect(() => {
+    if (!base || linked.current) return;
+    linked.current = true;
+    if (!link.current) return;
+    const { lon, lat, k } = link.current;
+    const centre = base([lon, lat]);
+    if (!centre || !isFinite(centre[0]) || !isFinite(centre[1])) return;
+    setView(
+      clampView({ k, x: width / 2 - k * centre[0], y: height / 2 - k * centre[1] }, base, width, height)
+    );
+  }, [base, width, height]);
+
+  // Written on settle rather than per frame: replaceState during a drag is
+  // sixty history writes a second, and the browser is entitled to complain.
+  useEffect(() => {
+    if (!linked.current || !layerProjection?.invert || !width || !height) return;
+    const centre = layerProjection.invert([width / 2, height / 2]);
+    const world = settled.k <= MIN_K + 1e-3;
+    const hash =
+      world || !centre || !isFinite(centre[0]) || !isFinite(centre[1])
+        ? ""
+        : `#${centre[0].toFixed(2)}/${centre[1].toFixed(2)}/${settled.k.toFixed(2)}`;
+    if (hash === window.location.hash) return;
+    // The whole world is the default, and a default does not need saying.
+    window.history.replaceState(null, "", hash || window.location.pathname + window.location.search);
+  }, [layerProjection, settled, width, height]);
+
   // Rebuilding the land matrix costs tens of milliseconds, so it waits until
   // the view stops moving. Until then the previous matrix is stretched, which
   // is why it is built with margin.
@@ -227,6 +289,15 @@ const WorldMap = ({
       GRID_RADIUS_KM / Math.pow(settled.k, GRID_FALLOFF)
     );
   }, [layerProjection, settled.k, width, height]);
+
+  // Its own slow clock, like the one the footer keeps: the sun moving is not a
+  // reason to re-render anything but the layer it shades.
+  const [sunAt, setSunAt] = useState(() => Date.now());
+  useEffect(() => {
+    if (!settings.daylight) return;
+    const id = setInterval(() => setSunAt(Date.now()), SUN_TICK_MS);
+    return () => clearInterval(id);
+  }, [settings.daylight]);
 
   // Watched rather than read once at setup: read inside the render effect, a
   // reader turning motion off mid-session would keep the beam until something
@@ -288,6 +359,31 @@ const WorldMap = ({
     // coordinates are real numbers but not places on this map.
     if (Math.abs(point[0]) > 180 || Math.abs(point[1]) > LAT_LIMIT) return null;
     return { x, y, lon: point[0], lat: point[1] };
+  };
+
+  /**
+   * The storm cell under a point, or null. Tested in degrees, matching how the
+   * ring is drawn — its radius is a longitude span, so the test is exact on
+   * the axis the drawing is exact on and forgiving on the other, which is the
+   * right way round for something a finger has to hit.
+   *
+   * Smallest wins: a cell inside a larger one is the more specific answer.
+   */
+  const pickStorm = (point) => {
+    if (!settings.storms) return null;
+    let best = null;
+    for (const storm of storms) {
+      const away = Math.hypot(point.lon - storm.lon, point.lat - storm.lat);
+      if (away <= storm.radius && (!best || storm.radius < best.radius)) best = storm;
+    }
+    if (!best) return null;
+    return {
+      lon: best.lon,
+      lat: best.lat,
+      place: locate(best.lon, best.lat),
+      // Carried so the feed can narrow to the cell rather than to its country.
+      radius: best.radius,
+    };
   };
 
   // ── The view controls ────────────────────────────────────────────────────
@@ -355,8 +451,8 @@ const WorldMap = ({
 
   // Asked for, never volunteered: nothing here touches the geolocation API
   // until the control below is pressed, and the fix is held for the session
-  // only — it is not written to storage and not sent anywhere.
-  const [here, setHere] = useState(null);
+  // only — it is not written to storage and not sent anywhere. It lives in App
+  // because the watch readouts are built from it; the framing stays here.
   const [locating, setLocating] = useState("idle");
 
   const findMe = () => {
@@ -372,7 +468,7 @@ const WorldMap = ({
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         const point = { lon: coords.longitude, lat: coords.latitude };
-        setHere(point);
+        onHere(point);
         setLocating("found");
         focusRegion([
           point.lon - HERE_SPAN,
@@ -488,12 +584,44 @@ const WorldMap = ({
 
   // ── Layers ───────────────────────────────────────────────────────────────
 
-  // Land and graticule: fixed geometry for a given view, so it is painted once
-  // per settle and reused as a bitmap.
+  // Land, daylight and graticule: fixed geometry for a given view and minute,
+  // so it is painted once per settle and reused as a bitmap.
   useEffect(() => {
     if (!layerProjection || !width || !height) return;
     const canvas = document.createElement("canvas");
     const ctx = scaleCanvas(canvas, width, height);
+
+    // Which side of the terminator gets shaded is a property of the medium,
+    // not a colour choice. On a tube the lit hemisphere is lit: light is
+    // added. On paper night is inked: ink is deposited, and an unmarked sheet
+    // is daylight. Shading the same side in both would read as a fault in one.
+    if (settings.daylight) {
+      const { points, nightEdge } = terminator(new Date(sunAt), LAT_LIMIT);
+      const lit = theme === "dark";
+      const edge = lit ? -nightEdge : nightEdge;
+
+      ctx.beginPath();
+      let started = false;
+      for (const point of points) {
+        const xy = layerProjection(point);
+        if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
+        if (started) ctx.lineTo(xy[0], xy[1]);
+        else {
+          ctx.moveTo(xy[0], xy[1]);
+          started = true;
+        }
+      }
+      const close = [layerProjection([180, edge]), layerProjection([-180, edge])];
+      if (started && close.every((xy) => xy && isFinite(xy[0]) && isFinite(xy[1]))) {
+        ctx.lineTo(close[0][0], close[0][1]);
+        ctx.lineTo(close[1][0], close[1][1]);
+        ctx.closePath();
+        ctx.fillStyle = lit ? palette.land : palette.text;
+        ctx.globalAlpha = lit ? 0.13 : 0.07;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
 
     // Scope graticule: 30° meridians and parallels, under the land matrix.
     if (settings.graticule) {
@@ -523,8 +651,9 @@ const WorldMap = ({
       if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
       ctx.fillRect(xy[0] - 0.9, xy[1] - 0.9, 1.8, 1.8);
     }
+
     landLayer.current = canvas;
-  }, [grid, layerProjection, palette, settings.graticule, width, height]);
+  }, [grid, layerProjection, palette, settings.graticule, settings.daylight, sunAt, theme, width, height]);
 
   // Cumulative density: redrawn twice a second, so the backing canvas is
   // allocated once per resize and cleared rather than reallocated.
@@ -576,8 +705,104 @@ const WorldMap = ({
       }
     }
     ctx.globalAlpha = 1;
+
+    // Capitals, lit by the weather rather than drawn as furniture.
+    //
+    // A permanent label set competes with the strikes for the same eye, and
+    // the map is not an atlas — the only moment a place name earns its space
+    // is when something is happening there and you need to know where "there"
+    // is. So a capital surfaces when a cell near it is burning and fades with
+    // that burn, on the same four-minute decay as the smudge underneath it.
+    // A quiet map carries no names at all, which is the point: pointing at it
+    // already names whatever is under the cursor, in the corner, on demand.
+    //
+    // Placed in prominence order and collision-culled, so a squall over the
+    // Low Countries lights Brussels or Amsterdam, not both on top of each
+    // other. Anything overlapping a label already placed is simply dropped.
+    if (settings.capitals && bins.length) {
+      // Cell key → how much life its burn has left. Keyed exactly as App bins,
+      // so lighting a label is a handful of lookups rather than a scan over
+      // every burning cell on the planet for all 138 capitals.
+      const burning = new Map();
+      for (const bin of bins) {
+        if (bin.count >= MIN_BURN) burning.set(`${bin.lon},${bin.lat}`, bin.fade);
+      }
+
+      ctx.font = '10px "IBM Plex Mono", ui-monospace, monospace';
+      ctx.textBaseline = "middle";
+      // Knocked out of the background before being drawn: a label over the
+      // land matrix is text on a field of dots at nearly its own weight, and
+      // no amount of contrast fixes that — the dots have to go first.
+      ctx.strokeStyle = palette.void;
+      ctx.fillStyle = palette.void;
+      ctx.lineJoin = "round";
+      ctx.miterLimit = 2;
+      const placed = [];
+
+      for (const capital of capitals) {
+        const cellLon = Math.floor(capital.lon);
+        const cellLat = Math.floor(capital.lat);
+        // The box is only a prefilter, and it widens toward the poles so that
+        // it always contains the circle it is standing in for.
+        const spanLat = Math.ceil(CAPITAL_NEAR_KM / KM_PER_DEG);
+        const spanLon = Math.ceil(
+          CAPITAL_NEAR_KM / (KM_PER_DEG * Math.max(0.08, Math.cos((capital.lat * Math.PI) / 180)))
+        );
+
+        let life = 0;
+        for (let dx = -spanLon; dx <= spanLon; dx++) {
+          for (let dy = -spanLat; dy <= spanLat; dy++) {
+            const fade = burning.get(`${wrapLon(cellLon + dx)},${cellLat + dy}`);
+            // Nothing there, or nothing that could brighten this label — in
+            // either case the distance is not worth computing.
+            if (!(fade > life)) continue;
+            // Cell centre stands for the cell. The bins are a degree across,
+            // so the threshold is inherently fuzzy at that scale; measuring to
+            // the corner would be false precision on a fuzzy quantity.
+            const km = distanceKm(capital.lon, capital.lat, cellLon + dx + 0.5, cellLat + dy + 0.5);
+            if (km <= CAPITAL_NEAR_KM) life = fade;
+          }
+        }
+        if (life <= 0) continue;
+
+        const xy = layerProjection([capital.lon, capital.lat]);
+        if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
+        const [x, y] = xy;
+        // Off the tube: skip before measuring, which is the costly part.
+        if (x < -60 || y < -20 || x > width + 60 || y > height + 20) continue;
+
+        const text = ctx.measureText(capital.name).width;
+        const box = [x - 2 - CAPITAL_PAD, y - 6 - CAPITAL_PAD, x + 7 + text + CAPITAL_PAD, y + 6 + CAPITAL_PAD];
+        const clash = placed.some(
+          (other) => box[0] < other[2] && box[2] > other[0] && box[1] < other[3] && box[3] > other[1]
+        );
+        if (clash) continue;
+        placed.push(box);
+
+        // Full while the cell is working, letting go only as the burn does.
+        const alpha = Math.min(1, life * 1.8);
+
+        // Halo first, then the mark and the name over it. The halo clears a
+        // space rather than tinting one, so it tracks the label's own fade.
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = 3;
+        ctx.strokeText(capital.name, x + 6, y);
+        ctx.beginPath();
+        ctx.arc(x, y, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = palette.text;
+        ctx.globalAlpha = alpha * 0.95;
+        ctx.fillRect(x - 1.25, y - 1.25, 2.5, 2.5);
+        ctx.globalAlpha = alpha * 0.88;
+        ctx.fillText(capital.name, x + 6, y);
+        ctx.fillStyle = palette.void;
+      }
+      ctx.globalAlpha = 1;
+    }
+
     historyLayer.current = canvas;
-  }, [bins, layerProjection, palette, settings.bounds, width, height]);
+  }, [bins, layerProjection, palette, settings.bounds, settings.capitals, width, height]);
 
   // Deliberately not keyed on the view: the loop reads that through a ref, so
   // panning never tears the canvas down and rebuilds it.
@@ -902,7 +1127,12 @@ const WorldMap = ({
         // screen never sends the pointermove that would have filled it in.
         const point = readPointer(event);
         if (!point || !locate) return;
-        onSelect({ lon: point.lon, lat: point.lat, place: locate(point.lon, point.lat) });
+        // A storm ring under the pointer is the more specific pick: it is a
+        // thing on the map rather than the country it happens to be over.
+        const hit = pickStorm(point);
+        onSelect(
+          hit ?? { lon: point.lon, lat: point.lat, place: locate(point.lon, point.lat) }
+        );
       }}
     >
       <div ref={screenRef} className="absolute inset-0">
@@ -917,8 +1147,13 @@ const WorldMap = ({
 
       {/* Where to look. The presets are the keyboard route to the view, since
           a drag is not something a keyboard can express. */}
+      {/* Scrolls sideways on a narrow screen rather than being hidden: pinching
+          to Europe is not a route to Europe, and this was the only one. The
+          pointer handlers are stopped here, so dragging the strip cannot also
+          drag the map underneath it. */}
       <div
-        className="absolute left-3 top-3 hidden items-center gap-2 sm:flex"
+        className="no-bar absolute inset-x-3 top-3 flex items-center gap-2 overflow-x-auto sm:inset-x-auto sm:left-3"
+        style={{ touchAction: "pan-x" }}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
@@ -927,25 +1162,25 @@ const WorldMap = ({
             key={region.label}
             type="button"
             onClick={() => focusRegion(region.bounds)}
-            className="text-2xs uppercase tracking-label text-dim transition-colors hover:text-text"
+            className="shrink-0 text-2xs uppercase tracking-label text-dim transition-colors hover:text-text"
           >
             {region.label}
           </button>
         ))}
-        <span className="h-2.5 w-px bg-line" aria-hidden="true" />
+        <span className="h-2.5 w-px shrink-0 bg-line" aria-hidden="true" />
         <button
           type="button"
           onClick={findMe}
           disabled={locating === "asking"}
           title="Ask this browser for your location and frame the map on it"
-          className={`text-2xs uppercase tracking-label transition-colors ${
+          className={`shrink-0 text-2xs uppercase tracking-label transition-colors ${
             here ? "text-text glow" : "text-dim hover:text-text"
           }`}
         >
           {hereLabel}
         </button>
         {zoomedIn && (
-          <span className="text-2xs uppercase tracking-label text-text glow">
+          <span className="shrink-0 text-2xs uppercase tracking-label text-text glow">
             &#215;{view.k.toFixed(1)}
           </span>
         )}

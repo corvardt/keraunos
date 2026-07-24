@@ -8,6 +8,9 @@
     "build": "vite build",
     "lint": "eslint .",
     "build:water": "node scripts/build-water.cjs",
+    "check": "npm run check:capitals && npm run check:sun && npm run check:storms",
+    "check:capitals": "node scripts/check-capitals.cjs",
+    "check:sun": "node scripts/check-sun.cjs",
     "check:storms": "node scripts/check-storms.cjs",
     "preview": "vite preview"
   },

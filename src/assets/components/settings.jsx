@@ -73,6 +73,8 @@ export default function Settings({ settings, set, reset, onClose }) {
         <Toggle label="Cell tracks" value={settings.trails} onChange={(v) => set("trails", v)} />
         <Toggle label="Cell bounds" value={settings.bounds} onChange={(v) => set("bounds", v)} />
         <Toggle label="Graticule" value={settings.graticule} onChange={(v) => set("graticule", v)} />
+        <Toggle label="Daylight" value={settings.daylight} onChange={(v) => set("daylight", v)} />
+        <Toggle label="Capitals" value={settings.capitals} onChange={(v) => set("capitals", v)} />
         <Choice
           label="Persistence"
           value={settings.persistence}

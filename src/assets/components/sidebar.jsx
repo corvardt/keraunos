@@ -2,6 +2,10 @@ import { memo } from "react";
 
 const TRACE_W = 300;
 const TRACE_H = 34;
+// Samples are half-second counts; the rate beside them is per minute. The peak
+// is scaled into the same unit so the two figures can be read against each
+// other — it is the busiest half-second, stated as the minute it implies.
+const SAMPLES_PER_MIN = 120;
 
 /** Caps label trailed by a rule to the panel edge — a terminal section break. */
 function Label({ children, trailing }) {
@@ -94,13 +98,22 @@ function Sidebar({
   settings,
   regions,
   selection,
+  watch,
   hold,
   onSelect,
   onFocus,
   onHold,
 }) {
   const fmt = (n) => n.toLocaleString("en-US");
-  const rows = selection ? feed.filter((strike) => strike.place === selection.place) : feed;
+  // A picked storm cell carries a radius, and narrows the feed to what fell
+  // inside it. Everything else is a named place, and narrows by the name.
+  const rows = selection
+    ? feed.filter((strike) =>
+        selection.radius
+          ? Math.hypot(strike.lon - selection.lon, strike.lat - selection.lat) <= selection.radius
+          : strike.place === selection.place
+      )
+    : feed;
   const busiest = Math.max(1, ...regions.map((region) => region.count));
 
   return (
@@ -114,6 +127,13 @@ function Sidebar({
         {settings.trace && (
           <div className="mt-1">
             <RateTrace samples={samples} />
+            {/* The shape alone doesn't answer "is that a lot?" — it is drawn
+                to its own maximum, so the tape looks the same in a lull as in
+                a squall. The scale is what makes the two different. */}
+            <div className="flex items-baseline justify-between text-2xs uppercase tracking-label text-dim">
+              <span>60s</span>
+              <span>peak {fmt(Math.max(...samples) * SAMPLES_PER_MIN)}</span>
+            </div>
           </div>
         )}
       </section>
@@ -123,6 +143,18 @@ function Sidebar({
         <Readout label="Latency" value={stats.delay ?? "—"} unit={stats.delay ? "s" : ""} />
         <Readout label="Storm cells" value={fmt(stats.storms)} />
       </section>
+
+      {/* Only ever present once the reader has asked to be located. Nothing
+          about it is stored, and it disappears with the session. */}
+      {watch && (
+        <section className="border-b border-line px-4 py-1">
+          <Readout
+            label="Nearest strike"
+            value={watch.nearest === null ? "—" : fmt(Math.round(watch.nearest))}
+            unit={watch.nearest === null ? "" : "km"}
+          />
+        </section>
+      )}
 
       {settings.regions && (
         <section className="border-b border-line px-4 pb-4 pt-4">
@@ -175,7 +207,9 @@ function Sidebar({
             onClick={() => onSelect(selection)}
             className="mt-2 flex items-center gap-2 text-2xs uppercase tracking-label text-text transition-colors hover:text-dim"
           >
-            <span className="truncate">[ {selection.place} ]</span>
+            <span className="truncate">
+              [ {selection.radius ? `cell · ${selection.place}` : selection.place} ]
+            </span>
             <span className="shrink-0 text-dim">clear &#215;</span>
           </button>
         )}

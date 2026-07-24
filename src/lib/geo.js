@@ -1,5 +1,18 @@
 import booleanPointInPolygon from "@turf/boolean-point-in-polygon";
 
+const EARTH_KM = 6371;
+const RAD = Math.PI / 180;
+
+/** Great-circle distance in kilometres. */
+export function distanceKm(lon1, lat1, lon2, lat2) {
+  const dLat = (lat2 - lat1) * RAD;
+  const dLon = (lon2 - lon1) * RAD;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * RAD) * Math.cos(lat2 * RAD) * Math.sin(dLon / 2) ** 2;
+  return 2 * EARTH_KM * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
 // Walk a GeoJSON coordinate tree of any depth, growing [minLon, minLat, maxLon, maxLat].
 function extend(box, coords) {
   if (typeof coords[0] === "number") {
