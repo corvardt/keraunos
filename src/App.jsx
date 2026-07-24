@@ -32,10 +32,21 @@ const STORM_EVERY_MS = 2000; // clustering cadence; storms don't move fast
 const MAX_HISTORY = 25000; // ceiling on retained strikes (~8 min at peak rate)
 const REGION_COUNT = 5; // places listed in the activity ranking
 const REGION_MIN = 3; // strikes a cell needs before it is worth geocoding
+// Ceiling on strikes waiting to be drawn. The map drains this every animation
+// frame, so it is normally a handful — but a hidden tab gets no frames at all
+// while the socket keeps delivering, and the backlog would otherwise grow for
+// as long as the tab is left alone and then land in one frame on return.
+const MAX_QUEUE = 800;
 
 // The feed reports whatever the network gives it; a malformed delay reads "—"
 // rather than throwing inside a render.
 const seconds = (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed(1) : null);
+
+// What makes two picks the same pick: the named place, at the same 1° cell.
+// A feed row clicked twice is byte-identical here; a ranked place is its
+// busiest cell, which is stable for as long as it stays the busiest.
+const pickKey = (pick) =>
+  pick && `${pick.place}@${Math.floor(pick.lon / BIN_SIZE)},${Math.floor(pick.lat / BIN_SIZE)}`;
 
 function App() {
   const [feed, setFeed] = useState([]);
@@ -59,9 +70,12 @@ function App() {
   // read to the end. Arrivals keep queueing behind it.
   const [hold, setHold] = useState(false);
 
-  // Picking the same place twice is how you let go of it.
+  // Picking the same thing twice is how you let go of it. Identity is the
+  // place *and* the cell, not the place alone: two storms over Brazil are both
+  // "Brazil", and comparing on the name alone means the second one clears the
+  // filter instead of moving to it.
   const select = useCallback((next) => {
-    setSelection((prev) => (prev && next && prev.place === next.place ? null : next));
+    setSelection((prev) => (prev && next && pickKey(prev) === pickKey(next) ? null : next));
   }, []);
 
   // Stable, so the memoised children below actually skip: an arrow written
@@ -114,6 +128,11 @@ function App() {
   const handleDataReceived = useCallback((data) => {
     pending.current.push(data);
     strikeQueue.current.push(data);
+    // Trimmed with slack rather than on every message: a copy per strike would
+    // cost more than the backlog it is guarding against.
+    if (strikeQueue.current.length > MAX_QUEUE * 2) {
+      strikeQueue.current = strikeQueue.current.slice(-MAX_QUEUE);
+    }
     // Push only. Trimming here would re-copy the whole array on every
     // message; the clustering pass below enforces both bounds instead.
     history.current.push({ lon: data.lon, lat: data.lat, t: Date.now() });

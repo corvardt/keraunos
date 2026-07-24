@@ -217,6 +217,19 @@ const WorldMap = ({
     );
   }, [layerProjection, settled.k, width, height]);
 
+  // Watched rather than read once at setup: read inside the render effect, a
+  // reader turning motion off mid-session would keep the beam until something
+  // unrelated — a resize, a theme change — happened to rebuild the loop.
+  const [reduceMotion, setReduceMotion] = useState(
+    () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const onChange = (event) => setReduceMotion(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+
   // Where the pointer is, in pixels and in degrees. Held in state rather than a
   // ref because the reticle and readout are DOM, not canvas: the render loop
   // above never sees it.
@@ -560,7 +573,6 @@ const WorldMap = ({
   useEffect(() => {
     if (!width || !height) return;
     const ctx = scaleCanvas(canvasRef.current, width, height);
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const shake = settings.shake;
     let frame = null;
 
@@ -800,6 +812,7 @@ const WorldMap = ({
     palette,
     composite,
     persistenceMs,
+    reduceMotion,
     settings.shake,
     settings.storms,
     width,

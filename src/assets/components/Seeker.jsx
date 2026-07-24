@@ -2,7 +2,8 @@ import { memo, useEffect } from "react";
 
 const HOSTS = ["ws1", "ws7", "ws8"];
 const DOMAIN = ".blitzortung.org:443/";
-const RECONNECT_MS = 3000;
+const RECONNECT_MS = 3000; // first retry; doubles from here
+const MAX_RECONNECT_MS = 30000; // ceiling on the backoff
 const GIVE_UP_AFTER = 4; // failed attempts before the feed is reported down
 
 // blitzortung streams LZW-compressed JSON frames
@@ -39,13 +40,17 @@ function Seeker({ onDataReceived, onStatus }) {
     let failures = 0;
 
     let host = null;
+    // Random start so readers spread across the nodes, then round-robin: a
+    // fresh random pick each time can land on the node that just refused us
+    // several attempts running, which is the one case the retry exists for.
+    let node = Math.floor(Math.random() * HOSTS.length);
     const report = (phase, message) => {
       if (!cancelled) onStatus?.({ phase, message, host });
     };
 
     const connect = () => {
       if (cancelled) return;
-      host = HOSTS[Math.floor(Math.random() * HOSTS.length)];
+      host = HOSTS[node++ % HOSTS.length];
       report("connecting", `connecting to ${host}...`);
 
       const ws = new WebSocket(`wss://${host}${DOMAIN}`);
@@ -84,7 +89,11 @@ function Seeker({ onDataReceived, onStatus }) {
         } else {
           report("connecting", "relinking...");
         }
-        retry = setTimeout(connect, RECONNECT_MS);
+        // Backoff, jittered. Blitzortung is run by volunteers, and an outage
+        // is exactly when every open tab in the world would otherwise retry in
+        // lockstep every three seconds for as long as it lasts.
+        const wait = Math.min(MAX_RECONNECT_MS, RECONNECT_MS * 2 ** (failures - 1));
+        retry = setTimeout(connect, wait * (0.8 + Math.random() * 0.4));
       };
     };
 
