@@ -70,7 +70,7 @@ function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey }) {
             className={item}
             target="_blank"
             rel="noreferrer"
-            href="https://github.com/corvardt/lightning"
+            href="https://github.com/corvardt/keraunos"
           >
             src
           </a>
