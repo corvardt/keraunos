@@ -16,8 +16,6 @@ import { useTheme } from "./lib/theme.js";
 import { useSettings } from "./lib/settings.js";
 import { detectStorms, trackStorms } from "./lib/storms.js";
 import geoData from "./lib/world.json";
-import usData from "./lib/us.json";
-import waterData from "./lib/water.geo.json";
 
 const FEED_LENGTH = 60; // strikes listed in the recent feed
 const BIN_SIZE = 1; // degrees per map cell
@@ -104,10 +102,38 @@ function App() {
   const closeKey = useCallback(() => setKeyOpen(false), []);
 
   const worldIndex = useMemo(() => indexFeatures(geoData.features), []);
-  const usIndex = useMemo(() => indexFeatures(usData.features), []);
-  // Pre-sorted smallest-first, so the first hit is the most specific name: the
-  // Adriatic before the Mediterranean, the Mediterranean before the Atlantic.
-  const waterIndex = useMemo(() => indexFeatures(waterData.features), []);
+
+  // The country outlines are needed for the first frame — the land matrix is
+  // built from them — but the two detail sets are not. Nothing can be named
+  // before a strike has arrived, and no strike arrives before the socket
+  // opens, so they are fetched alongside the boot sequence rather than ahead
+  // of it. Together they are more than a third of the bundle, and holding
+  // first paint behind them buys nothing.
+  //
+  // Until they land, `locate` answers at the resolution it has: "USA" rather
+  // than "Texas", "open water" rather than "Coral Sea".
+  const [detail, setDetail] = useState({ us: null, water: null });
+
+  useEffect(() => {
+    let live = true;
+    Promise.all([import("./lib/us.json"), import("./lib/water.geo.json")])
+      .then(([us, water]) => {
+        if (!live) return;
+        setDetail({
+          us: indexFeatures(us.default.features),
+          // Pre-sorted smallest-first, so the first hit is the most specific
+          // name: the Adriatic before the Mediterranean, the Mediterranean
+          // before the Atlantic.
+          water: indexFeatures(water.default.features),
+        });
+      })
+      .catch(() => {
+        // A failed fetch is not a broken map. The coarse answers stand.
+      });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   // Strikes buffer here and drain on a timer. Writing state per message would
   // re-render the whole tree several times a second.
@@ -122,6 +148,14 @@ function App() {
   // cells on earth, so this is bounded by the grid itself rather than by the
   // length of the session.
   const placeCache = useRef(new Map());
+  // Anything named before the detail sets arrived was named coarsely, and the
+  // cache is what makes that permanent: a cell answered as "open water" in the
+  // first second would stay "open water" for the session, and the activity
+  // ranking is built from these names. Emptying it costs one re-geocode of the
+  // burning cells on the next flush, half a second later.
+  useEffect(() => {
+    if (detail.us || detail.water) placeCache.current.clear();
+  }, [detail]);
   const history = useRef([]);
   const tracked = useRef([]);
   // The map drains this itself on every animation frame, so strikes light up
@@ -132,18 +166,19 @@ function App() {
     (lon, lat) => {
       const country = findFeature(worldIndex, lon, lat);
       if (country) {
-        if (country.properties.name === "USA") {
-          const state = findFeature(usIndex, lon, lat);
+        if (country.properties.name === "USA" && detail.us) {
+          const state = findFeature(detail.us, lon, lat);
           if (state) return state.properties.name;
         }
         return country.properties.name;
       }
       // Most strikes fall at sea, and "open water" is the same answer for the
       // Coral Sea as for the mid-Atlantic. Name the body where we can.
-      const water = findFeature(waterIndex, lon, lat);
+      if (!detail.water) return "open water";
+      const water = findFeature(detail.water, lon, lat);
       return water ? water.properties.name : "open water";
     },
-    [worldIndex, usIndex, waterIndex]
+    [worldIndex, detail]
   );
 
   const handleDataReceived = useCallback((data) => {

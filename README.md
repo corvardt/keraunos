@@ -47,8 +47,9 @@ persistence, and which panels are shown. It is stored in `localStorage`.
 | `src/lib/geo.js` | Bounding-box-indexed point-in-polygon lookup shared by the map and the place log, and great-circle distance |
 | `src/lib/sun.js` | Solar position and the terminator — lightning is a daily rhythm before it is anything else |
 | `src/lib/capitals.js` | Capitals as sparse orientation marks; checked against the country polygons by `npm run check:capitals` |
-| `src/lib/world.json`, `src/lib/us.json` | Country and US-state boundaries |
-| `src/lib/water.geo.json` | Named seas and oceans, so water reads as "Coral Sea" rather than "open water" |
+| `src/lib/world.json` | Country boundaries; the only geometry the first frame needs |
+| `src/lib/us.json`, `src/lib/water.geo.json` | US states and named seas — fetched after mount, see below |
+| `scripts/shrink-geo.cjs` | Rounds the boundary data to a precision the tube can show — `npm run shrink:geo` |
 | `scripts/build-water.cjs` | Regenerates the above from the raw `src/lib/water.json` dump — `npm run build:water` |
 
 ## Notes on the labels
@@ -112,4 +113,26 @@ largest component in the app.
 The canvas loop is deliberately not keyed on the view. It reads position through
 a ref, so panning never tears the loop down and reallocates the backing store
 mid-drag.
+
+## Notes on weight
+
+Boundary data is most of what is shipped, so it is the only thing worth
+measuring. Two things keep it down, and both are about what the display can
+actually resolve rather than about compression.
+
+Coordinates are rounded to three decimals, which is 111 m against a dot matrix
+that samples at 11 km. `shrink:geo` measures before it writes and fails if
+rounding changed a single lookup out of sixty thousand — the whole argument for
+doing it is that it changes nothing, so it should stop being quiet the moment
+that is untrue. Vertex count, by contrast, is already low and cannot be cut: at
+a 10 km tolerance Helsinki, Tallinn, Algiers and Beirut all end up offshore.
+
+Only `world.json` is needed to draw the first frame, since the land matrix is
+built from it. The US states and the named seas are fetched after mount — they
+are more than a third of the bundle and nothing can be named before a strike
+arrives, which cannot happen before the socket opens. Until they land `locate`
+answers at the resolution it has: "USA" rather than "Texas", "open water"
+rather than "Coral Sea". The place cache is emptied when they arrive, or a cell
+named coarsely in the first second would keep that name for the session and
+carry it into the activity ranking.
 
