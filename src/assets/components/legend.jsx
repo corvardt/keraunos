@@ -110,10 +110,12 @@ export default function Legend({ onClose }) {
           direction is to scale, the length is not.
         </Entry>
         <Entry mark={track} term="Cell track">
-          The path a storm cell has taken, brightening toward the present, with its next half hour
-          dashed on ahead. Both are drawn to scale — a cell covers only a few kilometres in the
-          time shown, so the track appears once you are close enough for that to be more than a
-          pixel, and not before.
+          Up to an hour of where a storm cell has been, brightening toward the present, with its
+          next hour dashed on ahead. Both are drawn to scale — an ordinary cell covers only tens of
+          kilometres in that time, so the track appears once you are close enough for that to be
+          more than a pixel, and not before. The speed beside it is fitted to the recent end of the
+          track alone: cells turn, and an hour of a turning one averages out to a heading it no
+          longer has.
         </Entry>
         <Entry mark={capital} term="Capital">
           Named only while a cell within 400 km of it is burning, and fading as that burn does. The

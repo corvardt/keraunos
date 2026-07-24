@@ -26,7 +26,13 @@ const KM_PER_DEG = 111.32;
 // cell covers 3.75 km in five minutes while being ~100 km across — three per
 // cent of its own width, which no centroid is accurate enough to resolve. Over
 // ten minutes it moves far enough to measure, so that is the wait.
-const TRAIL_MS = 1500000; // centroid history retained per cell (25 min)
+// Retention and fitting are two different jobs and want two different windows.
+// The drawn track wants to be long: a 50 km/h cell covers 21 km in 25 minutes,
+// which is a smudge on its own ring at any zoom you would actually use. The
+// velocity fit wants to be short: `slope` is a straight line, and storms curve,
+// so regressing an hour of a turning cell reports a heading it no longer has.
+const TRAIL_MS = 3600000; // centroid history retained per cell, for drawing (60 min)
+const FIT_MS = 1500000; // recent window the velocity is regressed over (25 min)
 const TRAIL_STEP_MS = 20000; // how often a centroid is recorded
 const MIN_BASELINE_S = 600; // observation span before speed is reported
 const MIN_TRAIL_POINTS = 15; // samples the regression needs to be meaningful
@@ -174,14 +180,16 @@ export function trackStorms(previous, current, now) {
       trail.push({ lon: storm.tlon, lat: storm.tlat, t: now });
     }
 
+    // The whole trail is kept, but only its recent end is fitted.
+    const fit = trail.filter((p) => now - p.t <= FIT_MS);
     let vlon = 0;
     let vlat = 0;
     let baseline = 0;
-    if (trail.length >= MIN_TRAIL_POINTS) {
-      baseline = (trail[trail.length - 1].t - trail[0].t) / 1000;
+    if (fit.length >= MIN_TRAIL_POINTS) {
+      baseline = (fit[fit.length - 1].t - fit[0].t) / 1000;
       if (baseline >= MIN_BASELINE_S) {
-        vlon = slope(trail, "lon");
-        vlat = slope(trail, "lat");
+        vlon = slope(fit, "lon");
+        vlat = slope(fit, "lat");
       }
     }
 
