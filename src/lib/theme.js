@@ -4,24 +4,15 @@ import { useCallback, useEffect, useState } from "react";
 // can never drift apart. These are the token names, in both places.
 export const TOKENS = ["void", "panel", "line", "land", "dim", "text", "strike"];
 
-// The medium is shared with the rest of unmod.fun, so the choice lives in a
+// The medium is shared with the rest of corvardt.com, so the choice lives in a
 // cookie scoped to the domain rather than in localStorage, which is per-origin
 // and would not survive the walk between the index and a project.
-const COOKIE_KEY = "unmod-theme";
+const COOKIE_KEY = "corvardt-theme";
 
-const STORAGE_KEY = "keraunos-theme";
-// Written before the rename, and before the medium became domain-wide. Both
-// are read as fallbacks so a returning reader keeps their medium; the next
-// choice they make writes the cookie.
-const LEGACY_KEY = "lightning-theme";
-
-const cookie = () => document.cookie.match(/(?:^|;\s*)unmod-theme=(dark|light)/)?.[1] ?? null;
-
-const stored = () =>
-  cookie() ?? localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_KEY);
+const stored = () => document.cookie.match(/(?:^|;\s*)corvardt-theme=(dark|light)/)?.[1] ?? null;
 
 function write(theme) {
-  const domain = location.hostname.endsWith("unmod.fun") ? "; domain=.unmod.fun" : "";
+  const domain = location.hostname.endsWith("corvardt.com") ? "; domain=.corvardt.com" : "";
   document.cookie = `${COOKIE_KEY}=${theme}; path=/; max-age=31536000; samesite=lax${domain}`;
 }
 

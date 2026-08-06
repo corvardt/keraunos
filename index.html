@@ -16,17 +16,11 @@
     />
     <script>
       // Resolve the medium before first paint so the tube never flashes on paper.
-      // The cookie is set on `.unmod.fun`, so it is shared with the index and
-      // every other project; localStorage is read only for returning readers.
+      // The cookie is set on `.corvardt.com`, so it is shared with the index and
+      // every other project.
       (function () {
-        var c = document.cookie.match(/(?:^|;\s*)unmod-theme=(dark|light)/);
-        var t =
-          (c && c[1]) ||
-          localStorage.getItem('keraunos-theme') ||
-          localStorage.getItem('lightning-theme');
-        if (t !== 'dark' && t !== 'light') {
-          t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-        }
+        var m = document.cookie.match(/(?:^|;\s*)corvardt-theme=(dark|light)/);
+        var t = m ? m[1] : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
         document.documentElement.dataset.theme = t;
       })();
     </script>
