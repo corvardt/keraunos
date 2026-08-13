@@ -15,7 +15,10 @@
     --c-void: #0a0a0b;
     --c-panel: #0f0f11;
     --c-line: #26262b;
-    --c-land: #4c4c55;
+    /* Land is a dot matrix, not a fill: 1.8px marks carrying the whole of the
+       map's geography. It is held near 3.4:1 against the void in both media,
+       and matched between them, so neither reads as background texture. */
+    --c-land: #666670;
     --c-dim: #7b7b81;
     --c-text: #c8c8cc;
     --c-strike: #ffffff;
@@ -43,7 +46,7 @@
     --c-void: #dedee0;
     --c-panel: #e7e7e9;
     --c-line: #c2c2c6;
-    --c-land: #9a9aa2;
+    --c-land: #76767f;
     --c-dim: #626268;
     --c-text: #2a2a2e;
     --c-strike: #000000;

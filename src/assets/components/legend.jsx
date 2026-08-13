@@ -70,6 +70,42 @@ const land = (
   </svg>
 );
 
+const frontier = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    {[3, 7, 11, 15, 19].map((x) => (
+      <rect key={x} x={x} y={11} width="1.8" height="1.8" className="fill-land" />
+    ))}
+    {[2, 5, 8, 11, 14, 17, 20].map((x, i) => (
+      <rect key={x} x={x} y={2 + Math.abs(3 - i) * 0.9} width="1.8" height="1.8" className="fill-dim" />
+    ))}
+  </svg>
+);
+
+const bounds = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    <circle cx="12" cy="8" r="3.4" className="fill-text" opacity="0.2" />
+    {[[6, 3, 1, 1], [18, 3, -1, 1], [6, 13, 1, -1], [18, 13, -1, -1]].map(([x, y, sx, sy]) => (
+      <path
+        key={`${x}-${y}`}
+        d={`M${x + sx * 3} ${y}H${x}V${y + sy * 3}`}
+        className="stroke-text"
+        fill="none"
+        strokeWidth="1"
+        opacity="0.5"
+      />
+    ))}
+  </svg>
+);
+
+const station = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    {[[3, 3], [2, 9], [6, 14], [21, 5], [22, 11]].map(([x, y]) => (
+      <line key={`${x}-${y}`} x1={x} y1={y} x2="13" y2="8" className="stroke-dim" strokeWidth="0.5" opacity="0.6" />
+    ))}
+    <circle cx="13" cy="8" r="1.4" className="fill-strike" />
+  </svg>
+);
+
 const capital = (
   <svg viewBox="0 0 24 16" className="h-4 w-6">
     <rect x="4" y="7" width="2" height="2" className="fill-text" opacity="0.9" />
@@ -90,7 +126,10 @@ export default function Legend({ onClose }) {
       <Group title="On the map">
         <Entry mark={dot} term="Strike">
           A detected strike, at full brightness on arrival and fading over the persistence set in
-          configuration. Position is where the network located the discharge.
+          configuration. Position is where the network located the discharge — and the mark is drawn
+          a little softer where it located it from one side only, which the Fix gap below explains.
+          The ping and the bolt are never softened: how well a strike was placed says nothing about
+          whether it happened.
         </Entry>
         <Entry mark={ring} term="Ping">
           The arrival marker — a ring thrown outward as a strike lands, so an arrival anywhere on
@@ -99,6 +138,11 @@ export default function Legend({ onClose }) {
         <Entry mark={bolt} term="Bolt">
           Drawn when one 1° cell takes 3 or more strikes within 2.5 seconds. Heavier and twice the
           size at 9 or more, which is also what shakes the screen.
+        </Entry>
+        <Entry mark={bounds} term="Cell bounds">
+          Off by default. Corner ticks around a one-degree cell that is firing right now, clearing a
+          few seconds after it goes quiet. Ticks rather than a closed box, so the extent is marked
+          without a rectangle being ruled over the weather inside it.
         </Entry>
         <Entry mark={smudge} term="Density">
           Where strikes have accumulated. A cell needs 3 strikes before it marks at all, and the
@@ -116,6 +160,14 @@ export default function Legend({ onClose }) {
           more than a pixel, and not before. The speed beside it is fitted to the recent end of the
           track alone: cells turn, and an hour of a turning one averages out to a heading it no
           longer has.
+          <br />
+          <br />
+          How much of this a cell carries is Cell detail in configuration.{" "}
+          <span className="text-text">Ring</span> is the cell and its strike count and nothing else;{" "}
+          <span className="text-text">track</span> adds where it has been and which way it is
+          heading; <span className="text-text">full</span> adds the forecast and the speed. Turned
+          down, a cue is not drawn rather than drawn faintly — a cue you have dimmed is still a cue
+          competing for the same eye.
         </Entry>
         <Entry mark={capital} term="Capital">
           Named only while a cell within 400 km of it is burning, and fading as that burn does. The
@@ -128,6 +180,26 @@ export default function Legend({ onClose }) {
           paper, so the lit side is the pale one in both. It is here because lightning is a daily
           rhythm before it is anything else: the strike band is afternoon convection, and it walks
           around the planet a step behind this line.
+        </Entry>
+        <Entry mark={frontier} term="Frontier">
+          Borders between countries, dotted a step brighter than the land they cross. Only the
+          borders: coastlines are left to the matrix, which is the whole reason the map has none.
+          They appear as the view becomes a region rather than a planet, and go again at the far end
+          of the zoom, where the boundary data is coarser than what you are looking at and a border
+          would be drawn straighter than it runs.
+        </Entry>
+        <Entry mark={station} term="Detector threads">
+          Off by default. As each strike lands it throws a thread back to every detector that helped
+          place it, for under a second, and then the map is bare again. Nobody publishes where the
+          detectors are, so their positions are assembled from the strikes themselves: every strike
+          names the stations that heard it. Nothing is drawn between times, because a detector that
+          is not hearing anything has nothing to say and the threads are the whole of the point.
+          <br />
+          <br />
+          This is the Fix gap below, drawn rather than counted. A strike caught in a full sheaf was
+          pinned from every side; one wearing a fan was heard from a single direction, and placed the
+          more loosely for it. Watch a storm for a minute and you can see which way the network is
+          listening from.
         </Entry>
         <Entry mark={land} term="Land">
           A dot matrix, not a coastline, so that lit strikes stay the only solid marks on screen.
@@ -142,6 +214,18 @@ export default function Legend({ onClose }) {
         <Entry term="Latency">
           How long the network took to locate the most recent strike — a property of the detection
           system, not of the weather.
+        </Entry>
+        <Entry term="Stations">
+          How many detectors were used to solve the last few strikes, as a median. Not how many
+          heard them: the network reports both, and the ones that merely received the signal did not
+          decide where it came from.
+        </Entry>
+        <Entry term="Fix gap">
+          The widest direction the last few strikes were <span className="text-text">not</span> heard
+          from — the largest angular gap between the stations that fixed them, in degrees. A strike
+          ringed by detectors is pinned from every side and reads low; one heard only from the east
+          reads above 180°, and is placed far less precisely however many stations heard it. This is
+          the network describing its own geometry, and most of what it sees, it sees from one side.
         </Entry>
         <Entry term="Storm cells">
           Clusters currently being tracked. Not grid squares: a cluster needs at least 12 strikes

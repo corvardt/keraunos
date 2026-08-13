@@ -15,6 +15,11 @@ import {
 } from "../../lib/view.js";
 import { terminator } from "../../lib/sun.js";
 import capitals from "../../lib/capitals.js";
+import frontiers from "../../lib/frontiers.js";
+import { fixQuality } from "../../lib/fix.js";
+import { stations } from "../../lib/stations.js";
+import { tick } from "../../lib/click.js";
+import Transport from "./transport.jsx";
 import { Ticks } from "./crt.jsx";
 import GeoData from "../../lib/world.json";
 
@@ -73,6 +78,33 @@ const CAPITAL_PAD = 3; // clear space demanded around a label before it is drawn
 const HASH_RE = /^#(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/;
 
 const WHEEL_K = 0.0016; // wheel delta to zoom exponent
+// Frontiers are an orientation aid, not geography, and they are held to the
+// band where they are one. Below, the map is a planet and a political overlay
+// is noise on it. Above, the boundary data gives out: it runs 62 km between
+// vertices at the median, a third of the tube at maximum zoom, and a river
+// border drawn as straight chords is worse than no border at all.
+const FRONTIER_FADE = [1.8, 3.2, 12, 18]; // k: appearing, full, holding, gone
+const FRONTIER_STEP_PX = 5; // dot spacing along a border
+
+function frontierFade(k) {
+  const [appear, full, hold, gone] = FRONTIER_FADE;
+  if (k <= appear || k >= gone) return 0;
+  if (k < full) return (k - appear) / (full - appear);
+  if (k <= hold) return 1;
+  return (gone - k) / (gone - hold);
+}
+
+// The weakest fix still draws at this much of full strength. High on purpose:
+// the difference should be felt across a storm rather than read off a single
+// mark, and a strike is never so poorly located as to be worth hiding.
+const FIX_FLOOR = 0.72;
+
+// The lines a strike throws back to the detectors that fixed it. Brief, because
+// they answer a question asked at the moment of arrival — which stations placed
+// this, and from what side — and an answer left on screen becomes clutter.
+const LINK_MS = 900;
+const LINK_ALPHA = 0.16;
+
 const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
 const DRAG_SLOP = 4; // pixels of movement that turn a click into a drag
 const HERE_SPAN = 20; // degrees framed around a located reader — regional, not a street
@@ -100,7 +132,29 @@ let landIndex = null;
 // for the visible extent only, at a spacing that follows the zoom — so the
 // matrix stays the same density on screen however far in you go, and the cost
 // stays bounded however far in that is.
-function buildGrid([west, south, east, north], stepKm) {
+// A handful of built matrices, kept by the view that produced them. Zooming out
+// clamps to the same bounds every time, so the world view is asked for over and
+// over across a session and is the one worth never building twice. Held by
+// reference and never mutated; a few thousand pairs each.
+const gridCache = new Map();
+const GRID_CACHE_MAX = 4;
+
+function buildGrid(bounds, stepKm) {
+  // Rounded, because a settle lands on floating-point bounds that differ in the
+  // last place from the identical view a minute ago, and a key that precise
+  // would never hit.
+  const key = `${bounds.map((n) => n.toFixed(3)).join(",")}@${stepKm.toFixed(3)}`;
+  const hit = gridCache.get(key);
+  if (hit) return hit;
+
+  const land = buildMatrix(bounds, stepKm);
+  // Oldest out first: Map iterates in insertion order.
+  if (gridCache.size >= GRID_CACHE_MAX) gridCache.delete(gridCache.keys().next().value);
+  gridCache.set(key, land);
+  return land;
+}
+
+function buildMatrix([west, south, east, north], stepKm) {
   landIndex = landIndex || indexFeatures(GeoData.features);
   const degToRad = Math.PI / 180;
   const kmToDeg = (stepKm / (2 * Math.PI * EARTH_RADIUS_KM)) * 360;
@@ -184,6 +238,13 @@ const WorldMap = ({
   theme,
   settings,
   summary,
+  lost,
+  paletteKey,
+  onConfig,
+  replay,
+  history,
+  span,
+  onSeek,
   locate,
   focus,
   selection,
@@ -201,8 +262,12 @@ const WorldMap = ({
   const recentHits = useRef(new Map());
   const { width, height } = useElementSize(containerRef);
 
-  // Re-resolved on theme change: the stylesheet owns the values.
-  const { palette, composite } = useMemo(() => readMedium(theme), [theme]);
+  // Re-resolved on theme change: the stylesheet owns the values. `paletteKey`
+  // is in the dependencies because a customised palette changes those values
+  // without changing anything React can see — the tokens moved in the DOM, and
+  // this is the only signal that they did.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const { palette, composite } = useMemo(() => readMedium(theme), [theme, paletteKey]);
   const persistenceMs = PERSISTENCE[settings.persistence] ?? PERSISTENCE.normal;
 
   const base = useMemo(
@@ -223,11 +288,11 @@ const WorldMap = ({
   // every frame of a drag, and restarting the loop each time would reallocate
   // the canvas backing store sixty times a second.
   const projectionRef = useRef(projection);
-  const settledRef = useRef(settled);
   const stormsRef = useRef(storms);
+  const replayRef = useRef(replay);
   projectionRef.current = projection;
-  settledRef.current = settled;
   stormsRef.current = storms;
+  replayRef.current = replay;
 
   // A resize refits the world under the view, so the view has to be re-checked
   // against the new bounds or it can end up parked off the edge.
@@ -273,6 +338,19 @@ const WorldMap = ({
     // The whole world is the default, and a default does not need saying.
     window.history.replaceState(null, "", hash || window.location.pathname + window.location.search);
   }, [layerProjection, settled, width, height]);
+
+  // Chaining the frontiers is a one-off ~28ms, and left alone it is paid inside
+  // the first settle that draws them — which is to say while the map is being
+  // moved, the one moment a frame can be felt going missing. Paid up front
+  // instead, while the boot sequence is still running and nothing is animating.
+  useEffect(() => {
+    if (window.requestIdleCallback) {
+      const id = window.requestIdleCallback(() => frontiers());
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = setTimeout(frontiers, 400);
+    return () => clearTimeout(id);
+  }, []);
 
   // Rebuilding the land matrix costs tens of milliseconds, so it waits until
   // the view stops moving. Until then the previous matrix is stretched, which
@@ -635,7 +713,10 @@ const WorldMap = ({
         ctx.lineTo(close[1][0], close[1][1]);
         ctx.closePath();
         ctx.fillStyle = lit ? palette.land : palette.text;
-        ctx.globalAlpha = lit ? 0.13 : 0.07;
+        // The wash is a property of the terminator, not of the land token, so
+        // the tube's alpha absorbs that token's lift and leaves daylight where
+        // it already sat.
+        ctx.globalAlpha = lit ? 0.1 : 0.07;
         ctx.fill();
         ctx.globalAlpha = 1;
       }
@@ -663,26 +744,105 @@ const WorldMap = ({
       ctx.stroke();
     }
 
+    // A 1.8px mark at a fractional coordinate is antialiased across three
+    // device pixels, and a dot spread that thin loses most of the contrast the
+    // token was given. Snapped to the device grid instead, every dot lands at
+    // full weight — worth more here than any further lift of the colour.
+    const dpr = window.devicePixelRatio || 1;
+    const dot = Math.max(2, Math.round(1.8 * dpr));
+    const deviceW = width * dpr;
+    const deviceH = height * dpr;
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    const mark = (x, y) => {
+      if (x < -dot || y < -dot || x > deviceW + dot || y > deviceH + dot) return;
+      ctx.fillRect(Math.round(x - dot / 2), Math.round(y - dot / 2), dot, dot);
+    };
+
     ctx.fillStyle = palette.land;
     for (const point of grid) {
       const xy = layerProjection(point);
       if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
-      ctx.fillRect(xy[0] - 0.9, xy[1] - 0.9, 1.8, 1.8);
+      mark(xy[0] * dpr, xy[1] * dpr);
     }
 
-    landLayer.current = canvas;
-  }, [grid, layerProjection, palette, settings.graticule, settings.daylight, sunAt, theme, width, height]);
+    // Frontiers: the same matrix, run tighter and a step brighter, so a border
+    // reads as a denser row of the dots already there rather than as a line
+    // laid over them. Land is the field; this is a mark on it.
+    const fade = settings.frontiers ? frontierFade(settled.k) : 0;
+    if (fade > 0) {
+      ctx.fillStyle = palette.dim;
+      ctx.globalAlpha = fade;
+      const step = FRONTIER_STEP_PX * dpr;
+      for (const path of frontiers()) {
+        // Distance walked since the last dot, carried from one segment into the
+        // next: spacing that restarts at every vertex drops a dot on every
+        // vertex, and a border is mostly vertices.
+        let carry = 0;
+        let previous = null;
+        for (const point of path) {
+          const xy = layerProjection(point);
+          const next = xy && isFinite(xy[0]) && isFinite(xy[1]) ? [xy[0] * dpr, xy[1] * dpr] : null;
+          if (!next) {
+            previous = null;
+            continue;
+          }
+          if (previous) {
+            const dx = next[0] - previous[0];
+            const dy = next[1] - previous[1];
+            const span = Math.hypot(dx, dy);
+            // A segment that leaps the whole tube is the projection wrapping at
+            // the date line, not a border.
+            if (span > deviceW) {
+              previous = next;
+              carry = 0;
+              continue;
+            }
+            let walked = step - carry;
+            if (walked > span) carry += span;
+            else {
+              for (; walked <= span; walked += step) {
+                mark(previous[0] + (dx * walked) / span, previous[1] + (dy * walked) / span);
+              }
+              carry = span - (walked - step);
+            }
+          }
+          previous = next;
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+
+    // Stamped with the view it was drawn for, and published only now that it is
+    // finished: until this line the previous bitmap is still the one on screen,
+    // and it still knows where it belongs.
+    landLayer.current = { canvas, view: settled };
+  }, [
+    grid,
+    layerProjection,
+    palette,
+    settings.graticule,
+    settings.daylight,
+    settings.frontiers,
+    settled,
+    sunAt,
+    theme,
+    width,
+    height,
+  ]);
 
   // Cumulative density: redrawn twice a second, so the backing canvas is
   // allocated once per resize and cleared rather than reallocated.
   useEffect(() => {
     if (!layerProjection || !width || !height) return;
-    let canvas = historyLayer.current;
+    let canvas = historyLayer.current?.canvas;
     if (!canvas || canvas.dataset.w !== `${width}x${height}`) {
       canvas = document.createElement("canvas");
       canvas.dataset.w = `${width}x${height}`;
       scaleCanvas(canvas, width, height);
-      historyLayer.current = canvas;
     }
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, width, height);
@@ -717,9 +877,27 @@ const WorldMap = ({
 
       // Bounds mark a cell that is firing right now, so they clear a few
       // seconds after it goes quiet instead of littering the map.
-      if (settings.bounds && bin.hot && w >= 3 && h >= 3) {
-        ctx.globalAlpha = 0.14 + heat * 0.3;
-        ctx.strokeRect(Math.round(sw[0]) + 0.5, Math.round(ne[1]) + 0.5, Math.round(w), Math.round(h));
+      //
+      // Corner ticks rather than a closed box — the same bezel the panels wear.
+      // A rectangle ruled around a soft smudge reads as interface laid over the
+      // weather, and four marks fix the same extent while leaving the cell
+      // itself uncovered.
+      if (settings.bounds && bin.hot && w >= 6 && h >= 6) {
+        ctx.globalAlpha = 0.18 + heat * 0.34;
+        const x0 = Math.round(sw[0]) + 0.5;
+        const y0 = Math.round(ne[1]) + 0.5;
+        const x1 = x0 + Math.round(w);
+        const y1 = y0 + Math.round(h);
+        const arm = Math.max(2, Math.min(5, Math.round(Math.min(w, h) * 0.26)));
+        ctx.beginPath();
+        for (const [cx, sx] of [[x0, 1], [x1, -1]]) {
+          for (const [cy, sy] of [[y0, 1], [y1, -1]]) {
+            ctx.moveTo(cx + sx * arm, cy);
+            ctx.lineTo(cx, cy);
+            ctx.lineTo(cx, cy + sy * arm);
+          }
+        }
+        ctx.stroke();
       }
     }
     ctx.globalAlpha = 1;
@@ -758,6 +936,15 @@ const WorldMap = ({
       const placed = [];
 
       for (const capital of capitals) {
+        // Off the tube: dropped here, before the burn scan below rather than
+        // after it. Projecting a point is a few multiplications; scanning for a
+        // burn near it is a hundred-odd cell lookups, and there is no sense
+        // asking whether a label is lit before asking whether it is on screen.
+        const xy = layerProjection([capital.lon, capital.lat]);
+        if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
+        const [x, y] = xy;
+        if (x < -60 || y < -20 || x > width + 60 || y > height + 20) continue;
+
         const cellLon = Math.floor(capital.lon);
         const cellLat = Math.floor(capital.lat);
         // The box is only a prefilter, and it widens toward the poles so that
@@ -782,12 +969,6 @@ const WorldMap = ({
           }
         }
         if (life <= 0) continue;
-
-        const xy = layerProjection([capital.lon, capital.lat]);
-        if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
-        const [x, y] = xy;
-        // Off the tube: skip before measuring, which is the costly part.
-        if (x < -60 || y < -20 || x > width + 60 || y > height + 20) continue;
 
         const text = ctx.measureText(capital.name).width;
         const box = [x - 2 - CAPITAL_PAD, y - 6 - CAPITAL_PAD, x + 7 + text + CAPITAL_PAD, y + 6 + CAPITAL_PAD];
@@ -819,8 +1000,17 @@ const WorldMap = ({
       ctx.globalAlpha = 1;
     }
 
-    historyLayer.current = canvas;
-  }, [bins, layerProjection, palette, settings.bounds, settings.capitals, width, height]);
+    historyLayer.current = { canvas, view: settled };
+  }, [
+    bins,
+    layerProjection,
+    palette,
+    settled,
+    settings.bounds,
+    settings.capitals,
+    width,
+    height,
+  ]);
 
   // Deliberately not keyed on the view: the loop reads that through a ref, so
   // panning never tears the canvas down and rebuilds it.
@@ -856,6 +1046,13 @@ const WorldMap = ({
       const queue = strikeQueue.current;
       if (!queue.length) return;
       const now = performance.now();
+      // Live arrivals keep being taken in while the map is rewound — the queue
+      // has to be drained either way, and returning to live should find the
+      // present already there rather than empty. What is suppressed is the
+      // announcing: a strike that is not on screen must not knock the chassis
+      // or click the counter, or the instrument reacts to something the reader
+      // is not being shown.
+      const quiet = replayRef.current !== null;
 
       for (const strike of queue) {
         // Repeat hits on one cell are a hard strike: they earn a bolt and a
@@ -867,6 +1064,9 @@ const WorldMap = ({
 
         const hard = hits >= SHAKE_HITS;
         const bolt = hits >= BOLT_HITS;
+        // Heard as it is drawn, and weighted the same way the knock is: a
+        // worked cell lands heavier than a scattered strike.
+        if (settings.clicks && !quiet) tick(hard ? 1 : bolt ? 0.5 : 0);
         // Kept in degrees, not pixels: the view can move underneath a strike
         // while it is still burning, and it has to stay where it landed.
         particles.current.push({
@@ -875,8 +1075,19 @@ const WorldMap = ({
           t: now,
           hard,
           bolt: bolt ? makeBolt(hard ? 1.6 : 1) : null,
+          // A dot drawn at full weight is a claim about where something was,
+          // and a one-sided fix has less of a claim to make. Weighted gently —
+          // the floor is high — because this is a caveat on the reading, not a
+          // verdict on it, and a strike the network is less sure of is still a
+          // strike. Nothing reported draws at full weight: no figure is not the
+          // same as a bad one.
+          weight: FIX_FLOOR + (1 - FIX_FLOOR) * (fixQuality(strike.gap) ?? 1),
+          // Which detectors solved it, so the strike can show its own geometry
+          // for a moment. Ids, not positions: the registry holds those, and a
+          // particle outlives the frame it was made from.
+          used: strike.used,
         });
-        if (hard) knock(hits);
+        if (hard && !quiet) knock(hits);
       }
       queue.length = 0;
 
@@ -890,23 +1101,33 @@ const WorldMap = ({
       }
     };
 
-    // Both offscreen layers belong to the settled view; this is the transform
-    // from that view to the live one. It is the identity whenever the map is
-    // sitting still, which is nearly always.
-    const drawLayers = () => {
+    // A layer is stretched from the view it was drawn for to the live one. That
+    // view travels with the bitmap rather than being read from a ref, because
+    // the two change at different moments: `settled` is assigned during render,
+    // while the bitmap it describes is not replaced until the effect that draws
+    // it has run, an effect that waits for paint and then takes 10-30ms. Read
+    // from a shared ref, the frames in between transform the outgoing bitmap by
+    // the incoming view — identity, at the end of a drag — and the map jumps a
+    // pan's worth sideways for a frame before snapping back. Asking the bitmap
+    // where it belongs is always answerable; asking the component is not.
+    const drawLayer = (layer) => {
+      if (!layer) return;
       const live = viewRef.current;
-      const layer = settledRef.current;
-      const s = live.k / layer.k;
-      const tx = live.x - s * layer.x;
-      const ty = live.y - s * layer.y;
+      const s = live.k / layer.view.k;
+      const tx = live.x - s * layer.view.x;
+      const ty = live.y - s * layer.view.y;
       const moved = s !== 1 || tx !== 0 || ty !== 0;
       if (moved) {
         ctx.save();
         ctx.transform(s, 0, 0, s, tx, ty);
       }
-      if (landLayer.current) ctx.drawImage(landLayer.current, 0, 0, width, height);
-      if (historyLayer.current) ctx.drawImage(historyLayer.current, 0, 0, width, height);
+      ctx.drawImage(layer.canvas, 0, 0, width, height);
       if (moved) ctx.restore();
+    };
+
+    const drawLayers = () => {
+      drawLayer(landLayer.current);
+      drawLayer(historyLayer.current);
     };
 
     const render = () => {
@@ -950,7 +1171,14 @@ const WorldMap = ({
         // scale, unlike the bearing arrow below — which is why both disappear
         // when the scale makes them meaningless rather than being faked up to
         // a visible length.
-        if (track && settings.trails && storm.trail.length > 1) {
+        // How much the cell is asked to carry. Everything below the chosen
+        // level is simply not drawn, rather than drawn fainter: a cue you have
+        // turned down is still a cue competing for the same eye.
+        const detail = settings.cells ?? "full";
+        const showTrack = detail !== "ring";
+        const showAhead = detail === "full";
+
+        if (track && showTrack && storm.trail.length > 1) {
           const points = [];
           const stride = Math.max(1, Math.ceil(storm.trail.length / TRAIL_POINTS));
           for (let i = 0; i < storm.trail.length; i += stride) {
@@ -982,7 +1210,7 @@ const WorldMap = ({
             }
 
             // Dashed, because it has not happened. Solid past, broken future.
-            const ahead = forecast(storm, FORECAST_S);
+            const ahead = showAhead && forecast(storm, FORECAST_S);
             const projected = ahead && projection(ahead);
             if (projected && isFinite(projected[0]) && isFinite(projected[1])) {
               ctx.setLineDash([3, 4]);
@@ -997,7 +1225,7 @@ const WorldMap = ({
           }
         }
 
-        if (track) {
+        if (track && showTrack) {
           // Direction is to scale; length is not. Fifteen minutes of real
           // motion is a fraction of a pixel here, so the arrow is a bearing.
           const ux = track.ux;
@@ -1018,16 +1246,135 @@ const WorldMap = ({
         }
 
         ctx.globalAlpha = 0.45 + weight * 0.4;
-        const label = track ? `${storm.count} · ${Math.round(track.kmh)}km/h` : `${storm.count}`;
+        // The speed is the one reading that needs a unit to be read at all, so
+        // it goes with the level that has room for it. Below that the label is
+        // the count alone, which needs nothing.
+        const label =
+          track && showAhead ? `${storm.count} · ${Math.round(track.kmh)}km/h` : `${storm.count}`;
         ctx.fillText(label, centre[0] + r + 5, centre[1]);
       }
       ctx.globalAlpha = 1;
+
+      // The fix, drawn: a thread from each contributing detector to the strike
+      // it helped place, thrown at arrival and gone within the second. It is
+      // the same fact the Fix gap reports as a number — a strike heard from all
+      // sides is caught in a full sheaf, one heard from the east wears a fan —
+      // except that here you read it without being told.
+      //
+      // Under the strike pass and over everything else, at a weight where a
+      // single thread is barely there and the sheaf is what you see.
+      if (settings.stations) {
+        const network = stations();
+        // Half the world in screen pixels: a thread wider than this is a
+        // detector on the far side of the date line, and the line to it would
+        // cross the whole map rather than the sea between them.
+        const wrap = Math.abs(projection([180, 0])[0] - projection([-180, 0])[0]) / 2;
+        ctx.strokeStyle = palette.dim;
+        ctx.lineWidth = 1;
+        for (const p of particles.current) {
+          const age = now - p.t;
+          if (age > LINK_MS || !p.used?.length) continue;
+          const xy = projection([p.lon, p.lat]);
+          if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
+          const fade = 1 - age / LINK_MS;
+          ctx.globalAlpha = fade * fade * LINK_ALPHA;
+          ctx.beginPath();
+          let drawn = false;
+          for (const id of p.used) {
+            const station = network.get(id);
+            if (!station) continue;
+            const at = projection([station.lon, station.lat]);
+            if (!at || !isFinite(at[0]) || !isFinite(at[1])) continue;
+            if (Math.abs(at[0] - xy[0]) > wrap) continue;
+            ctx.moveTo(xy[0], xy[1]);
+            ctx.lineTo(at[0], at[1]);
+            drawn = true;
+          }
+          if (drawn) ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
 
       // On the tube strikes accumulate light; on paper they accumulate ink.
       ctx.globalCompositeOperation = composite;
       ctx.fillStyle = palette.strike;
       ctx.strokeStyle = palette.strike;
       ctx.lineWidth = 1;
+
+      // A strike, at an age. The same arithmetic serves live and replay: what
+      // separates them is only which clock the age was measured against.
+      const drawMark = (x, y, age, life, weight) => {
+        // The ping: a ring that leaves fast and slows as it fades, so the eye
+        // catches an arrival anywhere on the map without needing an accent hue.
+        const ring = age / RING_MS;
+        if (ring < 1) {
+          const eased = 1 - Math.pow(1 - ring, 3);
+          ctx.globalAlpha = (1 - ring) * (1 - ring) * 0.5;
+          ctx.beginPath();
+          ctx.arc(x, y, 1.5 + eased * 15, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Halation: a wide dim disc under the core. Additive compositing turns
+        // it into a bloom without touching the (very expensive) shadow blur.
+        //
+        // The weight of the fix rides on the two marks that assert a position,
+        // and not on the ping or the bolt: those announce that something
+        // arrived, which is certain however poorly the network placed it.
+        const flash = Math.max(0, 1 - age / FLASH_MS);
+        ctx.globalAlpha = (life * 0.09 + flash * 0.12) * weight;
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5 + life * 4.5 + flash * 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // The core: overbright for a beat, then settling into the slow decay.
+        ctx.globalAlpha = Math.min(1, life * life + flash * 0.7) * weight;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.1 + life * 2.2 + flash * 2, 0, Math.PI * 2);
+        ctx.fill();
+      };
+
+      // Rewound. Re-derived from the retained window rather than remembered:
+      // the marks are the same, aged against the instant being replayed. Bolts
+      // and the knock they carry are not replayed — those are events, and an
+      // event does not happen a second time.
+      const rewound = replayRef.current;
+      if (rewound) {
+        // Interpolated, not held. Ages taken straight from the replay instant
+        // freeze for six frames and then jump a tenth of a second, which is
+        // most of the animation on a mark: the overbright flash lasts 180ms and
+        // would be sampled twice, the ping 720ms and sampled seven times. Run
+        // forward from the stamp instead and the decay is drawn at frame rate,
+        // with the state tick only deciding which strikes exist.
+        const at = rewound.at + (now - rewound.stamp);
+        const retained = history?.current ?? [];
+        // Strikes are appended in arrival order, so the lit window is a
+        // contiguous slice and can be found rather than scanned: a persistence
+        // window is a few dozen strikes out of the twenty-five thousand held.
+        let lo = 0;
+        let hi = retained.length;
+        const from = at - persistenceMs;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (retained[mid].t < from) lo = mid + 1;
+          else hi = mid;
+        }
+        for (let i = lo; i < retained.length; i++) {
+          const strike = retained[i];
+          const age = at - strike.t;
+          // The rest of the slice has not happened yet at this instant.
+          if (age < 0) break;
+          const life = 1 - age / persistenceMs;
+          if (life <= 0) continue;
+          const xy = projection([strike.lon, strike.lat]);
+          if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
+          drawMark(xy[0], xy[1], age, life, 1);
+        }
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 1;
+        frame = requestAnimationFrame(render);
+        return;
+      }
 
       const alive = [];
       for (const p of particles.current) {
@@ -1039,17 +1386,6 @@ const WorldMap = ({
         const xy = projection([p.lon, p.lat]);
         if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
         const [x, y] = xy;
-
-        // The ping: a ring that leaves fast and slows as it fades, so the eye
-        // catches an arrival anywhere on the map without needing an accent hue.
-        const ring = age / RING_MS;
-        if (ring < 1) {
-          const eased = 1 - Math.pow(1 - ring, 3);
-          ctx.globalAlpha = (1 - ring) * (1 - ring) * 0.5;
-          ctx.beginPath();
-          ctx.arc(x, y, 1.5 + eased * 15, 0, Math.PI * 2);
-          ctx.stroke();
-        }
 
         // The bolt: only hard strikes draw one, so it stays an event.
         if (p.bolt) {
@@ -1067,19 +1403,7 @@ const WorldMap = ({
           }
         }
 
-        // Halation: a wide dim disc under the core. Additive compositing turns
-        // it into a bloom without touching the (very expensive) shadow blur.
-        const flash = Math.max(0, 1 - age / FLASH_MS);
-        ctx.globalAlpha = life * 0.09 + flash * 0.12;
-        ctx.beginPath();
-        ctx.arc(x, y, 3.5 + life * 4.5 + flash * 5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // The core: overbright for a beat, then settling into the slow decay.
-        ctx.globalAlpha = Math.min(1, life * life + flash * 0.7);
-        ctx.beginPath();
-        ctx.arc(x, y, 1.1 + life * 2.2 + flash * 2, 0, Math.PI * 2);
-        ctx.fill();
+        drawMark(x, y, age, life, p.weight ?? 1);
       }
       particles.current = alive;
 
@@ -1119,9 +1443,12 @@ const WorldMap = ({
     composite,
     persistenceMs,
     reduceMotion,
+    settings.clicks,
     settings.shake,
+    settings.stations,
     settings.storms,
-    settings.trails,
+    settings.cells,
+    history,
     width,
     height,
   ]);
@@ -1203,7 +1530,37 @@ const WorldMap = ({
             &#215;{view.k.toFixed(1)}
           </span>
         )}
+        {/* Only present when the header that usually carries it is not. */}
+        {onConfig && (
+          <>
+            <span className="h-2.5 w-px shrink-0 bg-line" aria-hidden="true" />
+            <button
+              type="button"
+              onClick={onConfig}
+              className="shrink-0 text-2xs uppercase tracking-label text-dim transition-colors hover:text-text"
+            >
+              cfg
+            </button>
+          </>
+        )}
       </div>
+
+      <Transport span={span} behind={replay ? Date.now() - replay.at : 0} onSeek={onSeek} />
+
+      {/* Nothing is arriving. Said on the glass, because everything else the
+          tube can do in this state — an empty map, a burn-in fading out on
+          schedule — is indistinguishable from a quiet planet, and the planet is
+          never quiet. What is still drawn is the last of what was received,
+          which is why the mark decays rather than freezing. */}
+      {lost && (
+        <div
+          className="pointer-events-none absolute right-3 top-3 flex items-center gap-2 text-2xs uppercase tracking-label unselectable"
+          role="status"
+        >
+          <span className="lost-pulse h-1.5 w-1.5 rounded-full bg-text" aria-hidden="true" />
+          <span className="text-text glow">no signal</span>
+        </div>
+      )}
 
       {/* A held mark on the filtered place, and a soft one on the feed row
           under the pointer. Both are DOM so the canvas loop stays untouched. */}

@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 
 const TRACE_W = 300;
 const TRACE_H = 34;
@@ -56,6 +56,37 @@ function RateTrace({ samples }) {
     </svg>
   );
 }
+
+/**
+ * Seconds until the thunder of a strike that has already been seen.
+ *
+ * Its own clock, for the same reason the footer's is: the watch pass runs every
+ * two seconds, and a countdown that moved in two-second steps would be a worse
+ * lie than no countdown at all. Ticks four times a second and rounds, so the
+ * figure falls one second at a time.
+ */
+const Thunder = memo(function Thunder({ thunder }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!thunder) return;
+    const id = setInterval(() => tick((n) => n + 1), 250);
+    return () => clearInterval(id);
+  }, [thunder]);
+
+  if (!thunder) return null;
+  const left = (thunder.at - Date.now()) / 1000;
+  // It has arrived. Held for a beat rather than vanishing, so the count is seen
+  // to finish rather than appearing to have been cancelled.
+  if (left <= -2) return null;
+
+  return (
+    <Readout
+      label="Thunder"
+      value={left <= 0 ? "now" : Math.ceil(left)}
+      unit={left <= 0 ? "" : `s · ${Math.round(thunder.km)}km`}
+    />
+  );
+});
 
 /**
  * One arrival. Memoised and given only stable props, so releasing a new strike
@@ -130,6 +161,12 @@ function Sidebar({
       <section className="border-b border-line px-4 py-1">
         <Readout label="Detected" value={fmt(stats.total)} />
         <Readout label="Latency" value={stats.delay ?? "—"} unit={stats.delay ? "s" : ""} />
+        <Readout label="Stations" value={stats.stations ?? "—"} />
+        <Readout
+          label="Fix gap"
+          value={stats.gap ?? "—"}
+          unit={stats.gap === null ? "" : "°"}
+        />
         <Readout label="Storm cells" value={fmt(stats.storms)} />
       </section>
 
@@ -142,6 +179,7 @@ function Sidebar({
             value={watch.nearest === null ? "—" : fmt(Math.round(watch.nearest))}
             unit={watch.nearest === null ? "" : "km"}
           />
+          <Thunder thunder={watch.thunder} />
         </section>
       )}
 

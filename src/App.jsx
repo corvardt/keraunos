@@ -13,8 +13,10 @@ import Clock from "./assets/components/clock.jsx";
 //libs and utils
 import { indexFeatures, findFeature, distanceKm } from "./lib/geo.js";
 import { useTheme } from "./lib/theme.js";
+import { usePalette } from "./lib/palette.js";
 import { useSettings } from "./lib/settings.js";
 import { detectStorms, trackStorms } from "./lib/storms.js";
+import { binStrikes } from "./lib/burn.js";
 import geoData from "./lib/world.json";
 
 const FEED_LENGTH = 60; // strikes listed in the recent feed
@@ -35,24 +37,52 @@ const REGION_MIN = 3; // strikes a cell needs before it is worth geocoding
 // while the socket keeps delivering, and the backlog would otherwise grow for
 // as long as the tab is left alone and then land in one frame on return.
 const MAX_QUEUE = 800;
+// Somewhere on earth is always having weather: the feed runs at several strikes
+// a second at its quietest. Silence this long is therefore a fault and not a
+// lull — and it has to be said out loud, because a map that has stopped being
+// fed looks exactly like a map of calm weather, right down to the burn-in
+// draining away on schedule.
+const SILENCE_MS = 25000;
+
+// Thunder. Sound covers about a third of a kilometre a second, which is the one
+// piece of physics a lightning map can hand back to the person reading it: the
+// flash is already here, the sound is still coming, and the gap is a distance
+// you can check against your own window. Past 25km it is rarely audible at all,
+// so the count is not offered.
+const SPEED_OF_SOUND_KMS = 0.343;
+const THUNDER_MAX_KM = 25;
+
+// Replay runs at life size on a tenth-second beat: fine enough that a strike
+// fades smoothly, coarse enough that re-deriving the window ten times a second
+// is the cheapest thing on the frame. Within this of the present there is
+// nothing left to replay, so the clock is handed back to the live feed.
+const REPLAY_TICK_MS = 100;
+const REPLAY_LEAD_MS = 1500;
+
 // Past this there is no news in a nearest-strike figure, and skipping it early
 // keeps the scan off the ~99% of the planet that isn't near you.
 const WATCH_MAX_KM = 2000;
 const WATCH_MAX_DEG = WATCH_MAX_KM / 111.32;
 
+// Stable, so that hiding the storm rings during a replay does not hand the map
+// a new array on every frame and defeat its memoisation.
+const EMPTY = [];
+
 // The feed reports whatever the network gives it; a malformed delay reads "—"
 // rather than throwing inside a render.
 const seconds = (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed(1) : null);
 
-// The last strike of a batch, taken alone, swings by whole seconds from one
-// flush to the next — it is one measurement of a network, not a reading. The
-// median of the batch holds still enough to be watched.
+// Any one strike of a batch, taken alone, swings from one flush to the next —
+// it is one measurement of a network, not a reading. The median of the batch
+// holds still enough to be watched.
+function median(values) {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  return sorted.length ? sorted[sorted.length >> 1] : null;
+}
+
 function medianDelay(batch) {
-  const values = batch
-    .map((data) => Number(data.delay))
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b);
-  return values.length ? seconds(values[values.length >> 1]) : null;
+  const value = median(batch.map((data) => Number(data.delay)));
+  return value === null ? null : seconds(value);
 }
 
 // What makes two picks the same pick: the named place, at the same 1° cell.
@@ -67,12 +97,25 @@ function App() {
   const [bins, setBins] = useState([]);
   const [storms, setStorms] = useState([]);
   const [samples, setSamples] = useState(() => Array(SAMPLES).fill(0));
-  const [stats, setStats] = useState({ rate: 0, total: 0, storms: 0, delay: null });
+  const [stats, setStats] = useState({
+    rate: 0,
+    total: 0,
+    storms: 0,
+    delay: null,
+    stations: null,
+    gap: null,
+  });
   const [status, setStatus] = useState({ phase: "idle", message: "idle", host: null });
+  // Nothing has arrived for a while, whatever the socket believes about itself.
+  const [silent, setSilent] = useState(false);
   const [booted, setBooted] = useState(false);
   const finishBoot = useCallback(() => setBooted(true), []);
   const { theme, setTheme } = useTheme();
   const { settings, set, reset } = useSettings();
+  // Derives the palette from what index.css declares and writes it back to the
+  // same tokens, so the canvas picks it up by reading computed style as it
+  // always has. The key is the only part React can see; the map watches it.
+  const paletteKey = usePalette(theme, settings.phosphor, settings.contrast, settings.bloom);
   const [configOpen, setConfigOpen] = useState(false);
   const [keyOpen, setKeyOpen] = useState(false);
   // The feed row under the pointer, marked on the map.
@@ -85,6 +128,14 @@ function App() {
   // The reader's own position, if they asked for it. Session only.
   const [here, setHere] = useState(null);
   const [watch, setWatch] = useState(null);
+  // An instant in the retained window, or null for live. Everything the map
+  // shows is derived from this; nothing about the live pipeline stops, so the
+  // window keeps filling behind you while you are looking at the past.
+  const [replayAt, setReplayAt] = useState(null);
+  // When that instant was set, on the clock the render loop runs on. Captured
+  // beside the instant rather than when the map happens to render, so the pair
+  // is exact and the loop's interpolation carries no render latency.
+  const replayStamp = useRef(performance.now());
 
   // Picking the same thing twice is how you let go of it. Identity is the
   // place *and* the cell, not the place alone: two storms over Brazil are both
@@ -138,6 +189,9 @@ function App() {
   // Strikes buffer here and drain on a timer. Writing state per message would
   // re-render the whole tree several times a second.
   const pending = useRef([]);
+  // Seeded at mount rather than at zero, so the first seconds of a session are
+  // read as connecting rather than as a network that has fallen over.
+  const lastArrival = useRef(Date.now());
   const binCounts = useRef(new Map());
   const total = useRef(0);
   const nextId = useRef(0);
@@ -182,6 +236,7 @@ function App() {
   );
 
   const handleDataReceived = useCallback((data) => {
+    lastArrival.current = Date.now();
     pending.current.push(data);
     strikeQueue.current.push(data);
     // Trimmed with slack rather than on every message: a copy per strike would
@@ -191,7 +246,12 @@ function App() {
     }
     // Push only. Trimming here would re-copy the whole array on every
     // message; the clustering pass below enforces both bounds instead.
-    history.current.push({ lon: data.lon, lat: data.lat, t: Date.now() });
+    // `t` is when we heard about it; `at` is when it happened. The network runs
+    // about five seconds behind, and for anything counted in seconds — thunder,
+    // above all — the difference is the whole measurement.
+    const arrived = Date.now();
+    const flash = arrived - (Number(data.delay) || 0) * 1000;
+    history.current.push({ lon: data.lon, lat: data.lat, t: arrived, at: flash });
     const lon = Math.floor(data.lon / BIN_SIZE) * BIN_SIZE;
     const lat = Math.floor(data.lat / BIN_SIZE) * BIN_SIZE;
     const key = `${lon},${lat}`;
@@ -219,12 +279,18 @@ function App() {
         total: total.current,
         storms: tracked.current.length,
         delay: batch.length ? medianDelay(batch) : null,
+        // How well the network is currently placing what it hears. Both are
+        // properties of the detection geometry rather than of the weather,
+        // which is why they sit beside latency and not beside the rate.
+        stations: batch.length ? median(batch.map((data) => data.stations)) : null,
+        gap: batch.length ? median(batch.map((data) => data.gap)) : null,
       });
 
       // Burn-in releases: cells untouched for BURN_MS are dropped, and the
       // rest carry how much life they have left. Runs even in a lull, so the
       // map empties itself when the storms move on.
       const now = Date.now();
+      setSilent(now - lastArrival.current > SILENCE_MS);
       const active = [];
       const places = new Map();
       for (const [key, cell] of binCounts.current) {
@@ -317,6 +383,11 @@ function App() {
       // the flush because it reads the same history the clustering walks.
       if (!here) return;
       let nearest = Infinity;
+      // The closest strike near enough, and recent enough, for its thunder to
+      // still be on its way. Tracked alongside the nearest-ever figure because
+      // they answer different questions: one is how the storm sits, the other
+      // is whether you are about to hear something.
+      let pending = null;
       for (const strike of history.current) {
         // A degree box first: the trigonometry is the expensive part, and
         // almost every strike on earth is nowhere near the reader.
@@ -325,11 +396,93 @@ function App() {
         if (Math.min(spread, 360 - spread) > WATCH_MAX_DEG / Math.max(0.05, Math.cos((here.lat * Math.PI) / 180))) continue;
         const km = distanceKm(here.lon, here.lat, strike.lon, strike.lat);
         if (km < nearest) nearest = km;
+
+        // Sound leaves the channel at the moment of the flash and arrives when
+        // it arrives; the only thing that matters is whether that moment is
+        // still ahead of us. Beyond THUNDER_MAX_KM there is nothing to hear.
+        if (km > THUNDER_MAX_KM) continue;
+        const heardAt = (strike.at ?? strike.t) + (km / SPEED_OF_SOUND_KMS) * 1000;
+        if (heardAt <= now) continue;
+        if (!pending || heardAt < pending.at) pending = { at: heardAt, km };
       }
-      setWatch({ nearest: nearest <= WATCH_MAX_KM ? nearest : null });
+      setWatch({ nearest: nearest <= WATCH_MAX_KM ? nearest : null, thunder: pending });
     }, STORM_EVERY_MS);
     return () => clearInterval(id);
   }, [here]);
+
+  // ── Replay ───────────────────────────────────────────────────────────────
+  //
+  // Rewinding runs the clock forward again from wherever it was set down, at
+  // life size, until it catches up with the present and hands back over. A
+  // frozen frame would have been easier and worth less: what you want from a
+  // map of a storm is to watch the storm move.
+  useEffect(() => {
+    if (replayAt === null) return;
+    let last = Date.now();
+    const id = setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - last;
+      last = now;
+      replayStamp.current = performance.now();
+      setReplayAt((at) => {
+        if (at === null) return null;
+        // Caught up. Live is a state, not a position at the end of the track,
+        // so it is handed back rather than pinned there.
+        return at + elapsed >= now - REPLAY_LEAD_MS ? null : at + elapsed;
+      });
+    }, REPLAY_TICK_MS);
+    return () => clearInterval(id);
+  }, [replayAt !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // What the map was showing at that instant, derived on two clocks for the
+  // same reason the live map runs on two: the marks decay visibly and want the
+  // fast one, the burn-in is a slow accumulation and does not. Both are
+  // quantised, so a tick landing inside the same slice reuses the last
+  // derivation rather than walking the window again.
+  // The instant itself is passed exactly. It used to be rounded to the playback
+  // tick, which was harmless while the map drew straight from it and is not now
+  // that the loop runs forward from it between ticks: rounding error changes at
+  // every tick, so the interpolated clock would hop backward and forward by up
+  // to a tick, and a mark part-way through its flash would brighten again.
+  // Only the burn-in is quantised, and coarsely, because it is rebuilt at the
+  // same twice-a-second cadence it has when live.
+  const replayInstant = replayAt;
+  const replayBurn = replayAt === null ? null : Math.round(replayAt / FLUSH_MS) * FLUSH_MS;
+
+  const replayBins = useMemo(() => {
+    if (replayBurn === null) return EMPTY;
+    return binStrikes(history.current, replayBurn, {
+      size: BIN_SIZE,
+      burnMs: BURN_MS,
+      activeMs: ACTIVE_MS,
+    });
+  }, [replayBurn]);
+
+  // Only the instant and the burn-in. Which strikes are lit at that instant is
+  // left to the render loop, which asks the question sixty times a second
+  // against a clock it carries itself: deciding it here would quantise every
+  // arrival to the playback tick, and an arrival is the one thing on this map
+  // that has to land exactly when it lands.
+  const replay = useMemo(
+    () => (replayInstant === null ? null : { at: replayInstant, stamp: replayStamp.current, bins: replayBins }),
+    [replayInstant, replayBins]
+  );
+
+  // How far back there is anything to see. The window fills as the session runs,
+  // so the track grows for the first twelve minutes and then holds.
+  const [span, setSpan] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const oldest = history.current[0]?.t;
+      setSpan(oldest ? Math.min(STORM_WINDOW_MS, Date.now() - oldest) : 0);
+    }, 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  const seek = useCallback((behindMs) => {
+    replayStamp.current = performance.now();
+    setReplayAt(behindMs <= REPLAY_LEAD_MS ? null : Date.now() - behindMs);
+  }, []);
 
   // A storm can deliver dozens of strikes per flush. Releasing them on a steady
   // beat keeps the feed readable and lets each row animate in on its own.
@@ -346,10 +499,11 @@ function App() {
   }, [hold]);
 
   // The hold is released by the pointer leaving the feed, which cannot happen
-  // if the feed is switched off underneath it. Without this it stays frozen.
+  // if the feed is switched off underneath it — or the whole side panel is.
+  // Without this it stays frozen with nothing on screen to unfreeze it.
   useEffect(() => {
-    if (!settings.feed) setHold(false);
-  }, [settings.feed]);
+    if (!settings.feed || !settings.sidebar) setHold(false);
+  }, [settings.feed, settings.sidebar]);
 
   // Single keys, no modifiers: the whole interface is reachable without ever
   // going for the mouse.
@@ -392,25 +546,47 @@ function App() {
       )}
       <Crt scanlines={settings.scanlines} sweep={settings.sweep} />
       <Seeker onDataReceived={handleDataReceived} onStatus={setStatus} />
-      <Navbar
-        phase={status.phase}
-        host={status.host}
-        pulse={stats.total}
-        theme={theme}
-        onTheme={setTheme}
-        onConfig={openConfig}
-        onKey={openKey}
-      />
+      {settings.chrome && (
+        <Navbar
+          phase={status.phase}
+          host={status.host}
+          pulse={stats.total}
+          theme={theme}
+          onTheme={setTheme}
+          onConfig={openConfig}
+          onKey={openKey}
+        />
+      )}
 
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
         <div className="min-h-[45vh] flex-1 lg:min-h-0">
           <WorldMap
-            bins={bins}
-            storms={storms}
+            // Rewound, the map is drawn from the window rather than from the
+            // live accumulation. Storm cells are the one thing not replayed:
+            // they are tracked forward, strike by strike, and a track cannot be
+            // reconstructed from an instant — so rather than show stale rings
+            // over a past sky, it shows none.
+            bins={replay ? replay.bins : bins}
+            storms={replay ? EMPTY : storms}
+            replay={replay}
+            // The retained window itself, so the loop can pick the lit strikes
+            // per frame. A ref rather than state, like the strike queue: its
+            // contents change several times a second and none of those changes
+            // is a reason to render anything.
+            history={history}
+            span={span}
+            onSeek={seek}
             strikeQueue={strikeQueue}
             theme={theme}
             settings={settings}
             summary={`World lightning map. ${stats.rate} strikes per minute, ${stats.storms} storm cells tracked, ${stats.total} detected this session.`}
+            // The tube says so itself, rather than leaving it to a status line
+            // in the footer that nobody watching the weather is reading.
+            lost={silent || status.phase === "down"}
+            paletteKey={paletteKey}
+            // With the header hidden the map carries the way back to it, so
+            // turning the chrome off is never a door that locks behind you.
+            onConfig={settings.chrome ? null : openConfig}
             locate={locate}
             focus={focus}
             selection={selection}
@@ -419,6 +595,7 @@ function App() {
             onSelect={select}
           />
         </div>
+        {settings.sidebar && (
         <Sidebar
           stats={stats}
           samples={samples}
@@ -432,8 +609,10 @@ function App() {
           onFocus={setFocus}
           onHold={setHold}
         />
+        )}
       </main>
 
+      {settings.chrome && (
       <footer className="flex h-7 shrink-0 items-center justify-between border-t border-line px-4 text-2xs text-dim unselectable">
         <Clock />
         <span className="truncate pl-4" role="status" aria-live="polite">
@@ -448,6 +627,7 @@ function App() {
           blitzortung.org network
         </a>
       </footer>
+      )}
     </div>
   );
 }

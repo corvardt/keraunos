@@ -1,4 +1,6 @@
 import { memo, useEffect } from "react";
+import { usedStations } from "../../lib/fix.js";
+import { record } from "../../lib/stations.js";
 
 const HOSTS = ["ws1", "ws7", "ws8"];
 const DOMAIN = ".blitzortung.org:443/";
@@ -64,14 +66,31 @@ function Seeker({ onDataReceived, onStatus }) {
 
       ws.onmessage = (event) => {
         try {
-          const { time, delay, lon, lat } = JSON.parse(decode(event.data));
+          const { time, delay, lon, lat, sig, mcg } = JSON.parse(decode(event.data));
           const date = new Date(time / 1000000);
           // UTC, matching the footer clock. Local time would be the viewer's,
           // which says nothing useful about a strike over Java.
           const formattedTime = [date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds()]
             .map((n) => String(n).padStart(2, "0"))
             .join(":");
-          onDataReceived?.({ formattedTime, delay, lon, lat });
+          // The station list is read once, here, and then dropped: the network
+          // it describes is accumulated where the map can find it, and the
+          // strike itself carries only the two figures derived from it.
+          record(sig);
+
+          // Reduced rather than passed on. A frame carries up to forty station
+          // records, eight times a second, and nothing downstream wants them —
+          // only how many were used, and how well they surrounded it.
+          const used = usedStations(sig);
+          onDataReceived?.({
+            formattedTime,
+            delay,
+            lon,
+            lat,
+            used,
+            stations: used.length,
+            gap: Number.isFinite(mcg) ? mcg : null,
+          });
         } catch (err) {
           console.error("Error parsing message:", err);
         }

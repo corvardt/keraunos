@@ -4,10 +4,15 @@ export const LAT_LIMIT = 74; // Mercator runs to infinity at the poles
 export const PAD = 24; // breathing room around the fitted world
 export const MIN_K = 1; // the whole world; there is nothing to see further out
 export const MAX_K = 40; // roughly a 200km span across the tube
-// Extra extent built beyond the edges so a small pan still finds land under
-// it. Costed, not guessed: the build is area-proportional, and 0.6 here means
-// building 4.8x the visible world and a 180ms hitch on every settle.
-export const GRID_MARGIN = 0.3;
+// There was a margin here once: extra extent built beyond the edges so that a
+// small pan would still find land under it. It never reached the screen. The
+// layers are drawn to canvases exactly the size of the viewport, so everything
+// built outside it was clipped at paint — at 3x zoom, 9,239 of 15,288 dots, 60%
+// of the build, discarded on every settle, for an edge that stayed empty anyway.
+//
+// Covering that edge for real means canvases larger than the viewport, and they
+// are already the largest allocation in the app. So this is the honest version:
+// build what is drawn. The edge fills on settle, 160ms behind the pointer.
 
 /** The world, fitted to the tube. Everything else is a transform over this. */
 export function fitProjection(width, height) {
@@ -84,7 +89,7 @@ export function viewForBounds(base, width, height, [west, south, east, north]) {
 }
 
 /**
- * The lon/lat box on screen, widened so a small pan still lands on land.
+ * The lon/lat box on screen.
  *
  * The corners are clamped to the world before being inverted, never after:
  * Mercator's inverse wraps longitude, so a point off the left edge comes back
@@ -92,17 +97,15 @@ export function viewForBounds(base, width, height, [west, south, east, north]) {
  * clamping after quietly yields a box that is inside out.
  */
 export function visibleBounds(projection, width, height) {
-  const mx = width * GRID_MARGIN;
-  const my = height * GRID_MARGIN;
   const [west] = projection([-180, 0]);
   const [east] = projection([180, 0]);
   const [, top] = projection([0, LAT_LIMIT]);
   const [, bottom] = projection([0, -LAT_LIMIT]);
 
-  const x0 = Math.max(-mx, west);
-  const x1 = Math.min(width + mx, east);
-  const y0 = Math.max(-my, top);
-  const y1 = Math.min(height + my, bottom);
+  const x0 = Math.max(0, west);
+  const x1 = Math.min(width, east);
+  const y0 = Math.max(0, top);
+  const y1 = Math.min(height, bottom);
   if (!(x0 < x1) || !(y0 < y1)) return [-180, -LAT_LIMIT, 180, LAT_LIMIT];
 
   const a = projection.invert([x0, y0]);

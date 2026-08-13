@@ -87,6 +87,12 @@
     breathe 2.8s ease-in-out 900ms infinite;
 }
 
+/* Nothing is arriving. A slower, heavier beat than the link indicator's idle:
+   this is the tube waiting, not the tube ticking over. */
+.lost-pulse {
+  animation: breathe 1.8s ease-in-out infinite;
+}
+
 /* ── Phosphor bloom ─────────────────────────────────────────────────────────
    Lit pixels on a CRT bleed into the glass. Reserved for live values, never
    for labels: the glow marks what is actually reading. */
@@ -258,6 +264,7 @@
   .flash,
   .seek,
   .alive,
+  .lost-pulse,
   .row,
   .crt-sweep,
   .crt-roll,
