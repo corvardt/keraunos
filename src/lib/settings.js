@@ -28,6 +28,10 @@ export const DEFAULTS = {
   // of it that was never the busiest.
   cells: "full",
   bounds: false,
+  // How far back the burn-in reaches. Four minutes is the live reading and the
+  // default; the longer windows turn the same layer into where the lightning
+  // has been over the session's own hour.
+  density: "4m",
   graticule: true,
   frontiers: true,
   daylight: true,
@@ -46,6 +50,22 @@ export const DEFAULTS = {
 
 /** Phosphor decay, in milliseconds. */
 export const PERSISTENCE = { short: 3500, normal: 7000, long: 15000 };
+
+/**
+ * How far back the burn-in reaches, in milliseconds.
+ *
+ * At four minutes this is weather: where it is raining lightning now, emptying
+ * as the storms move on. Opened out, the same layer becomes the other reading,
+ * which is where the lightning has been, and an hour of it draws the band the
+ * planet actually fires in. Nothing is imported to do that and nothing is
+ * stored: it is the session's own hour, and it goes when the tab does.
+ *
+ * The scale that draws it has to move with this. Counts saturate at a hundred
+ * strikes in a cell, which is extreme in four minutes and ordinary in an hour,
+ * so the saturation point is scaled by the window (see `burnFull` in the map)
+ * or every cell that matters clips to solid white together.
+ */
+export const DENSITY = { "4m": 4 * 60 * 1000, "20m": 20 * 60 * 1000, "1h": 60 * 60 * 1000 };
 
 export function useSettings() {
   const [settings, setSettings] = useState(() => {

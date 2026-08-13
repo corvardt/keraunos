@@ -15,7 +15,7 @@ import Tour from "./assets/components/tour.jsx";
 import { indexFeatures, findFeature, distanceKm } from "./lib/geo.js";
 import { useTheme } from "./lib/theme.js";
 import { usePalette } from "./lib/palette.js";
-import { useSettings } from "./lib/settings.js";
+import { useSettings, DENSITY } from "./lib/settings.js";
 import { useTour } from "./lib/tour.js";
 import { detectStorms, trackStorms } from "./lib/storms.js";
 import { binStrikes } from "./lib/burn.js";
@@ -27,11 +27,27 @@ const FLUSH_MS = 500; // how often buffered strikes reach React state
 const SAMPLES = 120; // 120 half-second samples = a 60s rate window
 const RELEASE_MS = 130; // cadence at which queued strikes enter the feed
 const QUEUE_LENGTH = 40; // backlog cap; a storm outruns any readable feed
-const BURN_MS = 4 * 60 * 1000; // how long a cell keeps its burn-in
 const ACTIVE_MS = 6000; // how long a cell counts as still firing
-const STORM_WINDOW_MS = 12 * 60 * 1000; // strike history a cell is built from
+// Clustering only. A storm cell is a thing that exists for tens of minutes and
+// is tracked between passes; built over an hour it would be the union of
+// everywhere the storm has been, which is not a cell and not where it is.
+// This is why the retained history and the clustering window are two numbers:
+// they used to be one, and lengthening the first would have silently wrecked
+// the second.
+const STORM_WINDOW_MS = 12 * 60 * 1000;
 const STORM_EVERY_MS = 2000; // clustering cadence; storms don't move fast
-const MAX_HISTORY = 25000; // ceiling on retained strikes (~8 min at peak rate)
+// How much is kept to rewind through and to burn from. An hour, rather than the
+// twelve minutes the clustering wants, because the two are answering different
+// questions and only this one is about how far back you can look.
+const HISTORY_MS = 60 * 60 * 1000;
+// Memory ceiling, and the honest limit on the hour above. A retained strike is
+// four numbers in an object, which V8 keeps in about 64 bytes, so this is
+// roughly 8 MB. The world runs near 300 strikes a minute at the quiet end,
+// where an hour costs 18,000 and this is never reached; at the peak it binds
+// first and the window is shorter than an hour. Nothing pretends otherwise:
+// `span` below is measured from the oldest strike actually held, so the rewind
+// track shows the window there is rather than the window that was asked for.
+const MAX_HISTORY = 120000;
 const REGION_COUNT = 5; // places listed in the activity ranking
 const REGION_MIN = 3; // strikes a cell needs before it is worth geocoding
 // Ceiling on strikes waiting to be drawn. The map drains this every animation
@@ -69,6 +85,26 @@ const WATCH_MAX_DEG = WATCH_MAX_KM / 111.32;
 // Stable, so that hiding the storm rings during a replay does not hand the map
 // a new array on every frame and defeat its memoisation.
 const EMPTY = [];
+
+// Strikes are appended in arrival order, so any window over them is a
+// contiguous run and its start can be found rather than scanned for.
+//
+// This matters now in a way it did not when the whole history was twelve
+// minutes long. Every consumer here wants minutes of an hour: the clustering
+// wants twelve, a burn wants four. Left as a filter over the whole array, each
+// of them would walk five to fifteen times the strikes it uses, twice a second,
+// and lengthening the history would have quietly made every pass slower rather
+// than only making it deeper. The render loop already worked this way.
+function since(list, from) {
+  let lo = 0;
+  let hi = list.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (list[mid].t < from) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
 
 // The feed reports whatever the network gives it; a malformed delay reads "—"
 // rather than throwing inside a render.
@@ -114,6 +150,9 @@ function App() {
   const finishBoot = useCallback(() => setBooted(true), []);
   const { theme, setTheme } = useTheme();
   const { settings, set, reset } = useSettings();
+  // How far back the burn-in reaches. Four minutes is the live reading; opened
+  // out, the same layer becomes where the lightning has been this session.
+  const burnMs = DENSITY[settings.density] ?? DENSITY["4m"];
   // Derives the palette from what index.css declares and writes it back to the
   // same tokens, so the canvas picks it up by reading computed style as it
   // always has. The key is the only part React can see; the map watches it.
@@ -155,6 +194,12 @@ function App() {
   const openConfig = useCallback(() => setConfigOpen(true), []);
   const closeConfig = useCallback(() => setConfigOpen(false), []);
   const openKey = useCallback(() => setKeyOpen(true), []);
+  // Configuration hands over to the catalogue. One panel at a time, so the two
+  // do not stack up and leave Escape with a queue to work through.
+  const configToKey = useCallback(() => {
+    setConfigOpen(false);
+    setKeyOpen(true);
+  }, []);
   const closeKey = useCallback(() => setKeyOpen(false), []);
 
   // The guide's last step lights the header and leaves it clickable, so `key`
@@ -299,15 +344,15 @@ function App() {
         gap: batch.length ? median(batch.map((data) => data.gap)) : null,
       });
 
-      // Burn-in releases: cells untouched for BURN_MS are dropped, and the
-      // rest carry how much life they have left. Runs even in a lull, so the
-      // map empties itself when the storms move on.
+      // Burn-in releases: cells untouched for the burn window are dropped, and
+      // the rest carry how much life they have left. Runs even in a lull, so
+      // the map empties itself when the storms move on.
       const now = Date.now();
       setSilent(now - lastArrival.current > SILENCE_MS);
       const active = [];
       const places = new Map();
       for (const [key, cell] of binCounts.current) {
-        const fade = 1 - (now - cell.last) / BURN_MS;
+        const fade = 1 - (now - cell.last) / burnMs;
         if (fade <= 0) {
           binCounts.current.delete(key);
           continue;
@@ -372,14 +417,17 @@ function App() {
       feedQueue.current = [...feedQueue.current, ...located].slice(-QUEUE_LENGTH);
     }, FLUSH_MS);
     return () => clearInterval(id);
-  }, [locate]);
+    // Changing the burn window restarts the flush, which is what should happen:
+    // the cells it releases are the ones outside the window, and the window has
+    // just moved. Nothing is lost by it, since the accumulation lives in a ref.
+  }, [locate, burnMs]);
 
   // Clustering is the expensive pass, so it runs on its own slow cadence
   // rather than with the twice-a-second flush.
   useEffect(() => {
     const id = setInterval(() => {
       const now = Date.now();
-      const cutoff = now - STORM_WINDOW_MS;
+      const cutoff = now - HISTORY_MS;
       const stale = history.current.length && history.current[0].t < cutoff;
       const over = history.current.length > MAX_HISTORY;
       if (stale || over) {
@@ -387,7 +435,9 @@ function App() {
         const kept = stale ? history.current.filter((s) => s.t >= cutoff) : history.current;
         history.current = kept.length > MAX_HISTORY ? kept.slice(-MAX_HISTORY) : kept;
       }
-      const found = detectStorms(history.current, now, STORM_WINDOW_MS);
+      // Only the clustering window, not the retained hour.
+      const recent = history.current.slice(since(history.current, now - STORM_WINDOW_MS));
+      const found = detectStorms(recent, now, STORM_WINDOW_MS);
       tracked.current = trackStorms(tracked.current, found, now);
       setStorms(tracked.current);
 
@@ -464,12 +514,17 @@ function App() {
 
   const replayBins = useMemo(() => {
     if (replayBurn === null) return EMPTY;
-    return binStrikes(history.current, replayBurn, {
+    // Only the burn window that ends at this instant.
+    const window = history.current.slice(
+      since(history.current, replayBurn - burnMs),
+      since(history.current, replayBurn) + 1
+    );
+    return binStrikes(window, replayBurn, {
       size: BIN_SIZE,
-      burnMs: BURN_MS,
+      burnMs,
       activeMs: ACTIVE_MS,
     });
-  }, [replayBurn]);
+  }, [replayBurn, burnMs]);
 
   // Only the instant and the burn-in. Which strikes are lit at that instant is
   // left to the render loop, which asks the question sixty times a second
@@ -487,7 +542,7 @@ function App() {
   useEffect(() => {
     const id = setInterval(() => {
       const oldest = history.current[0]?.t;
-      setSpan(oldest ? Math.min(STORM_WINDOW_MS, Date.now() - oldest) : 0);
+      setSpan(oldest ? Math.min(HISTORY_MS, Date.now() - oldest) : 0);
     }, 2000);
     return () => clearInterval(id);
   }, []);
@@ -560,7 +615,13 @@ function App() {
       {tourOpen && <Tour onClose={closeTour} />}
       {keyOpen && <Legend onClose={closeKey} />}
       {configOpen && (
-        <Settings settings={settings} set={set} reset={reset} onClose={closeConfig} />
+        <Settings
+          settings={settings}
+          set={set}
+          reset={reset}
+          onClose={closeConfig}
+          onKey={configToKey}
+        />
       )}
       <Crt scanlines={settings.scanlines} sweep={settings.sweep} />
       <Seeker onDataReceived={handleDataReceived} onStatus={setStatus} />

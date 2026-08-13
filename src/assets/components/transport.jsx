@@ -79,7 +79,14 @@ function Transport({ span, behind, onSeek }) {
         onPointerUp: () => (dragging.current = false),
         onPointerCancel: () => (dragging.current = false),
         onKeyDown: (event) => {
-          const step = event.shiftKey ? 30000 : 5000;
+          // A fraction of the track rather than a fixed number of seconds. The
+          // window this rides is no longer always twelve minutes: it grows to
+          // an hour, and shrinks again when the world is busy enough to hit the
+          // memory ceiling. Five seconds of an hour is a third of a pixel, so a
+          // fixed step would have left the arrow keys apparently doing nothing
+          // at one end and jumping at the other. A hundredth moves the mark by
+          // about two pixels wherever the window happens to be.
+          const step = Math.max(2000, span / (event.shiftKey ? 10 : 100));
           if (event.key === "ArrowLeft") onSeek(Math.min(span, behind + step));
           else if (event.key === "ArrowRight") onSeek(Math.max(0, behind - step));
           else if (event.key === "Home") onSeek(span);

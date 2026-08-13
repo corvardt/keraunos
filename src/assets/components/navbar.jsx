@@ -83,7 +83,7 @@ function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey, onGuide }
             className={item}
             target="_blank"
             rel="noreferrer"
-            href="https://twitter.com/covardt"
+            href="https://twitter.com/corvardt"
           >
             x
           </a>

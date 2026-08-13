@@ -204,9 +204,15 @@ function Sidebar({
                     selection?.place === region.place ? "text-text glow" : ""
                   }`}
                 >
-                  {/* The bar is the comparison; the figure is the reading. */}
+                  {/* The bar is the comparison; the figure is the reading. Drawn
+                      from the land token rather than the rule token: a rule is
+                      meant to sit at the edge of visibility and a quantity is
+                      not, and at line weight this came to 1.27:1 against the
+                      panel, which is a comparison nobody can make. Mixed back
+                      to 60% it reads at about 2:1 in both media, present
+                      without competing with the figure beside it. */}
                   <span
-                    className="absolute inset-y-0 left-0 bg-line"
+                    className="absolute inset-y-0 left-0 bg-land/60"
                     style={{ width: `${(region.count / busiest) * 100}%` }}
                     aria-hidden="true"
                   />

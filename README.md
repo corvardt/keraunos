@@ -7,7 +7,7 @@ streamed over WebSocket and plotted on a d3 world map. Rendered as a phosphor
 instrument: strikes arrive at full white and decay, worked cells burn into the
 map, and clusters are tracked as storm cells with a bearing and a ground speed.
 The instrument also reports on itself, showing how well each strike was located
-and by which detectors, and the last twelve minutes can be rewound and replayed.
+and by which detectors, and the last hour can be rewound and replayed.
 
 ## Running
 
@@ -31,7 +31,7 @@ the terminal: `node KeraunosSeeker.cjs`.
 | **Point** | The map reads out the place under the pointer, its coordinates, and the strike count for that 1° cell |
 | **Pick** | Click the map, a feed row, or a ranked place to narrow the feed to it; click a storm cell to narrow to the cell rather than the country. Click again or press `esc` to clear |
 | **Move** | Drag to pan, wheel or pinch to zoom to ~200 km; the region names across the top of the tube jump straight there |
-| **Rewind** | The track along the bottom of the tube holds the last twelve minutes. Drag anywhere on it to set the clock down at that moment; it then runs forward at life size until it catches up and hands back to live. It is drawn from the first frame and fills toward the half a minute it needs before there is anything worth scrubbing into |
+| **Rewind** | The track along the bottom of the tube holds up to the last hour. Drag anywhere on it to set the clock down at that moment; it then runs forward at life size until it catches up and hands back to live. It is drawn from the first frame and fills toward the half a minute it needs before there is anything worth scrubbing into |
 | **Here** | Asks the browser for your location (only when pressed) and frames the map on it, then reads out how far away the nearest strike is, and how long until its thunder. Session only: not stored, not sent anywhere |
 | **Link** | Zoomed in, the address carries the view as `#lon/lat/k`, so a view can be handed to someone |
 | **Hold** | The feed stops advancing while the pointer rests on it, and queues arrivals behind |
@@ -54,7 +54,7 @@ stored in `localStorage` and covers five groups:
 | **Tube** | Phosphor (white, green, amber, ice), contrast, and bloom: the medium itself, before anything is drawn on it |
 | **Layout** | Whether the side panel, header and footer are shown at all |
 | **Screen** | Scanlines, refresh sweep, strike shake, detector clicks |
-| **Map** | Storm cells and how much detail they carry, cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
+| **Map** | Storm cells and how much detail they carry, the density window, cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
 | **Panel** | Rate trace, activity ranking, strike feed |
 
 ## Layout
@@ -114,6 +114,19 @@ assembled from the strikes themselves.
 
 ## Notes on rewinding
 
+How far back there is to go is not a fixed number. An hour is retained, but
+only if an hour fits: a strike costs about 64 bytes and the ceiling is 120,000
+of them, so at the quiet end of the world's rate the hour is comfortable and at
+the peak the ceiling binds first and the window is shorter. Nothing pretends
+otherwise. The span is measured from the oldest strike actually held, so the
+track is as long as the history there is, and it grows as the session runs.
+
+Retention and clustering are two numbers for a reason. A storm cell exists for
+tens of minutes and is tracked between passes; built over an hour it would be
+the union of everywhere the storm had been, which is neither a cell nor where it
+is. So the clustering keeps its twelve minutes while the history around it grew.
+They were one constant, and lengthening it would have quietly wrecked the other.
+
 Replay derives rather than remembers. Everything the live pipeline builds
 incrementally is a pure function of the strikes and a time, so scrubbing is that
 function called with a different time. `burn.js` is that function, extracted so
@@ -125,6 +138,15 @@ accumulation and is rebuilt at 2 Hz exactly as it is live. Both are quantised so
 a tick landing inside the same slice reuses the last derivation. On a full
 25,000 strike window that is 1.8 ms per burn and 0.5 ms per mark filter, about
 8 ms/s in total.
+
+The window is now an hour rather than twelve minutes, which would have made
+every one of those passes five times longer had they stayed as filters over the
+whole of it. They do not: strikes are appended in arrival order, so any window
+over them is a contiguous run whose start is found by bisection and passed on as
+a slice. The clustering asks for twelve minutes of the hour and walks twelve
+minutes; a burn asks for four and walks four. Cost follows the window each pass
+actually uses rather than the history it is drawn from, which is what makes
+lengthening the history a change in depth rather than in price.
 
 Setting the clock down starts it running forward again at life size, rather than
 freezing a frame: what you want from a map of a storm is to watch the storm
@@ -154,8 +176,8 @@ Seven steps and no more. The key panel already says everything, at length, and
 a guide that also said everything would be a worse copy of it read at the worst
 possible moment. These are only the things you cannot read the map without: what
 a mark is, how to interrogate one, how to move, what the four figures on the
-right are measuring, what the ranking is counting, that the last twelve minutes
-are still there, and where the rest of it lives. The last step points at `key`
+right are measuring, what the ranking is counting, that the last hour is still
+there, and where the rest of it lives. The last step points at `key`
 and gets out of the way.
 
 Steps drop themselves when there is nothing to point at. Each names the

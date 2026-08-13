@@ -146,7 +146,17 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry mark={smudge} term="Density">
           Where strikes have accumulated. A cell needs 3 strikes before it marks at all, and the
-          mark fades over 4 minutes, so the map empties as storms move on.
+          mark fades over the density window set in configuration, so the map empties as storms
+          move on.
+          <br />
+          <br />
+          At <span className="text-text">4m</span> that is weather: where it is raining lightning
+          now. Opened out to <span className="text-text">20m</span> or{" "}
+          <span className="text-text">1h</span>, the same layer becomes where the lightning has
+          been, and an hour of it draws the band the planet actually fires in. It is this
+          session&rsquo;s own hour and nothing else: nothing is fetched to fill it in, and it goes
+          when the tab does, so a window longer than you have been watching is simply shorter than
+          it says.
         </Entry>
         <Entry mark={storm} term="Storm cell">
           A cluster of strikes grouped by proximity, labelled with its strike count and, once
@@ -294,10 +304,11 @@ export default function Legend({ onClose }) {
           <br />
           <br />
           The rewind track takes <span className="text-text">&larr;</span>{" "}
-          <span className="text-text">&rarr;</span> once focused, in five-second steps and thirty
-          with <span className="text-text">shift</span>, and{" "}
+          <span className="text-text">&rarr;</span> once focused, in steps of a hundredth of the
+          track and a tenth with <span className="text-text">shift</span>, and{" "}
           <span className="text-text">home</span> and <span className="text-text">end</span> for the
-          two ends of it.
+          two ends of it. A fraction rather than a fixed count of seconds, because the track is as
+          long as the window behind you, which grows as the session runs.
         </Entry>
       </Group>
 

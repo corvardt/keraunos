@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { indexFeatures, findFeature, distanceKm } from "../../lib/geo.js";
 import { readMedium } from "../../lib/theme.js";
 import { motion, forecast } from "../../lib/storms.js";
-import { PERSISTENCE } from "../../lib/settings.js";
+import { PERSISTENCE, DENSITY } from "../../lib/settings.js";
 import {
   LAT_LIMIT,
   MIN_K,
@@ -269,6 +269,13 @@ const WorldMap = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const { palette, composite } = useMemo(() => readMedium(theme), [theme, paletteKey]);
   const persistenceMs = PERSISTENCE[settings.persistence] ?? PERSISTENCE.normal;
+  // Where the burn-in's heat scale tops out, as a power of ten of the strike
+  // count in a cell. A hundred in four minutes is an extraordinary cell and the
+  // scale is built around that; a hundred in an hour is an ordinary one, and
+  // held at the same ceiling every cell worth looking at would clip to solid
+  // white together and the layer would stop saying anything. So the ceiling
+  // rides the window: fifteen times the span, fifteen times the count.
+  const burnFull = Math.log10(100 * ((DENSITY[settings.density] ?? DENSITY["4m"]) / DENSITY["4m"]));
 
   const base = useMemo(
     () => (width && height ? fitProjection(width, height) : null),
@@ -579,6 +586,11 @@ const WorldMap = ({
   };
 
   const hereXY = project(here);
+  // Bracketed, because it is the only thing in this strip that is not a place
+  // to go. The names beside it move the view and cost nothing; this one asks
+  // the browser a question about the reader, and it read as the eighth region
+  // in a row of seven. Brackets are what the rest of the instrument puts around
+  // a control, so it borrows that rather than inventing a new mark.
   const hereLabel =
     locating === "asking"
       ? "locating"
@@ -866,7 +878,7 @@ const WorldMap = ({
       const h = sw[1] - ne[1];
       // Ease the fade so a cell holds its mark, then lets go near the end.
       const life = bin.fade * bin.fade;
-      const heat = Math.min(1, Math.log10(bin.count) / 2);
+      const heat = Math.min(1, Math.log10(bin.count) / burnFull);
 
       // History is a soft round smudge. A filled rectangle has hard edges and
       // reads as interface furniture rather than as accumulated density.
@@ -1002,6 +1014,7 @@ const WorldMap = ({
 
     historyLayer.current = { canvas, view: settled };
   }, [
+    burnFull,
     bins,
     layerProjection,
     palette,
@@ -1519,12 +1532,21 @@ const WorldMap = ({
           type="button"
           onClick={findMe}
           disabled={locating === "asking"}
-          title="Ask this browser for your location and frame the map on it"
+          aria-label={
+            here
+              ? "Frame the map on your location again"
+              : "Ask this browser for your location and frame the map on it"
+          }
+          title={
+            locating === "denied"
+              ? "This browser is refusing the page a position. It has to be allowed again in the browser's own site settings."
+              : "Ask this browser for your location and frame the map on it. Session only: not stored, not sent anywhere"
+          }
           className={`shrink-0 text-2xs uppercase tracking-label transition-colors ${
             here ? "text-text glow" : "text-dim hover:text-text"
           }`}
         >
-          {hereLabel}
+          [ {hereLabel} ]
         </button>
         {zoomedIn && (
           <span className="shrink-0 text-2xs uppercase tracking-label text-text glow">
