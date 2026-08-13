@@ -2,7 +2,7 @@ import { memo } from "react";
 
 /**
  * The glass. Sits above everything, catches no pointer events, and is the only
- * place the retro treatment lives — the components underneath stay clean.
+ * place the retro treatment lives; the components underneath stay clean.
  */
 function Crt({ scanlines = true, sweep = true }) {
   return (
@@ -18,7 +18,7 @@ function Crt({ scanlines = true, sweep = true }) {
 // should also re-render the glass.
 export default memo(Crt);
 
-/** Corner ticks for panels and the map — an instrument bezel, not a border. */
+/** Corner ticks for panels and the map: an instrument bezel, not a border. */
 export function Ticks() {
   return (
     <>

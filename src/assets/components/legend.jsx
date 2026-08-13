@@ -126,13 +126,13 @@ export default function Legend({ onClose }) {
       <Group title="On the map">
         <Entry mark={dot} term="Strike">
           A detected strike, at full brightness on arrival and fading over the persistence set in
-          configuration. Position is where the network located the discharge — and the mark is drawn
+          configuration. Position is where the network located the discharge, and the mark is drawn
           a little softer where it located it from one side only, which the Fix gap below explains.
           The ping and the bolt are never softened: how well a strike was placed says nothing about
           whether it happened.
         </Entry>
         <Entry mark={ring} term="Ping">
-          The arrival marker — a ring thrown outward as a strike lands, so an arrival anywhere on
+          The arrival marker: a ring thrown outward as a strike lands, so an arrival anywhere on
           the map catches the eye without needing a colour.
         </Entry>
         <Entry mark={bolt} term="Bolt">
@@ -149,13 +149,13 @@ export default function Legend({ onClose }) {
           mark fades over 4 minutes, so the map empties as storms move on.
         </Entry>
         <Entry mark={storm} term="Storm cell">
-          A cluster of strikes grouped by proximity, labelled with its strike count and — once
-          tracked long enough — its ground speed. The arrow gives the bearing of travel: the
+          A cluster of strikes grouped by proximity, labelled with its strike count and, once
+          tracked long enough, its ground speed. The arrow gives the bearing of travel: the
           direction is to scale, the length is not.
         </Entry>
         <Entry mark={track} term="Cell track">
           Up to an hour of where a storm cell has been, brightening toward the present, with its
-          next hour dashed on ahead. Both are drawn to scale — an ordinary cell covers only tens of
+          next hour dashed on ahead. Both are drawn to scale: an ordinary cell covers only tens of
           kilometres in that time, so the track appears once you are close enough for that to be
           more than a pixel, and not before. The speed beside it is fitted to the recent end of the
           track alone: cells turn, and an hour of a turning one averages out to a heading it no
@@ -166,17 +166,17 @@ export default function Legend({ onClose }) {
           <span className="text-text">Ring</span> is the cell and its strike count and nothing else;{" "}
           <span className="text-text">track</span> adds where it has been and which way it is
           heading; <span className="text-text">full</span> adds the forecast and the speed. Turned
-          down, a cue is not drawn rather than drawn faintly — a cue you have dimmed is still a cue
+          down, a cue is not drawn rather than drawn faintly; a cue you have dimmed is still a cue
           competing for the same eye.
         </Entry>
         <Entry mark={capital} term="Capital">
           Named only while a cell within 400 km of it is burning, and fading as that burn does. The
           map is an instrument rather than an atlas, and a place name earns its space at exactly one
-          moment: when something is happening there. A quiet map carries none — point at it instead,
+          moment: when something is happening there. A quiet map carries none; point at it instead,
           and it names whatever is under the cursor.
         </Entry>
         <Entry mark={daylight} term="Daylight">
-          The terminator, and the hemisphere it divides — light added on the tube, ink laid down on
+          The terminator, and the hemisphere it divides: light added on the tube, ink laid down on
           paper, so the lit side is the pale one in both. It is here because lightning is a daily
           rhythm before it is anything else: the strike band is afternoon convection, and it walks
           around the planet a step behind this line.
@@ -204,7 +204,7 @@ export default function Legend({ onClose }) {
         <Entry mark={land} term="Land">
           A dot matrix, not a coastline, so that lit strikes stay the only solid marks on screen.
           It is rebuilt for whatever is on screen as you zoom, opening out a little as you close
-          in — held at world spacing, a continent seen from inside reads as a solid field.
+          in; held at world spacing, a continent seen from inside reads as a solid field.
         </Entry>
       </Group>
 
@@ -212,7 +212,7 @@ export default function Legend({ onClose }) {
         <Entry term="Rate">Strikes detected worldwide in the last 60 seconds. The trace below it is that same minute, sampled twice a second.</Entry>
         <Entry term="Detected">Total strikes received since the page was opened.</Entry>
         <Entry term="Latency">
-          How long the network took to locate the most recent strike — a property of the detection
+          How long the network took to locate the most recent strike: a property of the detection
           system, not of the weather.
         </Entry>
         <Entry term="Stations">
@@ -222,7 +222,7 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry term="Fix gap">
           The widest direction the last few strikes were <span className="text-text">not</span> heard
-          from — the largest angular gap between the stations that fixed them, in degrees. A strike
+          from: the largest angular gap between the stations that fixed them, in degrees. A strike
           ringed by detectors is pinned from every side and reads low; one heard only from the east
           reads above 180°, and is placed far less precisely however many stations heard it. This is
           the network describing its own geometry, and most of what it sees, it sees from one side.
@@ -237,7 +237,7 @@ export default function Legend({ onClose }) {
           2,000 km, at which point the figure has stopped being about your weather.
         </Entry>
         <Entry term="Most active">
-          The places holding the most strikes across the cells still burning on the map — roughly
+          The places holding the most strikes across the cells still burning on the map, roughly
           the last few minutes, not the whole session. Counted from cells of 3 strikes or more, so
           scattered single strikes never enter the ranking.
         </Entry>
@@ -250,7 +250,7 @@ export default function Legend({ onClose }) {
           map instead.
         </Entry>
         <Entry term="Picking">
-          Clicking the map — or a feed row, or a ranked place — narrows the feed to that place.
+          Clicking the map (or a feed row, or a ranked place) narrows the feed to that place.
           Clicking a storm cell picks the cell instead, and narrows to what fell inside it rather
           than to the country underneath. Click it again, or press escape, to let it go.
         </Entry>
@@ -259,7 +259,7 @@ export default function Legend({ onClose }) {
           a detection network swings by whole seconds and says nothing you can watch.
         </Entry>
         <Entry term="Linking">
-          Zoom in and the address carries the view — longitude, latitude, magnification. Hand it to
+          Zoom in and the address carries the view: longitude, latitude, magnification. Hand it to
           someone and the tube opens where you left it. The whole world writes nothing, being where
           it starts.
         </Entry>
@@ -269,7 +269,7 @@ export default function Legend({ onClose }) {
           pixels across, which is the whole reason for it.
         </Entry>
         <Entry term="Here">
-          The one control that asks the browser where you are, and only when pressed — nothing
+          The one control that asks the browser where you are, and only when pressed; nothing
           requests a position on load. The fix frames the map on your region and marks it with a
           station ring. It is held for the session only: not stored, not sent anywhere.
         </Entry>
@@ -277,13 +277,27 @@ export default function Legend({ onClose }) {
           The feed stops advancing while the pointer rests on it, so a row can be read to the end.
           Arrivals queue behind it and release when you leave.
         </Entry>
+        <Entry term="Guide">
+          A walk through the instrument, pointing at each control on the running
+          map rather than describing it here: press <span className="text-text">g</span>, or{" "}
+          <span className="text-text">guide</span> in the header. It runs once on a first visit and
+          then leaves you alone. This panel is the catalogue it hands off to.
+        </Entry>
         <Entry term="Keys">
-          <span className="text-text">k</span> this panel &middot;{" "}
-          <span className="text-text">c</span> configuration &middot;{" "}
-          <span className="text-text">t</span> tube / paper &middot;{" "}
-          <span className="text-text">+</span> <span className="text-text">&minus;</span> zoom
-          &middot; <span className="text-text">0</span> whole world &middot;{" "}
-          <span className="text-text">esc</span> close or clear
+          <span className="text-text">k</span> or <span className="text-text">?</span> this panel
+          &middot; <span className="text-text">c</span> configuration &middot;{" "}
+          <span className="text-text">g</span> guide &middot; <span className="text-text">t</span>{" "}
+          tube / paper &middot; <span className="text-text">+</span>{" "}
+          <span className="text-text">&minus;</span> zoom &middot;{" "}
+          <span className="text-text">0</span> whole world &middot;{" "}
+          <span className="text-text">esc</span> close or clear.
+          <br />
+          <br />
+          The rewind track takes <span className="text-text">&larr;</span>{" "}
+          <span className="text-text">&rarr;</span> once focused, in five-second steps and thirty
+          with <span className="text-text">shift</span>, and{" "}
+          <span className="text-text">home</span> and <span className="text-text">end</span> for the
+          two ends of it.
         </Entry>
       </Group>
 
@@ -296,7 +310,7 @@ export default function Legend({ onClose }) {
         </p>
         <p className="py-1 text-xs leading-relaxed text-dim">
           Tracks extrapolate observed motion. They say where an existing cell is heading over the
-          next few minutes — not where the next strike will land, and nothing about cells that have
+          next few minutes, not where the next strike will land, and nothing about cells that have
           yet to form.
         </p>
       </Group>

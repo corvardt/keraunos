@@ -1,7 +1,7 @@
 // Burn-in, as a function of the strikes and an instant.
 //
-// The live map builds this incrementally — a cell is touched, it brightens, it
-// is left alone, it fades — because doing it that way costs nothing per strike.
+// The live map builds this incrementally (a cell is touched, it brightens, it
+// is left alone, it fades) because doing it that way costs nothing per strike.
 // Replay cannot: scrubbing to a moment four minutes ago means asking what the
 // map looked like then, and the only honest answer is to derive it from the
 // strikes that had happened by then.

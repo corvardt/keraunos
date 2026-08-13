@@ -31,13 +31,22 @@ the terminal: `node KeraunosSeeker.cjs`.
 | **Point** | The map reads out the place under the pointer, its coordinates, and the strike count for that 1° cell |
 | **Pick** | Click the map, a feed row, or a ranked place to narrow the feed to it; click a storm cell to narrow to the cell rather than the country. Click again or press `esc` to clear |
 | **Move** | Drag to pan, wheel or pinch to zoom to ~200 km; the region names across the top of the tube jump straight there |
-| **Rewind** | The track along the bottom of the tube holds the last twelve minutes. Drag anywhere on it to set the clock down at that moment; it then runs forward at life size until it catches up and hands back to live |
+| **Rewind** | The track along the bottom of the tube holds the last twelve minutes. Drag anywhere on it to set the clock down at that moment; it then runs forward at life size until it catches up and hands back to live. It is drawn from the first frame and fills toward the half a minute it needs before there is anything worth scrubbing into |
 | **Here** | Asks the browser for your location (only when pressed) and frames the map on it, then reads out how far away the nearest strike is, and how long until its thunder. Session only: not stored, not sent anywhere |
 | **Link** | Zoomed in, the address carries the view as `#lon/lat/k`, so a view can be handed to someone |
 | **Hold** | The feed stops advancing while the pointer rests on it, and queues arrivals behind |
-| **Keys** | `k` key panel · `c` configuration · `t` tube/paper · `+` `-` zoom · `0` whole world · `esc` close or clear. The rewind track takes arrow keys, `home` and `end` when focused |
+| **Guide** | Seven steps that light each control on the running map in turn. Opens itself once on a first visit; `g` or `guide` afterwards, `esc` to skip |
+| **Keys** | `k` key panel · `c` configuration · `g` guide · `t` tube/paper · `+` `-` zoom · `0` whole world · `esc` close or clear. The rewind track takes arrow keys, `home` and `end` when focused |
 
-The key panel (`k`) explains every mark on the map. Configuration (`c`) is
+The guide is the way in and the key panel is the reference; they are not the
+same document and neither one replaces the other. The guide runs on the live
+instrument, dimming everything except the control it is talking about and
+leaving that control working, so the first minute is spent using the thing
+rather than reading about it. It says the seven things worth knowing before you
+can read the map at all, and then stops.
+
+The key panel (`k`) is the catalogue the guide hands off to: every mark on the
+map and every figure beside it, in full, for looking up. Configuration (`c`) is
 stored in `localStorage` and covers five groups:
 
 | Group | What it holds |
@@ -55,9 +64,11 @@ stored in `localStorage` and covers five groups:
 | `src/assets/components/Seeker.jsx` | Headless websocket client; decodes frames, records the detecting network, reports strikes and connection status upward |
 | `src/assets/components/worldmap.jsx` | d3 Mercator map: land matrix, burn-in and storm layers, and the live strike loop |
 | `src/assets/components/transport.jsx` | The rewind track: seek into the retained window and play forward from there |
+| `src/assets/components/tour.jsx` | The guided pass: lights one real control at a time and leaves the hole open |
 | `src/lib/view.js` | Pan/zoom as a screen transform over the fitted world; clamping, region framing, visible extent |
 | `src/lib/storms.js` | Clusters strikes into cells and tracks them between passes to derive motion |
 | `src/lib/burn.js` | Burn-in as a pure function of the strikes and an instant, which is what makes replay possible |
+| `src/lib/tour.js` | Whether this browser has been walked through the instrument, and when the walk may start |
 | `src/lib/fix.js` | How well a strike was located, derived from the stations that fixed it |
 | `src/lib/stations.js` | The detecting network, assembled from the strikes as they arrive |
 | `src/lib/geo.js` | Bucketed point-in-polygon lookup shared by the map and the place log, and great-circle distance |
@@ -123,6 +134,41 @@ than show stale rings over a past sky the map shows none. Bolts and the chassis
 knock are events, and an event does not happen twice. And live arrivals keep
 draining silently behind you, so returning to live finds the present already
 there rather than empty.
+
+## Notes on the guide
+
+The instrument is legible once you know six or seven things and opaque until
+you do, and none of those things are guessable from a header reading `tube |
+guide key cfg`. That is a real cost of the terseness and worth paying, but only
+if something pays it back.
+
+So the guide dims the tube and cuts a hole over one real control at a time.
+Which means the map keeps drawing behind it, the feed keeps releasing, and the
+lit control still works: the hole is four bands around a gap rather than a
+mask, so there is genuinely nothing over it to click through. Pressing `here`
+while the guide is explaining `here` is the shortest version of the
+explanation. The dim is what advances the step, so the two gestures never
+compete for the same pixel.
+
+Seven steps and no more. The key panel already says everything, at length, and
+a guide that also said everything would be a worse copy of it read at the worst
+possible moment. These are only the things you cannot read the map without: what
+a mark is, how to interrogate one, how to move, what the four figures on the
+right are measuring, what the ranking is counting, that the last twelve minutes
+are still there, and where the rest of it lives. The last step points at `key`
+and gets out of the way.
+
+Steps drop themselves when there is nothing to point at. Each names the
+elements it is about, and a step whose elements are all switched off is not a
+step: turn the side panel off and the guide is five steps long and never
+mentions a feed. That filter runs after the first commit rather than during it,
+since during render the document is still the one from before the guide
+existed, and anything mounting alongside it would read as switched off.
+
+It runs once, on a first visit, after the boot readout clears. That flag is its
+own key in `localStorage` rather than a field in the configuration, because the
+configuration has a `[ defaults ]` button and resetting the phosphor is not a
+request to be taught the instrument again.
 
 ## Notes on the labels
 

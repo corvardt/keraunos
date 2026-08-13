@@ -3,8 +3,8 @@
 //
 // The speed a cell is labelled with is the one number on the map that cannot
 // be eyeballed: a wrong figure looks exactly like a right one. It is also
-// derived through a long chain — bin, flood fill, recent centroid, trail,
-// least-squares slope — where a sign or a unit can invert quietly. So it is
+// derived through a long chain (bin, flood fill, recent centroid, trail,
+// least-squares slope) where a sign or a unit can invert quietly. So it is
 // measured against a synthetic storm instead.
 //
 //   node scripts/check-storms.cjs
@@ -85,7 +85,7 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/storms.js")).href).then(
       );
       check(off < 6, `  bearing within 6°`, `read ${track.bearing.toFixed(1)} of ${bearing}`);
 
-      // The forecast must be the course, extended — not a second opinion.
+      // The forecast must be the course, extended, not a second opinion.
       const ahead = forecast(tracked[0], 1800);
       const moved =
         Math.hypot(

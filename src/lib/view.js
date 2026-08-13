@@ -7,7 +7,7 @@ export const MAX_K = 40; // roughly a 200km span across the tube
 // There was a margin here once: extra extent built beyond the edges so that a
 // small pan would still find land under it. It never reached the screen. The
 // layers are drawn to canvases exactly the size of the viewport, so everything
-// built outside it was clipped at paint — at 3x zoom, 9,239 of 15,288 dots, 60%
+// built outside it was clipped at paint: at 3x zoom, 9,239 of 15,288 dots, 60%
 // of the build, discarded on every settle, for an edge that stayed empty anyway.
 //
 // Covering that edge for real means canvases larger than the viewport, and they
@@ -28,7 +28,7 @@ export function fitProjection(width, height) {
 /**
  * The view is a plain screen transform over the fitted world: screen = k·p + t.
  * Mercator is linear in scale and translate, so that composition folds back
- * into a real projection — which means every caller, including `invert`, keeps
+ * into a real projection, which means every caller, including `invert`, keeps
  * working without knowing a view exists at all.
  */
 export function zoomed(base, view) {

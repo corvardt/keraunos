@@ -10,11 +10,13 @@ import Boot from "./assets/components/boot.jsx";
 import Settings from "./assets/components/settings.jsx";
 import Legend from "./assets/components/legend.jsx";
 import Clock from "./assets/components/clock.jsx";
+import Tour from "./assets/components/tour.jsx";
 //libs and utils
 import { indexFeatures, findFeature, distanceKm } from "./lib/geo.js";
 import { useTheme } from "./lib/theme.js";
 import { usePalette } from "./lib/palette.js";
 import { useSettings } from "./lib/settings.js";
+import { useTour } from "./lib/tour.js";
 import { detectStorms, trackStorms } from "./lib/storms.js";
 import { binStrikes } from "./lib/burn.js";
 import geoData from "./lib/world.json";
@@ -33,13 +35,13 @@ const MAX_HISTORY = 25000; // ceiling on retained strikes (~8 min at peak rate)
 const REGION_COUNT = 5; // places listed in the activity ranking
 const REGION_MIN = 3; // strikes a cell needs before it is worth geocoding
 // Ceiling on strikes waiting to be drawn. The map drains this every animation
-// frame, so it is normally a handful — but a hidden tab gets no frames at all
+// frame, so it is normally a handful, but a hidden tab gets no frames at all
 // while the socket keeps delivering, and the backlog would otherwise grow for
 // as long as the tab is left alone and then land in one frame on return.
 const MAX_QUEUE = 800;
 // Somewhere on earth is always having weather: the feed runs at several strikes
 // a second at its quietest. Silence this long is therefore a fault and not a
-// lull — and it has to be said out loud, because a map that has stopped being
+// lull, and it has to be said out loud, because a map that has stopped being
 // fed looks exactly like a map of calm weather, right down to the burn-in
 // draining away on schedule.
 const SILENCE_MS = 25000;
@@ -72,7 +74,7 @@ const EMPTY = [];
 // rather than throwing inside a render.
 const seconds = (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed(1) : null);
 
-// Any one strike of a batch, taken alone, swings from one flush to the next —
+// Any one strike of a batch, taken alone, swings from one flush to the next:
 // it is one measurement of a network, not a reading. The median of the batch
 // holds still enough to be watched.
 function median(values) {
@@ -118,6 +120,9 @@ function App() {
   const paletteKey = usePalette(theme, settings.phosphor, settings.contrast, settings.bloom);
   const [configOpen, setConfigOpen] = useState(false);
   const [keyOpen, setKeyOpen] = useState(false);
+  // The walk through the instrument. First visit only, and not until the boot
+  // readout has cleared: it points at controls, and there are none before then.
+  const { open: tourOpen, start: startTour, close: closeTour } = useTour(booted);
   // The feed row under the pointer, marked on the map.
   const [focus, setFocus] = useState(null);
   // A place picked off the map (or the feed); the feed narrows to it.
@@ -152,10 +157,18 @@ function App() {
   const openKey = useCallback(() => setKeyOpen(true), []);
   const closeKey = useCallback(() => setKeyOpen(false), []);
 
+  // The guide's last step lights the header and leaves it clickable, so `key`
+  // and `cfg` can be pressed straight out of it. A panel opening over the guide
+  // would leave two things wanting Escape, and the guide has done its job by
+  // then anyway: reaching the catalogue is where it was pointing.
+  useEffect(() => {
+    if (configOpen || keyOpen) closeTour();
+  }, [configOpen, keyOpen, closeTour]);
+
   const worldIndex = useMemo(() => indexFeatures(geoData.features), []);
 
-  // The country outlines are needed for the first frame — the land matrix is
-  // built from them — but the two detail sets are not. Nothing can be named
+  // The country outlines are needed for the first frame (the land matrix is
+  // built from them) but the two detail sets are not. Nothing can be named
   // before a strike has arrived, and no strike arrives before the socket
   // opens, so they are fetched alongside the boot sequence rather than ahead
   // of it. Together they are more than a third of the bundle, and holding
@@ -198,7 +211,7 @@ function App() {
   const rates = useRef(Array(SAMPLES).fill(0));
   const feedQueue = useRef([]);
   // Cell key → place name. Cells never move, so this is filled once each, and
-  // never evicted — it doesn't need to be. There are only 360×180 one-degree
+  // never evicted; it doesn't need to be. There are only 360×180 one-degree
   // cells on earth, so this is bounded by the grid itself rather than by the
   // length of the session.
   const placeCache = useRef(new Map());
@@ -247,8 +260,8 @@ function App() {
     // Push only. Trimming here would re-copy the whole array on every
     // message; the clustering pass below enforces both bounds instead.
     // `t` is when we heard about it; `at` is when it happened. The network runs
-    // about five seconds behind, and for anything counted in seconds — thunder,
-    // above all — the difference is the whole measurement.
+    // about five seconds behind, and for anything counted in seconds (thunder,
+    // above all) the difference is the whole measurement.
     const arrived = Date.now();
     const flash = arrived - (Number(data.delay) || 0) * 1000;
     history.current.push({ lon: data.lon, lat: data.lat, t: arrived, at: flash });
@@ -329,7 +342,7 @@ function App() {
         } else {
           seen.count += cell.count;
           // The marker points at the busiest cell, not the average of a
-          // country — the centroid of Brazil is not where the storm is.
+          // country: the centroid of Brazil is not where the storm is.
           if (cell.count > seen.peak) {
             seen.peak = cell.count;
             seen.lon = cell.lon + BIN_SIZE / 2;
@@ -488,7 +501,7 @@ function App() {
   // beat keeps the feed readable and lets each row animate in on its own.
   useEffect(() => {
     // Held: the queue keeps filling and the list stays where it was. Nothing
-    // is lost that would not have been lost anyway — the queue is capped.
+    // is lost that would not have been lost anyway; the queue is capped.
     if (hold) return;
     const id = setInterval(() => {
       if (!feedQueue.current.length) return;
@@ -499,7 +512,7 @@ function App() {
   }, [hold]);
 
   // The hold is released by the pointer leaving the feed, which cannot happen
-  // if the feed is switched off underneath it — or the whole side panel is.
+  // if the feed is switched off underneath it, or the whole side panel is.
   // Without this it stays frozen with nothing on screen to unfreeze it.
   useEffect(() => {
     if (!settings.feed || !settings.sidebar) setHold(false);
@@ -526,6 +539,8 @@ function App() {
       } else if (key === "c") {
         setKeyOpen(false);
         setConfigOpen((open) => !open);
+      } else if (key === "g") {
+        startTour();
       } else if (key === "t") {
         setTheme(theme === "dark" ? "light" : "dark");
       } else {
@@ -535,11 +550,14 @@ function App() {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [booted, configOpen, keyOpen, theme, setTheme]);
+  }, [booted, configOpen, keyOpen, theme, setTheme, startTour]);
 
   return (
     <div className="flex h-full flex-col bg-void">
       {!booted && <Boot onDone={finishBoot} />}
+      {/* Under the glass, like the panels: the guide is drawn on the tube
+          rather than over it, and the scanlines cross it too. */}
+      {tourOpen && <Tour onClose={closeTour} />}
       {keyOpen && <Legend onClose={closeKey} />}
       {configOpen && (
         <Settings settings={settings} set={set} reset={reset} onClose={closeConfig} />
@@ -555,16 +573,17 @@ function App() {
           onTheme={setTheme}
           onConfig={openConfig}
           onKey={openKey}
+          onGuide={startTour}
         />
       )}
 
       <main className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-        <div className="min-h-[45vh] flex-1 lg:min-h-0">
+        <div data-tour="map" className="min-h-[45vh] flex-1 lg:min-h-0">
           <WorldMap
             // Rewound, the map is drawn from the window rather than from the
             // live accumulation. Storm cells are the one thing not replayed:
             // they are tracked forward, strike by strike, and a track cannot be
-            // reconstructed from an instant — so rather than show stale rings
+            // reconstructed from an instant, so rather than show stale rings
             // over a past sky, it shows none.
             bins={replay ? replay.bins : bins}
             storms={replay ? EMPTY : storms}

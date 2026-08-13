@@ -13,7 +13,7 @@ const item =
 /** Splits the controls into what they do: display, panels, elsewhere. */
 const Rule = () => <span className="h-2.5 w-px bg-line" aria-hidden="true" />;
 
-function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey }) {
+function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey, onGuide }) {
   const live = phase === "live";
   const down = phase === "down";
   // When live, the dot and the node name already say it. Only speak up otherwise.
@@ -48,7 +48,7 @@ function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey }) {
           </span>
         </span>
 
-        <span className="flex items-center gap-3 border-l border-line pl-4">
+        <span data-tour="controls" className="flex items-center gap-3 border-l border-line pl-4">
           {/* Two media, named for what they are rather than "light"/"dark". */}
           <button
             type="button"
@@ -59,6 +59,11 @@ function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey }) {
             {theme === "dark" ? "tube" : "paper"}
           </button>
           <Rule />
+          {/* First of the three, and the only one that walks: it is what the
+              other two are for once you already know what you are looking at. */}
+          <button type="button" onClick={onGuide} className={item}>
+            guide
+          </button>
           <button type="button" onClick={onKey} className={item}>
             key
           </button>

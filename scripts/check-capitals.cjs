@@ -38,7 +38,7 @@ for (const capital of rows) {
   // the coordinate; they are the resolution of the map it is checked against.
   if (!known.has(capital.country)) {
     unknown++;
-    console.log(`  ?  ${capital.name.padEnd(16)} ${capital.country} — not a feature in world.json`);
+    console.log(`  ?  ${capital.name.padEnd(16)} ${capital.country}: not a feature in world.json`);
     continue;
   }
   const found = locate(capital.lon, capital.lat);
@@ -54,7 +54,7 @@ for (const capital of rows) {
 
 const tier1 = rows.filter((c) => c.tier === 1).length;
 console.log(
-  `\n${rows.length} capitals (${tier1} tier 1) — ` +
+  `\n${rows.length} capitals (${tier1} tier 1): ` +
     `${rows.length - wrong - offshore - unknown} exact, ${offshore} offshore, ` +
     `${unknown} unmapped, ${wrong} in the wrong country`
 );

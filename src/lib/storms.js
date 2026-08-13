@@ -19,11 +19,11 @@ const MATCH_DEG = 1.2; // how far a cell may move between passes and stay itself
 const KM_PER_DEG = 111.32;
 
 // Velocity needs a long baseline. A 50 km/h cell moves ~28 m in 2 s, while one
-// new strike joining a 130-strike cluster drags the centroid ~430 m — fifteen
+// new strike joining a 130-strike cluster drags the centroid ~430 m: fifteen
 // times further. Measured sample-to-sample, the reading is pure noise, so
 // displacement is taken across minutes instead.
 // How long a baseline has to be is set by geometry, not preference. A 45 km/h
-// cell covers 3.75 km in five minutes while being ~100 km across — three per
+// cell covers 3.75 km in five minutes while being ~100 km across, three per
 // cent of its own width, which no centroid is accurate enough to resolve. Over
 // ten minutes it moves far enough to measure, so that is the wait.
 // Retention and fitting are two different jobs and want two different windows.
@@ -201,7 +201,7 @@ export function trackStorms(previous, current, now) {
 /**
  * Ground track, or null when the cell has not been watched long enough for the
  * reading to mean anything. Speeds outside weather's range are tracking errors
- * — a cluster merging or being matched to its neighbour — and are withheld
+ * (a cluster merging or being matched to its neighbour) and are withheld
  * rather than displayed.
  */
 export function motion(storm) {
@@ -220,7 +220,7 @@ export function motion(storm) {
 
 /**
  * Where the cell reaches in `seconds` if it holds its present course, measured
- * from the recent centroid rather than the windowed one — the forecast starts
+ * from the recent centroid rather than the windowed one: the forecast starts
  * from where the cell is, not from where it has been on average.
  *
  * Gated on `motion` deliberately: a course too short-baselined to state as a

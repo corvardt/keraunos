@@ -65,7 +65,7 @@ export default function Settings({ settings, set, reset, onClose }) {
     >
       {/* The medium before the marks on it. Phosphor multiplies the palette
           rather than replacing it, and contrast moves everything that is not
-          the background away from it together — so the hierarchy the palette
+          the background away from it together, so the hierarchy the palette
           was built with survives whatever is chosen here. */}
       <Group title="Tube">
         <Choice

@@ -1,6 +1,6 @@
 // The tick.
 //
-// A lightning detector clicks — that is what the hardware does, and it is the
+// A lightning detector clicks: that is what the hardware does, and it is the
 // oldest way an instrument has of telling you the rate without being watched.
 // Off unless asked for, because a page that makes noise uninvited is a page
 // nobody opens twice.
@@ -18,7 +18,7 @@ let recent = [];
 
 // Browsers refuse to start audio without a gesture, which is exactly right.
 // Nothing here runs until the reader has turned the setting on, and that click
-// is the gesture — so the context is built on first use and never before.
+// is the gesture, so the context is built on first use and never before.
 function context() {
   if (audio) return audio;
   const Ctor = window.AudioContext || window.webkitAudioContext;
@@ -45,7 +45,7 @@ export function wake() {
 }
 
 /**
- * One tick. `weight` runs 0 to 1 — a hard strike is a heavier knock, the way a
+ * One tick. `weight` runs 0 to 1: a hard strike is a heavier knock, the way a
  * closer particle is on a counter.
  */
 export function tick(weight = 0) {

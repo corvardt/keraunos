@@ -6,9 +6,9 @@ import { TOKENS } from "./theme.js";
 // The rule from theme.js holds and everything here follows from it: the palette
 // lives in CSS so the stylesheet and the canvas can never disagree. So nothing
 // in this file paints anything. It derives new values for the same tokens and
-// writes them back as inline properties on the root element, and the whole app —
-// Tailwind classes, glow shadows, the canvas reading computed style as it draws
-// — follows without knowing that anything was customised.
+// writes them back as inline properties on the root element, and the whole app
+// (Tailwind classes, glow shadows, the canvas reading computed style as it
+// draws) follows without knowing that anything was customised.
 //
 // The stylesheet stays the source of truth. Derivation always starts from the
 // values index.css declares for the current theme, never from whatever is
@@ -16,7 +16,7 @@ import { TOKENS } from "./theme.js";
 // nobody chose.
 
 // The tube's colour, as ratios rather than colours. A phosphor does not repaint
-// a grey, it decides which part of the beam survives the coating — so these
+// a grey, it decides which part of the beam survives the coating, so these
 // multiply the neutral palette rather than replacing it, and the mark that was
 // the brightest thing on screen still is.
 export const PHOSPHOR = {
@@ -54,8 +54,8 @@ function parse(value) {
 
 const hex = (rgb) => `#${rgb.map((c) => clamp(c).toString(16).padStart(2, "0")).join("")}`;
 
-// Alpha only: the bloom's colour belongs to the medium — white light added on
-// the tube, black ink spreading in paper — and is not ours to reinterpret.
+// Alpha only: the bloom's colour belongs to the medium (white light added on
+// the tube, black ink spreading in paper) and is not ours to reinterpret.
 function scaleAlpha(value, factor) {
   const parts = String(value).match(/[\d.]+/g);
   if (!parts || parts.length < 4) return value;
@@ -78,7 +78,7 @@ const baselines = new Map();
  * What index.css declares for this theme, read once and remembered.
  *
  * Our own overrides are cleared before reading, because a custom property set
- * inline is what computed style would report back — the derivation would be
+ * inline is what computed style would report back; the derivation would be
  * reading its own output.
  */
 function baseline(theme) {
@@ -130,7 +130,7 @@ export function applyPalette(theme, { phosphor, contrast, bloom }) {
  * theme.js gives for doing the same with the theme itself: effects run
  * child-first, so the canvas would read the outgoing palette out of computed
  * style and draw a frame in it. Returns a key the canvas can watch, since a
- * change here is invisible to React — the values it cares about live in the
+ * change here is invisible to React: the values it cares about live in the
  * DOM, not in props.
  */
 export function usePalette(theme, phosphor, contrast, bloom) {

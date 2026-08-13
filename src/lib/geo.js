@@ -31,7 +31,7 @@ function extend(box, coords) {
 // feature's bounding box is only cheap until you do it often enough. Building
 // the land matrix asks 14,548 questions of this at world zoom, and answering
 // each by walking all 177 countries is 2.5 million box comparisons for 3,845
-// dots — 40ms of the main thread on every settle. Bucketed first, it is 22,530
+// dots: 40ms of the main thread on every settle. Bucketed first, it is 22,530
 // comparisons and 17ms, for the same answers: what remains is the
 // point-in-polygon work itself, which is the part that was ever the point.
 //
@@ -55,7 +55,7 @@ const row = (lat) => Math.min(ROWS - 1, Math.max(0, Math.floor((lat + 90) / BUCK
  *
  * Feature order is preserved within a bucket, which the water bodies depend on:
  * they arrive sorted smallest-first so that the first hit is the most specific
- * name — the Adriatic before the Mediterranean, the Mediterranean before the
+ * name: the Adriatic before the Mediterranean, the Mediterranean before the
  * Atlantic. Bucketing must not quietly reorder that.
  */
 export function indexFeatures(features) {

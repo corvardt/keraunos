@@ -76,7 +76,7 @@ export default function Panel({ title, width = 380, onClose, children, footer })
   );
 }
 
-/** Caps label trailed by a rule — the terminal section break, reused. */
+/** Caps label trailed by a rule: the terminal section break, reused. */
 export function Group({ title, children }) {
   return (
     <section className="border-t border-line px-5 py-3 first:border-t-0">

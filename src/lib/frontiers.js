@@ -3,7 +3,7 @@ import GeoData from "./world.json";
 // Frontiers, taken from the boundary data the map already carries.
 //
 // A frontier is the edge two countries agree on. The data is topologically
-// clean — neighbours share vertices exactly, not approximately — so an interior
+// clean (neighbours share vertices exactly, not approximately) so an interior
 // border is an edge that appears in two features, and a coastline is one that
 // appears in a single one. That distinction is the whole point of doing this
 // rather than stroking country outlines: the land matrix exists so the map has
@@ -81,7 +81,7 @@ export default function frontiers() {
   };
 
   // Start from the ends: a node of degree two is the middle of a run, and
-  // anything else — a coast, a tripoint — is where one run stops and another
+  // anything else (a coast, a tripoint) is where one run stops and another
   // begins. Starting mid-run instead would split it into two half-runs.
   const paths = [];
   for (const [at, list] of nodes) {

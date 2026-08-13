@@ -3,7 +3,7 @@ import { memo, useEffect, useState } from "react";
 const TRACE_W = 300;
 const TRACE_H = 34;
 
-/** Caps label trailed by a rule to the panel edge — a terminal section break. */
+/** Caps label trailed by a rule to the panel edge: a terminal section break. */
 function Label({ children, trailing }) {
   return (
     <div className="flex items-center gap-2.5">
@@ -145,7 +145,7 @@ function Sidebar({
 
   return (
     <aside className="flex w-full shrink-0 flex-col border-line bg-panel lg:w-[340px] lg:border-l">
-      <section className="border-b border-line px-4 pb-4 pt-4">
+      <section data-tour="rate" className="border-b border-line px-4 pb-4 pt-4">
         <Label>Rate</Label>
         <div className="mt-2 flex items-baseline justify-between">
           <span className="text-base text-text glow-hot">{fmt(stats.rate)}</span>
@@ -158,7 +158,7 @@ function Sidebar({
         )}
       </section>
 
-      <section className="border-b border-line px-4 py-1">
+      <section data-tour="stats" className="border-b border-line px-4 py-1">
         <Readout label="Detected" value={fmt(stats.total)} />
         <Readout label="Latency" value={stats.delay ?? "—"} unit={stats.delay ? "s" : ""} />
         <Readout label="Stations" value={stats.stations ?? "—"} />
@@ -184,7 +184,7 @@ function Sidebar({
       )}
 
       {settings.regions && (
-        <section className="border-b border-line px-4 pb-4 pt-4">
+        <section data-tour="active" className="border-b border-line px-4 pb-4 pt-4">
           <Label trailing="strikes">Most active</Label>
           <ul className="mt-2">
             {regions.length === 0 && (
@@ -221,7 +221,7 @@ function Sidebar({
       )}
 
       {settings.feed && (
-      <section className="flex min-h-0 flex-1 flex-col px-4 pt-4">
+      <section data-tour="feed" className="flex min-h-0 flex-1 flex-col px-4 pt-4">
         {/* The label carries the hold: a stopped feed must never look like a
             dead one. */}
         <Label trailing={hold ? "held" : "delay"}>Recent · UTC</Label>
@@ -270,6 +270,6 @@ function Sidebar({
   );
 }
 
-// Skips every render driven by the map alone — panning and hovering the tube
+// Skips every render driven by the map alone: panning and hovering the tube
 // change nothing here.
 export default memo(Sidebar);

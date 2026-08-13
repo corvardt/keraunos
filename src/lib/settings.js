@@ -5,7 +5,7 @@ const STORAGE_KEY = "keraunos-settings";
 const LEGACY_KEY = "lightning-settings";
 
 export const DEFAULTS = {
-  // tube — the medium itself. Defaults reproduce the palette index.css
+  // tube: the medium itself. Defaults reproduce the palette index.css
   // declares, so an untouched configuration is the design as drawn.
   phosphor: "white",
   contrast: "normal",
@@ -34,7 +34,7 @@ export const DEFAULTS = {
   capitals: true,
   // Opt-in: the detecting network is context for the instrument rather than
   // part of the reading, and most of the time you are here for the weather.
-  // Named for the threads because that is all there is to see — the detectors
+  // Named for the threads because that is all there is to see: the detectors
   // themselves are drawn only in the moment they hear something.
   stations: false,
   persistence: "normal",

@@ -5,14 +5,14 @@
 //
 // The obvious suspicion is that the coastline has too many vertices. It does
 // not: world.json carries 10,354 of them across 177 countries, and dropping
-// any meaningful number starts putting coastal capitals — Helsinki, Tallinn,
-// Algiers, Beirut — into the sea. What it carries instead is precision.
+// any meaningful number starts putting coastal capitals (Helsinki, Tallinn,
+// Algiers, Beirut) into the sea. What it carries instead is precision.
 // Coordinates are stored to six decimal places, which is 0.1 m, on a map whose
 // finest sampling is the 11 km dot matrix at maximum zoom and whose finest
 // question is which country a strike fell in.
 //
-// So this rounds rather than simplifies. At three decimals — 111 m, still a
-// hundred times finer than the matrix — nothing measurably changes: zero of
+// So this rounds rather than simplifies. At three decimals (111 m, still a
+// hundred times finer than the matrix) nothing measurably changes: zero of
 // 60,000 sampled points are renamed and no capital moves. Two decimals would
 // save more and does start renaming points, so it is not what runs.
 //
@@ -33,7 +33,7 @@ const FILES = ["world.json", "us.json", "water.geo.json"].map((name) => ({
 
 // ── Rounding ───────────────────────────────────────────────────────────────
 // Rounding pulls neighbouring vertices onto the same point, so consecutive
-// duplicates are dropped — they are pure cost, and a ring of them can confuse
+// duplicates are dropped: they are pure cost, and a ring of them can confuse
 // a point-in-polygon test. The closing point is restored afterwards, because a
 // ring that no longer meets itself is not a ring.
 function roundRing(ring, factor) {
@@ -153,7 +153,7 @@ for (const { name, file } of FILES) {
 
 console.log(
   `\ntotal ${before.toFixed(1)} → ${after.toFixed(1)} KB gzipped, saving ${(before - after).toFixed(1)} KB` +
-    (apply ? " — written" : " — nothing written, pass --apply")
+    (apply ? " (written)" : " (nothing written, pass --apply)")
 );
 
 // The whole justification for rounding is that it changes nothing. If it has

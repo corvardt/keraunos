@@ -15,8 +15,8 @@ export default function Boot({ onDone }) {
   const [shown, setShown] = useState(0);
   const [leaving, setLeaving] = useState(false);
 
-  // The sequence must survive its parent re-rendering — which it does twice a
-  // second — so the callback is held in a ref and the effect never re-runs.
+  // The sequence must survive its parent re-rendering (which it does twice a
+  // second) so the callback is held in a ref and the effect never re-runs.
   const done = useRef(onDone);
   useEffect(() => {
     done.current = onDone;

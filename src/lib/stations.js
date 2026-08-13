@@ -2,14 +2,14 @@
 //
 // Nobody publishes the station list, but every strike names the stations that
 // heard it and where they stand. Listening is therefore enough to draw the
-// network — and drawing it that way is more honest than a roster would be: what
+// network, and drawing it that way is more honest than a roster would be: what
 // appears is the part of the network that is currently working, discovered by
 // the weather as it moves over them. An empty region means nothing was heard
 // there, which is a real thing to be able to see on a map of lightning.
 //
 // Keyed by station id, which is stable, so a detector found once is not found
-// again on every strike it hears. The set is bounded by the network itself — a
-// couple of thousand — rather than by the length of the session, so it is never
+// again on every strike it hears. The set is bounded by the network itself (a
+// couple of thousand) rather than by the length of the session, so it is never
 // evicted; a station that has gone quiet is still a station, and the map says
 // so by letting its mark go dim rather than by removing it.
 

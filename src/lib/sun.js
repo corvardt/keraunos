@@ -1,7 +1,7 @@
 // Where the sun is, and therefore where the night is.
 //
-// Lightning is violently diurnal — the global strike band is afternoon
-// convection walking around the planet — so the terminator is not decoration
+// Lightning is violently diurnal (the global strike band is afternoon
+// convection walking around the planet) so the terminator is not decoration
 // here. It is the single line that makes the pattern legible: strikes cluster
 // behind it, over land, in the hours after local noon.
 //
@@ -55,7 +55,7 @@ export function terminator(date, limit, step = 2) {
   for (let lon = -180; lon <= 180; lon += step) {
     const hour = (lon - sunLon) * RAD;
     let lat = Math.atan(-Math.cos(hour) / tanDecl) / RAD;
-    // Only ever 0/0 — the equinox meridian at the exact moment of equinox.
+    // Only ever 0/0: the equinox meridian at the exact moment of equinox.
     if (!isFinite(lat)) lat = 0;
     points.push([lon, Math.max(-limit, Math.min(limit, lat))]);
   }

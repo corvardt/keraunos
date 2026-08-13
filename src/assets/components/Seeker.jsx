@@ -79,7 +79,7 @@ function Seeker({ onDataReceived, onStatus }) {
           record(sig);
 
           // Reduced rather than passed on. A frame carries up to forty station
-          // records, eight times a second, and nothing downstream wants them —
+          // records, eight times a second, and nothing downstream wants them:
           // only how many were used, and how well they surrounded it.
           const used = usedStations(sig);
           onDataReceived?.({
@@ -104,7 +104,7 @@ function Seeker({ onDataReceived, onStatus }) {
         if (cancelled || socket !== ws) return;
         failures++;
         if (failures >= GIVE_UP_AFTER) {
-          report("down", `no response from the network after ${failures} attempts — still trying`);
+          report("down", `no response from the network after ${failures} attempts, still trying`);
         } else {
           report("connecting", "relinking...");
         }

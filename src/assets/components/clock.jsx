@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 /**
  * Owns its own tick. Held apart from App because the clock changing is not a
- * reason to re-render the map, the feed and the panels once a second — which
+ * reason to re-render the map, the feed and the panels once a second, which
  * is exactly what it did while the time lived in App's state.
  */
 export default function Clock() {

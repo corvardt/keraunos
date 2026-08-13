@@ -26,7 +26,7 @@ import GeoData from "../../lib/world.json";
 const GRID_RADIUS_KM = 175; // dot spacing at world zoom
 // How fast that spacing tightens as you close in. Dividing by k outright holds
 // the gap at a constant 5px, which is right over an ocean and wrong once the
-// whole tube is land — a continent fills in as a solid field. At k^0.75 the gap
+// whole tube is land: a continent fills in as a solid field. At k^0.75 the gap
 // instead opens as k^0.25, roughly 5px to 13px across the zoom range, so the
 // array coarsens as you approach and stays legible as an array.
 const GRID_FALLOFF = 0.75;
@@ -47,22 +47,22 @@ const SHAKE_HITS = 9; // hits that earn a knock on the tube
 const HIT_WINDOW = 2500; // window those hits have to land in
 const MAX_PARTICLES = 700; // ceiling on the live loop during a severe storm
 const ARROW_PX = 17; // storm bearing arrow; a fixed length, not a distance
-// Rings below this are not drawn — and therefore not clickable. Both the
+// Rings below this are not drawn, and therefore not clickable. Both the
 // renderer and the hit test read it, because a cell you cannot see is a cell
 // you cannot have meant to pick.
 const STORM_MIN_PX = 3;
-// The trail holds a centroid every 20s for an hour — 180 points, far more than
+// The trail holds a centroid every 20s for an hour: 180 points, far more than
 // a track needs to read as a curve, and each one costs a projection every
 // frame. Subsampled to this, a point every couple of minutes.
 const TRAIL_POINTS = 36;
 const TRAIL_TIERS = 3; // alpha steps along the trail; the taper is what says which end is now
 // A cell doing 45 km/h covers 19 km in the whole 25-minute trail: under one
 // pixel at world zoom, where there are also the most cells on screen. Below
-// this the track is a smudge on top of its own ring, so it isn't drawn at all
-// — which is also what keeps the cost off the zoomed-out view.
+// this the track is a smudge on top of its own ring, so it isn't drawn at
+// all, which is also what keeps the cost off the zoomed-out view.
 const TRAIL_MIN_PX = 8;
 const FORECAST_S = 3600; // how far ahead the projected track runs (1 h)
-// The terminator moves 15° an hour — a fraction of a pixel a minute at world
+// The terminator moves 15° an hour, a fraction of a pixel a minute at world
 // zoom. Recomputing it per frame would be absurd; it rides the land layer,
 // which this clock rebuilds.
 const SUN_TICK_MS = 60000;
@@ -74,7 +74,7 @@ const SUN_TICK_MS = 60000;
 const CAPITAL_NEAR_KM = 400;
 const KM_PER_DEG = 111.32;
 const CAPITAL_PAD = 3; // clear space demanded around a label before it is drawn
-// #lon/lat/k — where the tube is pointed, so a view can be handed to someone.
+// #lon/lat/k: where the tube is pointed, so a view can be handed to someone.
 const HASH_RE = /^#(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/;
 
 const WHEEL_K = 0.0016; // wheel delta to zoom exponent
@@ -100,14 +100,14 @@ function frontierFade(k) {
 const FIX_FLOOR = 0.72;
 
 // The lines a strike throws back to the detectors that fixed it. Brief, because
-// they answer a question asked at the moment of arrival — which stations placed
-// this, and from what side — and an answer left on screen becomes clutter.
+// they answer a question asked at the moment of arrival (which stations placed
+// this, and from what side), and an answer left on screen becomes clutter.
 const LINK_MS = 900;
 const LINK_ALPHA = 0.16;
 
 const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
 const DRAG_SLOP = 4; // pixels of movement that turn a click into a drag
-const HERE_SPAN = 20; // degrees framed around a located reader — regional, not a street
+const HERE_SPAN = 20; // degrees framed around a located reader: regional, not a street
 
 // The presets exist because a storm over the Alps is four pixels wide at world
 // zoom. Bounds are the landmass, not its outlying islands: stretching europe
@@ -129,7 +129,7 @@ let landIndex = null;
 
 // Land is a dot matrix rather than filled coastline: it reads as a sensor
 // array, and it leaves the strikes as the only solid marks on screen. Built
-// for the visible extent only, at a spacing that follows the zoom — so the
+// for the visible extent only, at a spacing that follows the zoom, so the
 // matrix stays the same density on screen however far in you go, and the cost
 // stays bounded however far in that is.
 // A handful of built matrices, kept by the view that produced them. Zooming out
@@ -184,11 +184,11 @@ function makeBolt(scale = 1) {
 }
 
 // Cell keys run [-180, 180). Suva sits at 178°E and looks for burning cells a
-// couple of degrees east of it, which are named -179 and -178 — without this
+// couple of degrees east of it, which are named -179 and -178; without this
 // the search falls off the end of the world and the label never lights.
 const wrapLon = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
 
-/** 40.31°N rather than 40.31 — a bearing reads faster than a signed number. */
+/** 40.31°N rather than 40.31: a bearing reads faster than a signed number. */
 function coord(value, axis) {
   const hemisphere = axis === "lat" ? (value < 0 ? "S" : "N") : value < 0 ? "W" : "E";
   return `${Math.abs(value).toFixed(2)}°${hemisphere}`;
@@ -220,13 +220,13 @@ function scaleCanvas(canvas, width, height) {
 
 /**
  * Two layers over a land grid:
- *   history — every cell that has ever fired, dim, cumulative (the burn-in)
- *   live    — strikes from the last few seconds, white, decaying (the beam)
+ *   history: every cell that has ever fired, dim, cumulative (the burn-in)
+ *   live:    strikes from the last few seconds, white, decaying (the beam)
  *
  * Both layers are rasterised against the *settled* view and then drawn through
  * the delta to the live one, so a drag moves a finished bitmap instead of
  * re-plotting twenty thousand points a frame. The live layer is projected per
- * frame — it is small, and it must be exact.
+ * frame: it is small, and it must be exact.
  *
  * `strikeQueue` is a ref the parent pushes into; the animation loop drains it.
  * Strikes therefore reach the map the instant they arrive, without a render.
@@ -264,7 +264,7 @@ const WorldMap = ({
 
   // Re-resolved on theme change: the stylesheet owns the values. `paletteKey`
   // is in the dependencies because a customised palette changes those values
-  // without changing anything React can see — the tokens moved in the DOM, and
+  // without changing anything React can see: the tokens moved in the DOM, and
   // this is the only signal that they did.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const { palette, composite } = useMemo(() => readMedium(theme), [theme, paletteKey]);
@@ -340,7 +340,7 @@ const WorldMap = ({
   }, [layerProjection, settled, width, height]);
 
   // Chaining the frontiers is a one-off ~28ms, and left alone it is paid inside
-  // the first settle that draws them — which is to say while the map is being
+  // the first settle that draws them, which is to say while the map is being
   // moved, the one moment a frame can be felt going missing. Paid up front
   // instead, while the boot sequence is still running and nothing is animating.
   useEffect(() => {
@@ -383,7 +383,7 @@ const WorldMap = ({
 
   // Watched rather than read once at setup: read inside the render effect, a
   // reader turning motion off mid-session would keep the beam until something
-  // unrelated — a resize, a theme change — happened to rebuild the loop.
+  // unrelated (a resize, a theme change) happened to rebuild the loop.
   const [reduceMotion, setReduceMotion] = useState(
     () => window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
@@ -450,7 +450,7 @@ const WorldMap = ({
    * radius in degrees: the ring is a circle of pixels, and Mercator stretches
    * latitude, so a degree-space test drifts from the drawn shape the further
    * north you go. Cells too small to have been drawn are skipped on the same
-   * threshold the renderer uses — otherwise clicking apparently empty ocean at
+   * threshold the renderer uses; otherwise clicking apparently empty ocean at
    * world zoom silently filters the feed to a cell with no ring to explain it.
    *
    * Smallest wins: a cell inside a larger one is the more specific answer.
@@ -492,7 +492,7 @@ const WorldMap = ({
    * A high-refresh mouse delivers moves faster than the display draws them, and
    * a trackpad emits wheel events in bursts. Each one, taken directly, is a
    * React render of the largest component in the app. Everything the pointer
-   * produces is therefore folded into a single update per frame — which is all
+   * produces is therefore folded into a single update per frame, which is all
    * the screen can show anyway.
    */
   const geom = useRef({ base, width, height });
@@ -547,7 +547,7 @@ const WorldMap = ({
 
   // Asked for, never volunteered: nothing here touches the geolocation API
   // until the control below is pressed, and the fix is held for the session
-  // only — it is not written to storage and not sent anywhere. It lives in App
+  // only: it is not written to storage and not sent anywhere. It lives in App
   // because the watch readouts are built from it; the framing stays here.
   const [locating, setLocating] = useState("idle");
 
@@ -747,7 +747,7 @@ const WorldMap = ({
     // A 1.8px mark at a fractional coordinate is antialiased across three
     // device pixels, and a dot spread that thin loses most of the contrast the
     // token was given. Snapped to the device grid instead, every dot lands at
-    // full weight — worth more here than any further lift of the colour.
+    // full weight, worth more here than any further lift of the colour.
     const dpr = window.devicePixelRatio || 1;
     const dot = Math.max(2, Math.round(1.8 * dpr));
     const deviceW = width * dpr;
@@ -878,7 +878,7 @@ const WorldMap = ({
       // Bounds mark a cell that is firing right now, so they clear a few
       // seconds after it goes quiet instead of littering the map.
       //
-      // Corner ticks rather than a closed box — the same bezel the panels wear.
+      // Corner ticks rather than a closed box: the same bezel the panels wear.
       // A rectangle ruled around a soft smudge reads as interface laid over the
       // weather, and four marks fix the same extent while leaving the cell
       // itself uncovered.
@@ -905,7 +905,7 @@ const WorldMap = ({
     // Capitals, lit by the weather rather than drawn as furniture.
     //
     // A permanent label set competes with the strikes for the same eye, and
-    // the map is not an atlas — the only moment a place name earns its space
+    // the map is not an atlas: the only moment a place name earns its space
     // is when something is happening there and you need to know where "there"
     // is. So a capital surfaces when a cell near it is burning and fades with
     // that burn, on the same four-minute decay as the smudge underneath it.
@@ -928,7 +928,7 @@ const WorldMap = ({
       ctx.textBaseline = "middle";
       // Knocked out of the background before being drawn: a label over the
       // land matrix is text on a field of dots at nearly its own weight, and
-      // no amount of contrast fixes that — the dots have to go first.
+      // no amount of contrast fixes that; the dots have to go first.
       ctx.strokeStyle = palette.void;
       ctx.fillStyle = palette.void;
       ctx.lineJoin = "round";
@@ -958,7 +958,7 @@ const WorldMap = ({
         for (let dx = -spanLon; dx <= spanLon; dx++) {
           for (let dy = -spanLat; dy <= spanLat; dy++) {
             const fade = burning.get(`${wrapLon(cellLon + dx)},${cellLat + dy}`);
-            // Nothing there, or nothing that could brighten this label — in
+            // Nothing there, or nothing that could brighten this label; in
             // either case the distance is not worth computing.
             if (!(fade > life)) continue;
             // Cell centre stands for the cell. The bins are a degree across,
@@ -1020,7 +1020,7 @@ const WorldMap = ({
     const shake = settings.shake;
     let frame = null;
 
-    // Only the tube takes the hit — the panels around it stay put.
+    // Only the tube takes the hit; the panels around it stay put.
     const knock = (hits) => {
       const el = screenRef.current;
       if (!el || reduceMotion || !shake || !el.animate) return;
@@ -1046,7 +1046,7 @@ const WorldMap = ({
       const queue = strikeQueue.current;
       if (!queue.length) return;
       const now = performance.now();
-      // Live arrivals keep being taken in while the map is rewound — the queue
+      // Live arrivals keep being taken in while the map is rewound: the queue
       // has to be drained either way, and returning to live should find the
       // present already there rather than empty. What is suppressed is the
       // announcing: a strike that is not on screen must not knock the chassis
@@ -1076,8 +1076,8 @@ const WorldMap = ({
           hard,
           bolt: bolt ? makeBolt(hard ? 1.6 : 1) : null,
           // A dot drawn at full weight is a claim about where something was,
-          // and a one-sided fix has less of a claim to make. Weighted gently —
-          // the floor is high — because this is a caveat on the reading, not a
+          // and a one-sided fix has less of a claim to make. Weighted gently
+          // (the floor is high) because this is a caveat on the reading, not a
           // verdict on it, and a strike the network is less sure of is still a
           // strike. Nothing reported draws at full weight: no figure is not the
           // same as a bad one.
@@ -1107,7 +1107,7 @@ const WorldMap = ({
     // while the bitmap it describes is not replaced until the effect that draws
     // it has run, an effect that waits for paint and then takes 10-30ms. Read
     // from a shared ref, the frames in between transform the outgoing bitmap by
-    // the incoming view — identity, at the end of a drag — and the map jumps a
+    // the incoming view (identity, at the end of a drag) and the map jumps a
     // pan's worth sideways for a frame before snapping back. Asking the bitmap
     // where it belongs is always answerable; asking the component is not.
     const drawLayer = (layer) => {
@@ -1168,7 +1168,7 @@ const WorldMap = ({
         const track = motion(storm);
 
         // Where it has been, and where that course takes it. Both are drawn to
-        // scale, unlike the bearing arrow below — which is why both disappear
+        // scale, unlike the bearing arrow below, which is why both disappear
         // when the scale makes them meaningless rather than being faked up to
         // a visible length.
         // How much the cell is asked to carry. Everything below the chosen
@@ -1257,8 +1257,8 @@ const WorldMap = ({
 
       // The fix, drawn: a thread from each contributing detector to the strike
       // it helped place, thrown at arrival and gone within the second. It is
-      // the same fact the Fix gap reports as a number — a strike heard from all
-      // sides is caught in a full sheaf, one heard from the east wears a fan —
+      // the same fact the Fix gap reports as a number: a strike heard from all
+      // sides is caught in a full sheaf, one heard from the east wears a fan,
       // except that here you read it without being told.
       //
       // Under the strike pass and over everything else, at a weight where a
@@ -1336,7 +1336,7 @@ const WorldMap = ({
 
       // Rewound. Re-derived from the retained window rather than remembered:
       // the marks are the same, aged against the instant being replayed. Bolts
-      // and the knock they carry are not replayed — those are events, and an
+      // and the knock they carry are not replayed: those are events, and an
       // event does not happen a second time.
       const rewound = replayRef.current;
       if (rewound) {
@@ -1498,6 +1498,7 @@ const WorldMap = ({
           pointer handlers are stopped here, so dragging the strip cannot also
           drag the map underneath it. */}
       <div
+        data-tour="regions"
         className="no-bar absolute inset-x-3 top-3 flex items-center gap-2 overflow-x-auto sm:inset-x-auto sm:left-3"
         style={{ touchAction: "pan-x" }}
         onPointerDown={(event) => event.stopPropagation()}
@@ -1548,8 +1549,8 @@ const WorldMap = ({
       <Transport span={span} behind={replay ? Date.now() - replay.at : 0} onSeek={onSeek} />
 
       {/* Nothing is arriving. Said on the glass, because everything else the
-          tube can do in this state — an empty map, a burn-in fading out on
-          schedule — is indistinguishable from a quiet planet, and the planet is
+          tube can do in this state (an empty map, a burn-in fading out on
+          schedule) is indistinguishable from a quiet planet, and the planet is
           never quiet. What is still drawn is the last of what was received,
           which is why the mark decays rather than freezing. */}
       {lost && (
