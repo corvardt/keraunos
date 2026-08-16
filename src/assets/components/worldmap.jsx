@@ -893,6 +893,18 @@ const WorldMap = ({
     return () => clearInterval(id);
   }, [settings.ir]);
 
+  // A tab nobody is looking at is asked for again the moment it is. The fetch
+  // below stands down while the page is hidden — see there for why — so this
+  // is what starts it back up, rather than leaving the sky an hour stale until
+  // the next tick of the interval above.
+  useEffect(() => {
+    const onVisible = () => {
+      if (!document.hidden) setIrTick((n) => n + 1);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   const irAt =
     Math.floor((replay ? replay.at : Date.now() - IR_LAG_MS) / IR_STEP_MS) * IR_STEP_MS;
 
@@ -909,6 +921,12 @@ const WorldMap = ({
       return;
     }
     if (!layerProjection || !width || !height) return;
+    // A hidden tab is not a reader. The clock keeps moving behind a background
+    // page — the ten-minute tick still fires — so without this the map would
+    // spend a night fetching thirty megabytes of weather nobody can see, from
+    // somebody else's servers, and hold it in a pyramid the render loop is no
+    // longer running to sweep. Picked up again on visibilitychange above.
+    if (document.hidden) return;
     // Held back past the map's own settle. What the wait is for has changed:
     // it used to stop a pan from throwing away five full-screen requests it had
     // just paid for, and a settle now mostly asks for tiles already in hand and

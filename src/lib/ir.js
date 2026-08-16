@@ -914,6 +914,25 @@ export function createSky() {
       const target = incoming ?? shown;
       const targetAt = target === incoming ? incomingAt : at;
 
+      // Moments nobody will ask for again.
+      //
+      // The store is normally kept by `draw`: it drops the outgoing frame when
+      // a handover finishes, and evicts the least recently drawn tiles after
+      // it. But `draw` is a render-loop callback, and the render loop stops
+      // when the tab is hidden — while the clock does not. A moment that
+      // arrives and is replaced before anything is ever drawn leaves its tiles
+      // behind with nothing to collect them, and the only bound on how many
+      // times that can happen is how long the page is left open.
+      //
+      // So the sweep also runs here, where it is driven by the settle rather
+      // than by the frame. Every tile belongs to `shown` or to `incoming`;
+      // there is no third moment anything reads from.
+      for (const key of tiles.keys()) {
+        const held = key.slice(0, key.indexOf("/"));
+        if (held !== shown && held !== incoming) tiles.delete(key);
+      }
+      evict();
+
       queue = [];
       // Centre outward. There is a ceiling on how many of these can be in the
       // air at once, so the queue's order is the order the sky fills in, and
