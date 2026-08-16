@@ -206,7 +206,7 @@ export default function Legend({ onClose }) {
           tops cold enough to have been driven up near the tropopause. Those are the ones that
           matter. A column climbing that hard is the thing that separates charge, which is to say
           the second pass is very nearly a map of where this map is about to have something to
-          show. Between five and thirty-five minutes old depending on the satellite, and never a
+          show. Between twenty and forty minutes old depending on the satellite, and never a
           forecast: every pixel was measured. It is also the only layer here that is fetched rather
           than derived, so it can be absent, and when it is the sky simply reads as clear.
         </Entry>

@@ -15,8 +15,10 @@
  * services in different styles, and the seams between them are real and visible
  * and honest: that is where one satellite's horizon ends and the next begins.
  *
- * Nothing here is a forecast. Every pixel was measured, between five and
- * thirty-five minutes ago depending on whose satellite it came from.
+ * Nothing here is a forecast. Every pixel was measured, between twenty and
+ * forty minutes ago depending on whose satellite it came from — one moment
+ * named across the whole ring, and each service's newest scan at or before it.
+ * See LAG_MS.
  *
  * ── Why this is a pyramid ───────────────────────────────────────────────────
  *
@@ -49,26 +51,34 @@ import { mercatorFrame } from "./view.js";
 
 // The map wants three things from this file: `createSky`, and the two cadences.
 // Everything else exported below is the pure half — the grid, the territory and
-// the two calibrations — which is exported because `scripts/check-ir.cjs` is the
+// the calibration — which is exported because `scripts/check-ir.cjs` is the
 // only thing that can tell whether any of it is right. None of it can be checked
 // by looking: a tile grid that is subtly misaligned, a territory with a gap at
 // the antimeridian, and a calibration that disagrees with itself across a seam
 // all produce a plausible wash over a plausible map.
 
-// The ring, west to east by sub-satellite longitude. NASA publishes the three
-// on the Pacific and American side, EUMETSAT the two on the African and Indian
-// side, and between them there is no gap. Nothing else in this file names a
-// satellite: the territories below are derived from these longitudes, so a dish
-// being moved, replaced or added is a change to this list and nothing more.
-const GIBS = "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi";
+// The ring, west to east by sub-satellite longitude. Wisconsin's RealEarth
+// carries the three on the Pacific and American side, EUMETSAT the two on the
+// African and Indian side, and between them there is no gap. Nothing else in
+// this file names a satellite: the territories below are derived from these
+// longitudes, so a dish being moved, replaced or added is a change to this list
+// and nothing more.
+//
+// The three were NASA's GIBS once, which is the same measurement and the better
+// archive. It was dropped for being slow: GIBS holds a frame back thirty-five
+// minutes and then flaps, answering for it one minute and not the next as it
+// works through their caches, and this is an instrument about a storm that is
+// happening. RealEarth publishes the same scans within fifteen, in Mercator
+// tiles that land exactly on the grid below, and will say what it has.
+const REALEARTH = "https://realearth.ssec.wisc.edu/api/image";
 const EUMETVIEW = "https://view.eumetsat.int/geoserver/wms";
 
 export const DISCS = [
-  { id: "goes-west", lon: -137.0, service: GIBS, layer: "GOES-West_ABI_Band13_Clean_Infrared" },
-  { id: "goes-east", lon: -75.2, service: GIBS, layer: "GOES-East_ABI_Band13_Clean_Infrared" },
+  { id: "goes-west", lon: -137.0, service: REALEARTH, layer: "G18-ABI-FD-BAND13" },
+  { id: "goes-east", lon: -75.2, service: REALEARTH, layer: "G19-ABI-FD-BAND13" },
   { id: "msg-0deg", lon: 0.0, service: EUMETVIEW, layer: "msg_fes:ir108" },
   { id: "msg-iodc", lon: 45.5, service: EUMETVIEW, layer: "msg_iodc:ir108" },
-  { id: "himawari", lon: 140.7, service: GIBS, layer: "Himawari_AHI_Band13_Clean_Infrared" },
+  { id: "himawari", lon: 140.7, service: REALEARTH, layer: "HIMAWARI-B13" },
 ];
 
 // How often the ring is asked for a new picture. The satellites themselves run
@@ -81,6 +91,22 @@ export const REFRESH_MS = 10 * 60 * 1000;
 // moment the pyramid can hold, so scrubbing back over ground already covered
 // costs nothing at all.
 export const STEP_MS = 10 * 60 * 1000;
+
+/**
+ * How far behind the clock the live moment is set.
+ *
+ * A scan is not published the moment it is taken: the dish has to finish the
+ * disc, and the agency has to process it and put it on a server. Both services
+ * answer a time they do not have yet by handing back the newest frame they do
+ * have — except EUMETSAT, which answers 502 for a moment past its own last
+ * one. So this only has to clear EUMETSAT's publication, and theirs is the
+ * quickest of the five at about fifteen minutes.
+ *
+ * One lag for the whole ring rather than one per dish. A screen assembled out
+ * of several moments is the thing that made the clouds jump on a zoom, and the
+ * seams are where mixed times would show worst.
+ */
+export const LAG_MS = 20 * 60 * 1000;
 
 const EARTH_HALF = 20037508.342789244; // half the equator, in metres
 
@@ -99,12 +125,17 @@ const latAt = (y) => (Math.atan(Math.sinh((y * Math.PI) / EARTH_HALF)) * 180) / 
  *
  * The field is a soft, coarse thing and is meant to be: geostationary infrared
  * resolves 2-3km at nadir and much less at the limb, and it is being drawn as a
- * wash behind a map rather than as an image. Held at a little under half the
- * screen size it will be drawn at, a tile costs a quarter of the pixels of a
- * sharp one and loses nothing that was ever there. It is also the whole cost of
- * the calibrating pass below, which runs on the main thread.
+ * wash behind a map rather than as an image.
+ *
+ * Matched to the block, which is what actually reaches the glass. A tile lands
+ * near TILE_PX and a block is BLOCK_PX, so a tile covers about sixty blocks —
+ * and a sample finer than the block it will be averaged into is a sample nobody
+ * ever sees. This was 128 when the field went to the canvas unquantised; half
+ * of that was being thrown away at the last step, and being a square, dropping
+ * it is four times less of everything the main thread does here: samples
+ * calibrated, bytes held, and pixels painted.
  */
-export const SAMPLES = 128;
+export const SAMPLES = 64;
 
 /**
  * How large a tile is meant to land on the glass, which is what picks the level.
@@ -304,66 +335,52 @@ function discsFor(frame) {
 /**
  * One pixel to one number: 0 is warm ground, 1 is the coldest cloud top there
  * is. This is the scale the whole layer is drawn from, and getting the two
- * agencies onto it is the only genuinely hard thing in this file.
+ * services onto it is the only genuinely hard thing in this file.
  *
- * They do not publish the same picture. EUMETSAT ships plain greyscale, black
- * at about +40°C and white at about -80°C. NASA ships the standard enhanced
- * infrared: greyscale over the warm end, and then, colder than about -30°C, a
- * colour ramp over the tops. Same measurement, two stretches.
+ * Both ship plain greyscale, black warm and white cold, and neither ships the
+ * same one. EUMETSAT runs its ramp across the full byte, black at about +40°C
+ * and white at about -80°C. RealEarth renders a wider range of temperature into
+ * the same byte, so the weather occupies the middle of it: nothing on a live
+ * tile is darker than about 50 or brighter than about 190, and the same cloud
+ * that EUMETSAT draws at 148 it draws at 113.
  *
- * Which means brightness cannot be compared across the seam. A cloud at -30°C
- * is mid-grey to EUMETSAT and the very top of NASA's greyscale, about to turn
- * cyan. Read off brightness alone, the same cloud changes temperature as it
- * drifts across the boundary, and worse: EUMETSAT's white would never reach
- * whatever threshold NASA's colours start at, so half the planet would never
- * show a cold top at all. That was the bug this exists to prevent.
+ * Which means brightness cannot be compared across a seam. Read off the byte
+ * alone, a storm cools as it drifts west out of Meteosat's ground and into
+ * GOES-East's, and the coldest tops RealEarth can draw would never reach a
+ * threshold set on EUMETSAT's white. So each service is described by the three
+ * points on its own ramp that matter — where it leaves the warm floor, where
+ * -30°C lands, and where it tops out — and read onto the common scale through
+ * them.
  *
- * So each source is warped onto a common scale by the one landmark they share,
- * which is that -30°C where NASA's enhancement begins. Below it both are read
- * off brightness, each stretched to put -30°C at BREAK. Above it NASA is read
- * off hue instead, because that is where its brightness stops meaning anything,
- * while EUMETSAT keeps going on brightness to its own white point.
- *
- * Hue runs backwards through the enhancement: cyan where the colour first
- * appears, then green and yellow to red at the coldest tops. Sampling a live
- * tile puts effectively all of it between 0° and 200°.
+ * The numbers were measured rather than looked up, by the only method that can
+ * settle it: over the Atlantic and the Indian Ocean two dishes on different
+ * services see the same clouds, so a tile from each is one scene rendered
+ * twice, and matching their distributions gives the mapping directly. Three
+ * such patches agree to within a hundredth of the scale.
  *
  * None of this is radiometry. Nobody is publishing brightness temperature here,
- * only a picture of it, and the numbers below were read off those pictures. It
- * is calibrated well enough that the same storm reads the same on both sides of
- * a seam, which is all the layer asks of it.
+ * only a picture of it. It is calibrated well enough that the same storm reads
+ * the same on both sides of a seam, which is all the layer asks of it.
  */
 export const BREAK = 0.72; // where -30°C sits on the common scale
-const GREY_BREAK = 0.58; // ...and where it sits in EUMETSAT's own greyscale
-const HUE_COLDEST = 200;
+const COLDEST = 0.97; // ...and where each service's white point does
 
-export function greyScalar(l) {
-  const t = l / 255;
-  return t <= GREY_BREAK
-    ? (t / GREY_BREAK) * BREAK
-    : BREAK + ((t - GREY_BREAK) / (1 - GREY_BREAK)) * (0.97 - BREAK);
-}
+/**
+ * Each service's own greyscale, as the three bytes that anchor it: the warm
+ * end of its ramp, its -30°C, and its coldest.
+ */
+export const STRETCH = {
+  [EUMETVIEW]: { warm: 0, break: 148, cold: 255 },
+  [REALEARTH]: { warm: 50, break: 113, cold: 190 },
+};
 
-export function enhancedScalar(r, g, b) {
-  const max = r > g ? (r > b ? r : b) : g > b ? g : b;
-  const min = r < g ? (r < b ? r : b) : g < b ? g : b;
-  const spread = max - min;
-  // Grey: still on NASA's own greyscale, which ends exactly at the break.
-  if (spread <= 10) return (max / 255) * BREAK;
-
-  let hue;
-  if (max === r) hue = ((g - b) / spread) % 6;
-  else if (max === g) hue = (b - r) / spread + 2;
-  else hue = (r - g) / spread + 4;
-  hue *= 60;
-  if (hue < 0) hue += 360;
-  // Past the red end the ramp wraps into magenta, which is colder still, not
-  // warmer; folded back rather than allowed to read as cyan. The bound has to
-  // include 300 itself: that is pure magenta, the coldest value the enhancement
-  // has, and left outside the fold it clamps to the warm end of the ramp and
-  // draws the deepest core on the map as though it were the shallowest.
-  const cold = hue >= 300 ? 1 : 1 - clamp(hue, 0, HUE_COLDEST) / HUE_COLDEST;
-  return BREAK + (1 - BREAK) * cold;
+export function scalarFor(stretch, l) {
+  if (l <= stretch.warm) return 0;
+  if (l <= stretch.break) {
+    return ((l - stretch.warm) / (stretch.break - stretch.warm)) * BREAK;
+  }
+  const past = Math.min(1, (l - stretch.break) / (stretch.cold - stretch.break));
+  return BREAK + past * (COLDEST - BREAK);
 }
 
 /**
@@ -402,8 +419,53 @@ const convective = (lat) => ramp(Math.abs(lat), 62, 35);
 
 // ── Fetching ────────────────────────────────────────────────────────────────
 
-/** A WMS GetMap for one disc over one tile. `at` is null for the latest frame. */
-function url(disc, frame, at) {
+/**
+ * One disc's picture of one tile, at one named moment.
+ *
+ * The moment is always named, live as well as rewound. It was left off when
+ * live once, on the reasoning that a service asked for nothing would hand back
+ * whatever is newest, which is fresher than any timestamp this page could
+ * compute for itself. EUMETSAT does not do that. Asked for the same ground in
+ * two different boxes it hands back two different frames, each stable for its
+ * own box, and neither of them one of the last few hours' published ones.
+ *
+ * Which is invisible until the pyramid crosses a level. A tile and the parent
+ * it was drawn from are two different boxes, so they come back as two different
+ * moments, and the zoom that swaps one for the other moves every cloud on the
+ * map about a degree sideways. Named, parent and children agree to the sample
+ * at every level, on both services.
+ *
+ * Both then resolve that name the same way — the newest frame at or before it —
+ * so a moment between scans, or one a dish has not reached yet, is answered
+ * with the last real picture rather than an error or a gap.
+ */
+export function url(disc, tile, frame, at) {
+  if (disc.service === REALEARTH) {
+    // RealEarth cuts the world on the same grid this file does, so there is no
+    // box to describe: the tile's own address is the request. Asked at the far
+    // end of the step rather than its start, because the scan stamped 13:20 is
+    // published at 13:20:21 and a request for 13:20:00 exactly resolves to the
+    // step before it — a free ten minutes lost to a rounding.
+    //
+    // And asked at SAMPLES across, which is the same thing the WMS call below
+    // asks for and the only resolution this file has anywhere to put. Left off,
+    // the tile arrives at 256 and half of it is thrown away on the next line —
+    // but worse, asking for detail finer than the dish measured is a thing
+    // RealEarth refuses in the rudest possible way. It serves the tile with
+    // "Size limit exceeded" printed across it, and a caption rendered into the
+    // imagery is read by the calibration below as a cloud: pure white is the
+    // coldest top there is, so the layer draws the words as a storm. It only
+    // bites where a Mercator tile covers least ground, which is to say away
+    // from the equator and at the deepest zoom, and the map is at its most
+    // convincing exactly there.
+    const t = new Date(at + STEP_MS - 1000).toISOString(); // 2026-08-16T13:59:59.000Z
+    const stamp = `${t.slice(0, 4)}${t.slice(5, 7)}${t.slice(8, 10)}.${t.slice(11, 13)}${t.slice(14, 16)}${t.slice(17, 19)}`;
+    return (
+      `${disc.service}?products=${disc.layer}` +
+      `&time=${stamp}&x=${tile.x}&y=${tile.y}&z=${tile.z}&size=${SAMPLES}`
+    );
+  }
+
   const params = new URLSearchParams({
     SERVICE: "WMS",
     VERSION: "1.3.0",
@@ -416,12 +478,42 @@ function url(disc, frame, at) {
     HEIGHT: String(SAMPLES),
     FORMAT: "image/png",
     TRANSPARENT: "TRUE",
+    TIME: new Date(at).toISOString().replace(/\.\d+Z$/, "Z"),
   });
-  // Omitted entirely when live: both services read a missing TIME as "the most
-  // recent frame you have", which is a better answer than any timestamp this
-  // page could compute for itself.
-  if (at !== null) params.set("TIME", new Date(at).toISOString().replace(/\.\d+Z$/, "Z"));
   return `${disc.service}?${params}`;
+}
+
+/**
+ * Did the service refuse this one?
+ *
+ * RealEarth answers a request it will not serve with a picture rather than a
+ * status: the tile arrives 200 OK with "Size limit exceeded" printed across it,
+ * and a caption rendered into the imagery is read by the calibration above as
+ * weather. White is the coldest top there is, so the layer draws the words as a
+ * storm — the one failure on this map that invents a reading rather than
+ * omitting one.
+ *
+ * It is not a threshold anything here can stay under. It moves: the same tile,
+ * at the same moment and the same size, is refused one minute and served the
+ * next, and asking more slowly does not help. Asking at SAMPLES rather than at
+ * the native 256 makes it rare, and this catches the rest.
+ *
+ * The test is exact because the caption is the only thing in this data that is
+ * drawn rather than measured. Infrared arrives as a stretch well inside the
+ * byte — a live tile runs from about 70 to about 200, and even the saturated
+ * disc edge bottoms out near 72 — so pure black and pure white in one tile is
+ * text, every time.
+ */
+function refused(data) {
+  let dark = false;
+  let bright = false;
+  for (let j = 0; j < data.length; j += 4) {
+    if (!data[j + 3]) continue;
+    if (data[j] === 0) dark = true;
+    if (data[j] === 255) bright = true;
+    if (dark && bright) return true;
+  }
+  return false;
 }
 
 function load(src) {
@@ -457,18 +549,6 @@ async function fetchTile(z, x, y, at) {
   const discs = discsFor(frame);
   if (!discs.length) return null;
 
-  const images = await Promise.all(discs.map((disc) => load(url(disc, frame, at))));
-  if (!images.some(Boolean)) return null;
-
-  // Each disc is decoded on its own sheet rather than after they are stacked.
-  // It has to be: which of the two stretches above a pixel was drawn with is
-  // knowable here and nowhere later, and a composite of two calibrations is a
-  // picture no single scale can read.
-  const sheet = document.createElement("canvas");
-  sheet.width = SAMPLES;
-  sheet.height = SAMPLES;
-  const ctx = sheet.getContext("2d", { willReadFrequently: true });
-
   // The mask is separable and the tile is a Mercator box, so both cuts are one
   // number per column and one per row rather than a pass over every pixel.
   const cols = new Float32Array(SAMPLES);
@@ -480,6 +560,30 @@ async function fetchTile(z, x, y, at) {
     rows[i] = latitudeWeight(lat[i]);
   }
 
+  // Weighed before it is fetched, not after. Mercator gives the polar rows an
+  // enormous share of the grid — at level 4 the top two rows of tiles are
+  // entirely above the latitude the mask closes at, and every one of them used
+  // to be a request paid for, decoded, and multiplied by nothing. Returned as
+  // an empty tile rather than as a failure, because that is what it is: this
+  // ground is answered, and the answer is no cloud here. A failure would be
+  // asked for again on the next settle, forever.
+  if (!rows.some((w) => w > 0)) {
+    return { field: new Uint8Array(SAMPLES * SAMPLES), lat, any: false };
+  }
+
+  const tile = { z, x, y };
+  const images = await Promise.all(discs.map((disc) => load(url(disc, tile, frame, at))));
+  if (!images.some(Boolean)) return null;
+
+  // Each disc is decoded on its own sheet rather than after they are stacked.
+  // It has to be: which of the two stretches above a pixel was drawn with is
+  // knowable here and nowhere later, and a composite of two calibrations is a
+  // picture no single scale can read.
+  const sheet = document.createElement("canvas");
+  sheet.width = SAMPLES;
+  sheet.height = SAMPLES;
+  const ctx = sheet.getContext("2d", { willReadFrequently: true });
+
   // A weighted mean, kept as a running sum and a running weight rather than
   // blended in place. Blending in place looks equivalent and is not: a pixel
   // that only one disc can see, and that one only faintly, would come out
@@ -487,6 +591,7 @@ async function fetchTile(z, x, y, at) {
   // can see it says.
   const sum = new Float32Array(SAMPLES * SAMPLES);
   const total = new Float32Array(SAMPLES * SAMPLES);
+  let turnedAway = false;
 
   discs.forEach((disc, i) => {
     const image = images[i];
@@ -502,7 +607,11 @@ async function fetchTile(z, x, y, at) {
     ctx.clearRect(0, 0, SAMPLES, SAMPLES);
     ctx.drawImage(image, 0, 0, SAMPLES, SAMPLES);
     const { data } = ctx.getImageData(0, 0, SAMPLES, SAMPLES);
-    const enhanced = disc.service === GIBS;
+    if (refused(data)) {
+      turnedAway = true;
+      return;
+    }
+    const stretch = STRETCH[disc.service];
 
     for (let row = 0; row < SAMPLES; row++) {
       const wRow = rows[row];
@@ -513,14 +622,18 @@ async function fetchTile(z, x, y, at) {
         const p = row * SAMPLES + col;
         const j = p * 4;
         if (!data[j + 3]) continue; // outside this disc's horizon
-        const t = enhanced
-          ? enhancedScalar(data[j], data[j + 1], data[j + 2])
-          : greyScalar(data[j]);
+        const t = scalarFor(stretch, data[j]);
         sum[p] += t * weight;
         total[p] += weight;
       }
     }
   });
+
+  // A refusal is not an answer, so it is not kept. Returning null leaves the
+  // key out of the pyramid, which puts the tile back in the queue on the next
+  // settle — right, for a thing that is temporary by nature. Until then the
+  // ancestor covers the ground, as it does for any tile still in the air.
+  if (turnedAway) return null;
 
   const field = new Uint8Array(SAMPLES * SAMPLES);
   let any = false;
@@ -616,6 +729,23 @@ const IN_FLIGHT = 4;
 // already looked at cost nothing.
 const KEEP = 320;
 
+/**
+ * How large one block of the field is on the glass, in CSS pixels.
+ *
+ * The map is a dot matrix, and a photographic wash behind it was the one thing
+ * on this instrument that looked photographed rather than read off something.
+ * So the field is composed into a buffer one block to the pixel and enlarged
+ * without smoothing, which quantises it to a lattice the same way everything
+ * else here is quantised, without turning it into a pattern of its own: it is
+ * still a wash, drawn at the resolution the rest of the map is drawn at.
+ *
+ * Five, because that is where the land matrix's own dots start — they sit about
+ * five pixels apart at world zoom, opening to thirteen as you close in — and a
+ * field quantised finer than the marks over it reads as blur rather than as
+ * structure.
+ */
+const BLOCK_PX = 5;
+
 // How long a tile takes to come up. Short: there is almost always an ancestor
 // underneath showing the same weather more coarsely, so this is a sharpening
 // rather than an arrival, and anything longer reads as a lag.
@@ -648,6 +778,13 @@ export function createSky() {
   let body = "#fff";
   let tops = "#fff";
   let tint = "";
+
+  // The block buffer, held across frames rather than made each one: it is the
+  // largest allocation this layer keeps after the tiles themselves, and at a
+  // block to five pixels it is small enough that a resize is the only reason
+  // to touch it.
+  let buffer = null;
+  let bufferCtx = null;
 
   // Which frame off the satellites is on the glass, which one is coming up
   // behind it, and when the handover started. `shown` is null until the very
@@ -807,20 +944,40 @@ export function createSky() {
       const wanted = tilesFor(frame, z);
       clock++;
 
+      // The field is composed into a block-sized buffer and enlarged onto the
+      // glass at the end, so everything below works in blocks rather than in
+      // pixels. See BLOCK_PX.
+      const bw = Math.max(1, Math.round(width / BLOCK_PX));
+      const bh = Math.max(1, Math.round(height / BLOCK_PX));
+      if (!buffer) {
+        buffer = document.createElement("canvas");
+        bufferCtx = buffer.getContext("2d");
+      }
+      if (buffer.width !== bw || buffer.height !== bh) {
+        buffer.width = bw;
+        buffer.height = bh;
+      }
+      bufferCtx.clearRect(0, 0, bw, bh);
+
       // Metres to screen, both axes at once: EPSG:3857 and d3's Mercator are
       // the same pair of numbers a constant apart, so this is a multiply.
       const k = projection.scale();
       const [tx, ty] = projection.translate();
       const at = (m) => (k * Math.PI * m) / EARTH_HALF;
+      const toBlocksX = bw / width;
+      const toBlocksY = bh / height;
       // Rounded, and rounded from the shared edge rather than from a width:
-      // neighbouring tiles then agree on where the boundary is to the pixel and
-      // the grid leaves no hairlines between them.
+      // neighbouring tiles then agree on where the boundary is and the grid
+      // leaves no gaps between them. Rounded to whole blocks now rather than to
+      // whole pixels, which is the same guarantee one grid coarser — and it
+      // keeps every tile edge on the block lattice, so a tile boundary is never
+      // a half-lit row of blocks.
       const place = (tile) => {
         const f = tileFrame(tile.z, tile.x, tile.y);
-        const left = Math.round(at(f.minX) + tx);
-        const right = Math.round(at(f.maxX) + tx);
-        const top = Math.round(ty - at(f.maxY));
-        const bottom = Math.round(ty - at(f.minY));
+        const left = Math.round((at(f.minX) + tx) * toBlocksX);
+        const right = Math.round((at(f.maxX) + tx) * toBlocksX);
+        const top = Math.round((ty - at(f.maxY)) * toBlocksY);
+        const bottom = Math.round((ty - at(f.minY)) * toBlocksY);
         return { x: left, y: top, w: right - left, h: bottom - top };
       };
 
@@ -862,12 +1019,28 @@ export function createSky() {
         // and the pair reads as one field doubled rather than one replacing the
         // other. Both are washes, so the two halves add back to a whole.
         if (shown !== null && fade < 1) {
-          drawTile(ctx, shown, tile.z, tile.x, tile.y, box, now, 1 - fade);
+          drawTile(bufferCtx, shown, tile.z, tile.x, tile.y, box, now, 1 - fade);
         }
         if (incoming && fade > 0) {
-          drawTile(ctx, incoming, tile.z, tile.x, tile.y, box, now, fade);
+          drawTile(bufferCtx, incoming, tile.z, tile.x, tile.y, box, now, fade);
         }
       }
+
+      // And onto the glass, one block to many pixels, unsmoothed. This is the
+      // whole of the pixelation: the lattice belongs to the screen rather than
+      // to any tile, so it does not shift phase at a tile boundary or change
+      // pitch with the zoom, and it lands on whole device pixels the way the
+      // land matrix's own dots do.
+      //
+      // It is also cheaper than drawing the tiles straight onto the canvas was.
+      // The composite happens at a hundredth of the area, and what replaces it
+      // at full size is a nearest-neighbour enlargement, which is the least
+      // work canvas can do.
+      bufferCtx.globalAlpha = 1;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(buffer, 0, 0, width, height);
+      ctx.restore();
 
       // Handover complete. The frame that was on the glass is one nobody is
       // going to ask for again, so its tiles go rather than sit in the budget
@@ -885,7 +1058,6 @@ export function createSky() {
         }
       }
 
-      ctx.globalAlpha = 1;
       evict();
     },
   };

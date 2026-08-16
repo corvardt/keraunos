@@ -1,9 +1,10 @@
-// Checks the cloud field's grid, its territories and its two calibrations.
+// Checks the cloud field's grid, its territories, its calibrations and the
+// requests it builds from them.
 //
 // None of this is visible. A wash drawn behind a map looks equally plausible
 // whether the tiles are aligned or half a tile out, whether the ring covers the
 // whole planet or leaves a strip at the antimeridian uncovered, and whether the
-// two agencies' pictures agree about what -30°C looks like or disagree by a
+// two services' pictures agree about what -30°C looks like or disagree by a
 // third of the scale. The layer is soft and dim by design, which is exactly what
 // makes a wrong one impossible to spot: it renders, it moves, it sits over the
 // weather roughly where weather is. The arithmetic is the only thing that can
@@ -39,16 +40,17 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) =
     tileFrame,
     tilesFor,
     ancestorPatch,
+    url,
     longitudeWeight,
-    greyScalar,
-    enhancedScalar,
+    STRETCH,
+    scalarFor,
   } = ir;
 
   // ── The grid ──────────────────────────────────────────────────────────────
   //
-  // A tile's box is what goes into the WMS request, so an error here is imagery
-  // fetched for one piece of ground and drawn over another. It would still look
-  // like clouds.
+  // A tile's box is what one service is asked for and its address is what the
+  // other is, so an error here is imagery fetched for one piece of ground and
+  // drawn over another. It would still look like clouds.
   console.log("\nThe grid");
   {
     // Level 0 is the planet, exactly. Everything else is defined off it.
@@ -93,8 +95,18 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) =
     pass(at(390) === 0, "a phone world view is one tile", `z=${at(390)}`);
     pass(at(1440 * 40) === MAX_LEVEL, "the map's deepest zoom reaches the last level");
 
+    // The pyramid is sampled to the block it will be drawn as, not to the
+    // dishes: a sample finer than the block it gets averaged into is one the
+    // reader never sees. So what has to hold is that a tile's samples and the
+    // blocks it lands on are about the same count.
+    const blocksPerTile = 300 / 5; // TILE_PX / BLOCK_PX
+    pass(
+      SAMPLES >= blocksPerTile && SAMPLES <= blocksPerTile * 1.5,
+      "a tile carries about one sample per block",
+      `${SAMPLES} samples over ~${blocksPerTile} blocks`
+    );
     const metresPerSample = EQUATOR / (2 ** MAX_LEVEL * SAMPLES);
-    near(metresPerSample / 1000, 2.45, 0.1, "last level matches the satellites' ~2.4km");
+    near(metresPerSample / 1000, 4.9, 0.2, "the last level is as fine as the block allows");
 
     // Never past the ends of the pyramid, however far the map is pushed.
     const bounded = [1, 1e3, 1e6, 1e9].every((px) => at(px) >= 0 && at(px) <= MAX_LEVEL);
@@ -258,71 +270,111 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) =
 
   // ── Calibration ───────────────────────────────────────────────────────────
   //
-  // The two agencies draw the same measurement with different stretches. If
+  // The two services draw the same measurement with different stretches. If
   // they do not meet at the -30°C landmark, the same storm changes temperature
   // as it drifts across a seam, and the colder half of the scale is unreachable
-  // on the EUMETSAT side.
+  // on one side of it.
+  //
+  // The anchors themselves were measured against the sky rather than derived,
+  // over the patches of ocean two dishes on different services can both see, so
+  // what is checked here is not their values but that they are self-consistent:
+  // that each stretch spans the scale, meets the other at the break, and never
+  // draws a colder cloud dimmer than a warmer one.
   console.log("\nCalibration");
   {
-    near(greyScalar(0), 0, 1e-9, "EUMETSAT black is the warm end of the scale");
-    near(greyScalar(255), 0.97, 1e-9, "EUMETSAT white is very nearly the cold end");
-    near(greyScalar(0.58 * 255), BREAK, 1e-3, "EUMETSAT mid-grey lands on the -30°C break");
+    const stretches = Object.entries(STRETCH);
+    pass(stretches.length === 2, "both services have a stretch", `${stretches.length} of them`);
 
-    // NASA's own greyscale runs out exactly at the break, which is where its
-    // colour enhancement takes over.
-    near(enhancedScalar(255, 255, 255), BREAK, 1e-9, "NASA white ends on the break");
-    pass(enhancedScalar(200, 200, 200) < BREAK, "NASA grey stays below the break");
+    for (const [service, stretch] of stretches) {
+      const name = service.includes("eumetsat") ? "EUMETSAT" : "RealEarth";
+      near(scalarFor(stretch, stretch.warm), 0, 1e-9, `${name} starts at the warm end`);
+      near(scalarFor(stretch, stretch.break), BREAK, 1e-9, `${name} puts -30°C on the break`);
+      near(scalarFor(stretch, stretch.cold), 0.97, 1e-9, `${name} tops out at the cold end`);
 
-    // The enhancement is read by hue, and it begins at hue 200 — a blue-cyan,
-    // not pure cyan — running backwards through green and yellow to red at the
-    // coldest tops.
-    near(enhancedScalar(0, 170, 255), BREAK, 1e-3, "the colour ramp begins on the break");
-    pass(
-      enhancedScalar(0, 255, 255) > BREAK,
-      "pure cyan is already past the break, on the cold side",
-      enhancedScalar(0, 255, 255).toFixed(3)
-    );
-    pass(enhancedScalar(255, 0, 0) > 0.99, "NASA red is the coldest top", enhancedScalar(255, 0, 0).toFixed(3));
-    // Magenta is past red, which is colder still; read as a hue it would come
-    // back near the warm end and draw the deepest cores as ordinary cloud.
-    pass(
-      enhancedScalar(255, 0, 255) > 0.99,
-      "NASA magenta folds back as colder, not warmer",
-      enhancedScalar(255, 0, 255).toFixed(3)
-    );
+      // Below its warm anchor is warmer still, and past its cold one there is
+      // nothing colder to say; both must clamp rather than run off the scale.
+      pass(scalarFor(stretch, 0) >= 0, `${name} clamps below its warm point`);
+      pass(scalarFor(stretch, 255) <= 0.97 + 1e-9, `${name} clamps above its cold point`,
+        scalarFor(stretch, 255).toFixed(3));
 
-    // The two agencies must meet: a cloud at the break reads the same whichever
-    // one drew it, or the same storm changes temperature crossing a seam.
-    const seam = Math.abs(greyScalar(0.58 * 255) - enhancedScalar(0, 170, 255));
-    pass(seam < 0.01, "the two agencies agree at the break", seam.toFixed(4));
+      // And it must rise with cold all the way, or a colder cloud draws dimmer
+      // than a warmer one.
+      let rising = true;
+      for (let l = 1; l <= 255; l++) {
+        if (scalarFor(stretch, l) < scalarFor(stretch, l - 1)) rising = false;
+      }
+      pass(rising, `${name}'s scale rises with cold throughout`);
 
-    // The enhanced scale must rise with cold all the way round the ramp, from
-    // its start at hue 200 through red and into the magenta fold.
-    let ramp = true;
-    let last = -1;
-    for (let hue = 200; hue >= 0; hue -= 2) {
-      const h = hue / 60;
-      const sector = Math.floor(h) % 6;
-      const f = h - Math.floor(h);
-      const [r, g, b] = [
-        [1, f, 0],
-        [1 - f, 1, 0],
-        [0, 1, f],
-        [0, 1 - f, 1],
-        [f, 0, 1],
-        [1, 0, 1 - f],
-      ][sector].map((v) => Math.round(v * 255));
-      const v = enhancedScalar(r, g, b);
-      if (v < last - 1e-9) ramp = false;
-      last = v;
+      // The anchors have to be in order, or the two segments fold back on
+      // themselves and the arithmetic above is meaningless.
+      pass(
+        stretch.warm < stretch.break && stretch.break < stretch.cold,
+        `${name}'s anchors are in order`,
+        `${stretch.warm} < ${stretch.break} < ${stretch.cold}`
+      );
     }
-    pass(ramp, "the colour ramp rises with cold from its start to red");
 
-    // Both scales must rise with cold, all the way, or a colder cloud can draw
-    // dimmer than a warmer one.
-    let rising = true;
-    for (let l = 1; l <= 255; l++) if (greyScalar(l) < greyScalar(l - 1)) rising = false;
-    pass(rising, "EUMETSAT's scale rises with cold throughout");
+    // The services must meet: a cloud at -30°C reads the same whichever one drew
+    // it, or the same storm changes temperature crossing a seam.
+    const [a, b] = stretches.map(([, s]) => scalarFor(s, s.break));
+    pass(Math.abs(a - b) < 1e-9, "the two services agree at the break", Math.abs(a - b).toFixed(6));
+
+    // The TOPS threshold the second pass keys off sits just past the break, so
+    // both services have to be able to reach it. A stretch whose cold anchor
+    // fell below it would never draw a storm at all.
+    for (const [service, stretch] of stretches) {
+      const name = service.includes("eumetsat") ? "EUMETSAT" : "RealEarth";
+      pass(scalarFor(stretch, stretch.cold) > 0.8, `${name} can reach the storm tops`);
+    }
+  }
+
+  // ── The request ───────────────────────────────────────────────────────────
+  //
+  // Two services, two shapes of request, and the same moment has to mean the
+  // same thing in both. Neither can be checked by looking at the map: a tile
+  // fetched for the wrong ground or the wrong ten minutes still draws clouds.
+  console.log("\nThe request");
+  {
+    const at = Date.UTC(2026, 7, 16, 13, 20, 0);
+    const tile = { z: 5, x: 9, y: 17 };
+    const frame = tileFrame(tile.z, tile.x, tile.y);
+    const byId = Object.fromEntries(DISCS.map((d) => [d.id, d]));
+
+    const re = url(byId["goes-east"], tile, frame, at);
+    pass(/[?&]x=9(&|$)/.test(re) && /[?&]y=17(&|$)/.test(re) && /[?&]z=5(&|$)/.test(re),
+      "RealEarth is asked for the tile's own address");
+    // The far end of the step, not its start: a scan stamped 13:20 is published
+    // at 13:20:21, and a request for 13:20:00 resolves to the step before it.
+    pass(/[?&]time=20260816\.132959(&|$)/.test(re),
+      "RealEarth is asked at the end of the moment's step", re.match(/time=([^&]*)/)[1]);
+    // Asking for more detail than the dish measured gets the tile back with
+    // "Size limit exceeded" printed across it, and white text reads as the
+    // coldest cloud top on the scale — the caption is drawn as a storm.
+    pass(new RegExp(`[?&]size=${SAMPLES}(&|$)`).test(re),
+      "RealEarth is asked at the resolution we store", re.match(/size=([^&]*)/)?.[1]);
+
+    const wms = url(byId["msg-0deg"], tile, frame, at);
+    pass(wms.includes("TIME=2026-08-16T13%3A20%3A00Z"), "EUMETSAT is asked at the moment itself",
+      decodeURIComponent(wms.match(/TIME=([^&]*)/)[1]));
+    const bbox = decodeURIComponent(wms.match(/BBOX=([^&]*)/)[1]).split(",").map(Number);
+    const boxed = Math.abs(bbox[0] - frame.minX) < 1e-6 && Math.abs(bbox[1] - frame.minY) < 1e-6 &&
+      Math.abs(bbox[2] - frame.maxX) < 1e-6 && Math.abs(bbox[3] - frame.maxY) < 1e-6;
+    pass(boxed, "EUMETSAT is asked for the tile's own box");
+
+    // Every step of every hour has to format, and land inside its own step —
+    // one second over and the moment names the next ten minutes.
+    let stepped = true;
+    for (let m = 0; m < 24 * 60; m += 10) {
+      const t = Date.UTC(2026, 7, 16, 0, m, 0);
+      const stamp = url(byId["goes-east"], tile, frame, t).match(/time=([^&]*)/)[1];
+      if (!/^\d{8}\.\d{6}$/.test(stamp)) stepped = false;
+      const back = Date.UTC(
+        +stamp.slice(0, 4), +stamp.slice(4, 6) - 1, +stamp.slice(6, 8),
+        +stamp.slice(9, 11), +stamp.slice(11, 13), +stamp.slice(13, 15)
+      );
+      if (back < t || back >= t + 10 * 60 * 1000) stepped = false;
+    }
+    pass(stepped, "every moment of the day stamps inside its own step", "144 steps");
   }
 
   console.log(`\n${ok ? "✓ cloud field checks passed" : "✗ cloud field checks FAILED"}\n`);

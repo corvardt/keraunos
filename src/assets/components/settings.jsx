@@ -158,7 +158,7 @@ export default function Settings({ settings, set, reset, onClose, onKey }) {
       <Group title="Map">
         <Toggle
           label="Cloud field"
-          hint="Thermal infrared from the five geostationary satellites, behind the map. The bright tops are the cold ones, which is where the lightning is about to be. Fetched from NASA and EUMETSAT; nothing else here leaves the page."
+          hint="Thermal infrared from the five geostationary satellites, behind the map. The bright tops are the cold ones, which is where the lightning is about to be. Fetched from RealEarth (UW&ndash;Madison SSEC) and EUMETSAT; nothing else here leaves the page."
           value={settings.ir}
           onChange={(v) => set("ir", v)}
         />

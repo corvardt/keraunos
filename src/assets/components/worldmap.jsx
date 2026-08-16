@@ -19,7 +19,12 @@ import frontiers from "../../lib/frontiers.js";
 import { fixQuality } from "../../lib/fix.js";
 import { stations } from "../../lib/stations.js";
 import { tick } from "../../lib/click.js";
-import { createSky, REFRESH_MS as IR_REFRESH_MS, STEP_MS as IR_STEP_MS } from "../../lib/ir.js";
+import {
+  createSky,
+  REFRESH_MS as IR_REFRESH_MS,
+  STEP_MS as IR_STEP_MS,
+  LAG_MS as IR_LAG_MS,
+} from "../../lib/ir.js";
 import Transport from "./transport.jsx";
 import { Ticks } from "./crt.jsx";
 import GeoData from "../../lib/world.json";
@@ -871,10 +876,16 @@ const WorldMap = ({
   if (!sky.current) sky.current = createSky();
 
   // Rounded to the ten minutes the satellites themselves run at. Live, that is
-  // a refresh counter; rewound, it is where the transport is standing, which is
-  // what makes the cloud move when the map is scrubbed instead of hanging over
-  // the past like a still. Each of those ten-minute steps is a moment the
-  // pyramid can hold, so scrubbing back over an hour already seen costs nothing.
+  // the clock less the time it takes a scan to reach a server; rewound, it is
+  // where the transport is standing, which is what makes the cloud move when
+  // the map is scrubbed instead of hanging over the past like a still. Each of
+  // those ten-minute steps is a moment the pyramid can hold, so scrubbing back
+  // over an hour already seen costs nothing.
+  //
+  // The live end is a named moment rather than "whatever is newest" because the
+  // whole screen has to be one frame — a sky assembled out of several is a sky
+  // whose clouds jump when the pyramid changes level. The interval below exists
+  // to re-render when the moment it names has moved on.
   const [irTick, setIrTick] = useState(0);
   useEffect(() => {
     if (!settings.ir) return;
@@ -882,7 +893,8 @@ const WorldMap = ({
     return () => clearInterval(id);
   }, [settings.ir]);
 
-  const irAt = replay ? Math.floor(replay.at / IR_STEP_MS) * IR_STEP_MS : null;
+  const irAt =
+    Math.floor((replay ? replay.at : Date.now() - IR_LAG_MS) / IR_STEP_MS) * IR_STEP_MS;
 
   // The tokens the field is painted in. A palette change repaints the tiles
   // that are on screen from bytes already in hand; it does not go back to the
