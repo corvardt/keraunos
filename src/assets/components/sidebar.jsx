@@ -107,7 +107,7 @@ const Row = memo(function Row({ strike, onSelect, onFocus, onHold }) {
           onHold(false);
         }}
         onClick={() => onSelect(strike)}
-        className="settle flex w-full items-baseline gap-2 py-[3px] text-left text-xs transition-colors hover:text-text"
+        className="settle flex w-full items-baseline gap-2 py-[3px] text-left text-xs transition-colors hover:text-text active:text-text touch:py-2"
       >
         <span className="shrink-0 text-dim">&gt;</span>
         <span className="shrink-0 text-dim">{strike.time}</span>
@@ -200,7 +200,7 @@ function Sidebar({
                   onBlur={() => onFocus(null)}
                   onClick={() => onSelect(region)}
                   aria-pressed={selection?.place === region.place}
-                  className={`relative flex w-full items-baseline gap-2 py-[3px] text-left text-xs transition-colors hover:text-text ${
+                  className={`relative flex w-full items-baseline gap-2 py-[3px] text-left text-xs transition-colors hover:text-text active:text-text touch:py-2 ${
                     selection?.place === region.place ? "text-text glow" : ""
                   }`}
                 >
@@ -238,7 +238,7 @@ function Sidebar({
           <button
             type="button"
             onClick={() => onSelect(selection)}
-            className="mt-2 flex items-center gap-2 text-2xs uppercase tracking-label text-text transition-colors hover:text-dim"
+            className="mt-2 flex w-full items-center gap-2 text-2xs uppercase tracking-label text-text transition-colors hover:text-dim active:text-dim touch:py-2"
           >
             <span className="truncate">
               [ {selection.radius ? `cell · ${selection.place}` : selection.place} ]

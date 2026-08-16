@@ -344,7 +344,7 @@ export default function Tour({ onClose }) {
     : [];
 
   const pad = (n) => String(n).padStart(2, "0");
-  const control = "text-2xs uppercase tracking-label transition-colors";
+  const control = "text-2xs uppercase tracking-label transition-colors touch:px-2 touch:py-2";
 
   return (
     // Transparent to the pointer, so that what is not explicitly dimmed is not
@@ -393,13 +393,13 @@ export default function Tour({ onClose }) {
 
         <p className="px-4 py-3 text-xs leading-relaxed text-dim">{step.body}</p>
 
-        <footer className="flex items-center justify-between border-t border-line px-4 py-2.5">
-          <button type="button" onClick={onClose} className={`${control} text-dim hover:text-text`}>
+        <footer className="flex items-center justify-between border-t border-line px-4 py-2.5 touch:px-2 touch:py-1">
+          <button type="button" onClick={onClose} className={`${control} text-dim hover:text-text active:text-text`}>
             [ skip ]
           </button>
           <span className="flex items-baseline gap-3">
             {index > 0 && (
-              <button type="button" onClick={back} className={`${control} text-dim hover:text-text`}>
+              <button type="button" onClick={back} className={`${control} text-dim hover:text-text active:text-text`}>
                 back
               </button>
             )}

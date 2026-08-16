@@ -12,8 +12,11 @@ import { wake } from "../../lib/click.js";
  */
 function Row({ label, hint, children }) {
   return (
-    <div className="py-1.5">
-      <div className="flex items-baseline justify-between gap-5">
+    // The controls carry their own padding under a coarse pointer, so the row
+    // gives its own back rather than adding to it: two 40px targets a row apart
+    // is a panel you scroll through twice.
+    <div className="py-1.5 touch:py-0">
+      <div className="flex items-baseline justify-between gap-3 sm:gap-5">
         <span className="text-2xs uppercase tracking-label text-dim">{label}</span>
         {children}
       </div>
@@ -36,8 +39,8 @@ function Toggle({ label, hint, value, onChange }) {
         aria-checked={value}
         aria-label={label}
         onClick={() => onChange(!value)}
-        className={`shrink-0 text-2xs uppercase tracking-label transition-colors ${
-          value ? "text-text glow" : "text-dim hover:text-text"
+        className={`shrink-0 text-2xs uppercase tracking-label transition-colors touch:py-3 touch:pl-6 ${
+          value ? "text-text glow" : "text-dim hover:text-text active:text-text"
         }`}
       >
         [ {value ? "on" : "off"} ]
@@ -56,8 +59,8 @@ function Choice({ label, hint, value, options, onChange }) {
             type="button"
             aria-pressed={value === option}
             onClick={() => onChange(option)}
-            className={`pl-2 text-2xs uppercase tracking-label transition-colors ${
-              value === option ? "text-text glow" : "text-dim hover:text-text"
+            className={`pl-2 text-2xs uppercase tracking-label transition-colors touch:px-2 touch:py-3 ${
+              value === option ? "text-text glow" : "text-dim hover:text-text active:text-text"
             }`}
           >
             {option}
@@ -86,7 +89,7 @@ export default function Settings({ settings, set, reset, onClose, onKey }) {
                 type="button"
                 onClick={onKey}
                 title="What every mark and figure means"
-                className="text-2xs uppercase tracking-label text-dim transition-colors hover:text-text"
+                className="text-2xs uppercase tracking-label text-dim transition-colors hover:text-text active:text-text touch:px-2 touch:py-2"
               >
                 [ key ]
               </button>
@@ -94,7 +97,7 @@ export default function Settings({ settings, set, reset, onClose, onKey }) {
             <button
               type="button"
               onClick={reset}
-              className="text-2xs uppercase tracking-label text-dim transition-colors hover:text-text"
+              className="text-2xs uppercase tracking-label text-dim transition-colors hover:text-text active:text-text touch:px-2 touch:py-2"
             >
               [ defaults ]
             </button>
@@ -153,6 +156,12 @@ export default function Settings({ settings, set, reset, onClose, onKey }) {
       </Group>
 
       <Group title="Map">
+        <Toggle
+          label="Cloud field"
+          hint="Thermal infrared from the five geostationary satellites, behind the map. The bright tops are the cold ones, which is where the lightning is about to be. Fetched from NASA and EUMETSAT; nothing else here leaves the page."
+          value={settings.ir}
+          onChange={(v) => set("ir", v)}
+        />
         <Toggle label="Storm cells" value={settings.storms} onChange={(v) => set("storms", v)} />
         <Choice
           label="Cell detail"

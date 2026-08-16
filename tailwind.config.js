@@ -3,8 +3,23 @@ import { TOKENS } from "./src/lib/theme.js";
 
 export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
+  // A hover state on a touch screen is not a hover state: the browser fakes one
+  // on tap and then leaves it stuck on the last thing pressed, so a control the
+  // finger has moved on from goes on claiming the pointer is over it.
+  future: {
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
+      // Not a width. The instrument is drawn at 10px because that is the scale
+      // an instrument reads at, and that is right on any screen; what changes on
+      // a phone is the pointer, which is a fingertip and not a pixel. So the
+      // controls keep their type and are given the room around it that a finger
+      // needs, keyed off the pointer itself rather than off the viewport: a
+      // tablet is wide and still coarse.
+      screens: {
+        touch: { raw: "(pointer: coarse)" },
+      },
       // The palette stays in CSS, where the canvas can read the same values the
       // stylesheet uses. But a bare `var()` has nowhere to put <alpha-value>,
       // and Tailwind's response to that is to emit no rule at all rather than

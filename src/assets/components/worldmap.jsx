@@ -1512,7 +1512,7 @@ const WorldMap = ({
           drag the map underneath it. */}
       <div
         data-tour="regions"
-        className="no-bar absolute inset-x-3 top-3 flex items-center gap-2 overflow-x-auto sm:inset-x-auto sm:left-3"
+        className="no-bar absolute inset-x-3 top-2 flex items-center gap-2 overflow-x-auto sm:inset-x-auto sm:left-3 sm:top-3"
         style={{ touchAction: "pan-x" }}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
@@ -1522,7 +1522,7 @@ const WorldMap = ({
             key={region.label}
             type="button"
             onClick={() => focusRegion(region.bounds)}
-            className="shrink-0 text-2xs uppercase tracking-label text-dim transition-colors hover:text-text"
+            className="shrink-0 text-2xs uppercase tracking-label text-dim transition-colors hover:text-text active:text-text touch:px-1.5 touch:py-2.5"
           >
             {region.label}
           </button>
@@ -1542,8 +1542,8 @@ const WorldMap = ({
               ? "This browser is refusing the page a position. It has to be allowed again in the browser's own site settings."
               : "Ask this browser for your location and frame the map on it. Session only: not stored, not sent anywhere"
           }
-          className={`shrink-0 text-2xs uppercase tracking-label transition-colors ${
-            here ? "text-text glow" : "text-dim hover:text-text"
+          className={`shrink-0 text-2xs uppercase tracking-label transition-colors touch:px-1.5 touch:py-2.5 ${
+            here ? "text-text glow" : "text-dim hover:text-text active:text-text"
           }`}
         >
           [ {hereLabel} ]
@@ -1560,7 +1560,7 @@ const WorldMap = ({
             <button
               type="button"
               onClick={onConfig}
-              className="shrink-0 text-2xs uppercase tracking-label text-dim transition-colors hover:text-text"
+              className="shrink-0 text-2xs uppercase tracking-label text-dim transition-colors hover:text-text active:text-text touch:px-1.5 touch:py-2.5"
             >
               cfg
             </button>

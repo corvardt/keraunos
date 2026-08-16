@@ -55,13 +55,15 @@ export default function Panel({ title, width = 380, onClose, children, footer })
         style={{ width: `min(92vw, ${width}px)` }}
         className="relative max-h-full overflow-y-auto border border-line bg-panel"
       >
-        <header className="sticky top-0 flex items-center justify-between border-b border-line bg-panel px-5 py-3">
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-panel px-5 py-3 touch:py-1">
           <span className="text-2xs uppercase tracking-mark text-text glow">{title}</span>
+          {/* The way out of a modal is the one control that must never be
+              missed, so it takes the most room of any of them. */}
           <button
             ref={closeRef}
             type="button"
             onClick={onClose}
-            className="text-2xs uppercase tracking-label text-dim transition-colors hover:text-text"
+            className="text-2xs uppercase tracking-label text-dim transition-colors hover:text-text active:text-text touch:-mr-2 touch:px-3 touch:py-3"
           >
             [ esc ]
           </button>

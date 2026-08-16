@@ -1,3 +1,14 @@
+/* ── Under a finger ─────────────────────────────────────────────────────────
+   A tapped control on a phone gets a grey box thrown over it by the browser,
+   which is the one thing on this screen that was not drawn by the instrument.
+   The controls answer a press themselves — every one of them lights to reading
+   weight while it is held — so the box is turned off and the phosphor says it
+   instead. */
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* ── The decay rule ─────────────────────────────────────────────────────────
    Anything that arrives comes in at full white and settles into the gray of
    the interface. Applies to the canvas particles and to the feed alike. */

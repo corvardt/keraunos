@@ -109,8 +109,8 @@ function Transport({ span, behind, onSeek }) {
           type="button"
           onClick={() => onSeek(0)}
           title="Return to the live feed"
-          className={`shrink-0 text-2xs uppercase tracking-label transition-colors ${
-            behind ? "text-dim hover:text-text" : "text-text glow"
+          className={`shrink-0 text-2xs uppercase tracking-label transition-colors touch:-ml-1.5 touch:px-1.5 touch:py-3 ${
+            behind ? "text-dim hover:text-text active:text-text" : "text-text glow"
           }`}
         >
           {label()}
@@ -127,9 +127,13 @@ function Transport({ span, behind, onSeek }) {
         </span>
       )}
 
+      {/* Taller under a finger than under a cursor. A 24px strip is a generous
+          target for a mouse and a coin toss for a thumb, and the mark it
+          carries is a hairline either way: what grows is the box the drag is
+          picked up in, not anything drawn. */}
       <div
         {...handles}
-        className={`group relative h-6 flex-1 touch-none ${armed ? "cursor-ew-resize" : ""}`}
+        className={`group relative h-6 flex-1 touch-none touch:h-11 ${armed ? "cursor-ew-resize" : ""}`}
       >
         {/* Hairline, with the played part carried at reading weight. The hit
             area is the full height above; the mark is only what you see. */}
