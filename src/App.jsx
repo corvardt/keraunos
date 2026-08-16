@@ -222,12 +222,18 @@ function App() {
   // Until they land, `locate` answers at the resolution it has: "USA" rather
   // than "Texas", "open water" rather than "Coral Sea".
   const [detail, setDetail] = useState({ us: null, water: null });
+  // How many shapes each of those two brought, or zeroes if they never
+  // arrived. Held apart from the indexes themselves because it is not a map
+  // concern: the boot readout reports it, and by the time the indexes exist
+  // they are bucketed and no longer count anything.
+  const [named, setNamed] = useState(null);
 
   useEffect(() => {
     let live = true;
     Promise.all([import("./lib/us.json"), import("./lib/water.geo.json")])
       .then(([us, water]) => {
         if (!live) return;
+        setNamed({ us: us.default.features.length, water: water.default.features.length });
         setDetail({
           us: indexFeatures(us.default.features),
           // Pre-sorted smallest-first, so the first hit is the most specific
@@ -237,7 +243,9 @@ function App() {
         });
       })
       .catch(() => {
-        // A failed fetch is not a broken map. The coarse answers stand.
+        // A failed fetch is not a broken map. The coarse answers stand, and the
+        // readout says so rather than waiting for something that isn't coming.
+        if (live) setNamed({ us: 0, water: 0 });
       });
     return () => {
       live = false;
@@ -609,7 +617,14 @@ function App() {
 
   return (
     <div className="flex h-full flex-col bg-void">
-      {!booted && <Boot onDone={finishBoot} />}
+      {!booted && (
+        <Boot
+          onDone={finishBoot}
+          outlines={geoData.features.length}
+          names={named}
+          status={status}
+        />
+      )}
       {/* Under the glass, like the panels: the guide is drawn on the tube
           rather than over it, and the scanlines cross it too. */}
       {tourOpen && <Tour onClose={closeTour} />}
