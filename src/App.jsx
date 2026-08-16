@@ -20,6 +20,7 @@ import { useTour } from "./lib/tour.js";
 import { detectStorms, trackStorms, surge } from "./lib/storms.js";
 import { binStrikes } from "./lib/burn.js";
 import { createDay } from "./lib/day.js";
+import { saveStrikes, saveFrame } from "./lib/save.js";
 import geoData from "./lib/world.json";
 
 const FEED_LENGTH = 60; // strikes listed in the recent feed
@@ -285,6 +286,11 @@ function App() {
   }, [detail]);
   const history = useRef([]);
   const tracked = useRef([]);
+  // The map's canvas, so the frame can be saved as it is drawn rather than
+  // rebuilt from anything.
+  const tube = useRef(null);
+  const saveHistory = useCallback(() => saveStrikes(history.current), []);
+  const saveTube = useCallback(() => saveFrame(tube.current), []);
   // The map drains this itself on every animation frame, so strikes light up
   // the instant they land rather than waiting for the next flush.
   const strikeQueue = useRef([]);
@@ -653,6 +659,8 @@ function App() {
           reset={reset}
           onClose={closeConfig}
           onKey={configToKey}
+          onSaveStrikes={saveHistory}
+          onSaveFrame={saveTube}
         />
       )}
       <Crt scanlines={settings.scanlines} sweep={settings.sweep} />
@@ -689,6 +697,7 @@ function App() {
             span={span}
             onSeek={seek}
             strikeQueue={strikeQueue}
+            tube={tube}
             theme={theme}
             settings={settings}
             summary={`World lightning map. ${stats.rate} strikes per minute, ${stats.storms} storm cells tracked, ${stats.total} detected this session.`}

@@ -251,6 +251,7 @@ const WorldMap = ({
   bins,
   storms,
   strikeQueue,
+  tube,
   theme,
   settings,
   summary,
@@ -272,6 +273,12 @@ const WorldMap = ({
   const screenRef = useRef(null);
   const lastKnock = useRef(0);
   const canvasRef = useRef(null);
+  // The tube itself, handed back up so the frame can be saved as a picture. A
+  // ref rather than a callback for the same reason `strikeQueue` is one: it is
+  // the element, it does not change, and nothing about it should cost a render.
+  useEffect(() => {
+    if (tube) tube.current = canvasRef.current;
+  }, [tube]);
   const landLayer = useRef(null);
   const historyLayer = useRef(null);
   const particles = useRef([]);

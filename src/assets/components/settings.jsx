@@ -71,7 +71,22 @@ function Choice({ label, hint, value, options, onChange }) {
   );
 }
 
-export default function Settings({ settings, set, reset, onClose, onKey }) {
+/** An action rather than a setting: the brackets are the control here too. */
+function Action({ label, hint, verb, onClick }) {
+  return (
+    <Row label={label} hint={hint}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="shrink-0 text-2xs uppercase tracking-label text-dim transition-colors hover:text-text active:text-text touch:py-3 touch:pl-6"
+      >
+        [ {verb} ]
+      </button>
+    </Row>
+  );
+}
+
+export default function Settings({ settings, set, reset, onClose, onKey, onSaveStrikes, onSaveFrame }) {
   return (
     <Panel
       title="Configuration"
@@ -212,6 +227,24 @@ export default function Settings({ settings, set, reset, onClose, onKey }) {
         <Toggle label="Session day" value={settings.day} onChange={(v) => set("day", v)} />
         <Toggle label="Most active" value={settings.regions} onChange={(v) => set("regions", v)} />
         <Toggle label="Strike feed" value={settings.feed} onChange={(v) => set("feed", v)} />
+      </Group>
+      {/* The only group here that does something rather than sets something.
+          It sits in this panel because this is where the instrument's own
+          controls live, and because the alternative was two more words in a
+          header that is already four. */}
+      <Group title="Session">
+        <Action
+          label="Strikes"
+          verb="csv"
+          hint="Everything still retained, as it is held: where each strike was, when it happened, and when this browser heard about it. The gap between those two times is the network's own delay. Nothing is fetched to fill the file in, so it is as long as the session has been open."
+          onClick={onSaveStrikes}
+        />
+        <Action
+          label="Frame"
+          verb="png"
+          hint="The tube as drawn, rewound or live. This is the one way a moment can be handed to somebody: the address already carries the view, but the strikes under it belong to this session and cannot travel with a link, so a shared URL opens on the right coordinates and no weather."
+          onClick={onSaveFrame}
+        />
       </Group>
     </Panel>
   );

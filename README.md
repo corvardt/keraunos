@@ -35,6 +35,7 @@ the terminal: `node KeraunosSeeker.cjs`.
 | **Rewind** | The track along the bottom of the tube holds up to the last hour. Drag anywhere on it to set the clock down at that moment; it then runs forward at life size until it catches up and hands back to live. It is drawn from the first frame and fills toward the half a minute it needs before there is anything worth scrubbing into |
 | **Here** | Asks the browser for your location (only when pressed) and frames the map on it, then reads out how far away the nearest strike is, and how long until its thunder. Session only: not stored, not sent anywhere |
 | **Link** | Zoomed in, the address carries the view as `#lon/lat/k`, so a view can be handed to someone |
+| **Save** | Configuration holds two exports: the retained strikes as CSV, and the frame as drawn — rewound or live — as a PNG |
 | **Hold** | The feed stops advancing while the pointer rests on it, and queues arrivals behind |
 | **Guide** | Seven steps that light each control on the running map in turn. Opens itself once on a first visit; `g` or `guide` afterwards, `esc` to skip |
 | **Keys** | `k` key panel · `c` configuration · `g` guide · `t` tube/paper · `+` `-` zoom · `0` whole world · `esc` close or clear. The rewind track takes arrow keys, `home` and `end` when focused |
@@ -48,7 +49,8 @@ can read the map at all, and then stops.
 
 The key panel (`k`) is the catalogue the guide hands off to: every mark on the
 map and every figure beside it, in full, for looking up. Configuration (`c`) is
-stored in `localStorage` and covers five groups:
+stored in `localStorage` and covers six groups, the last of which does
+something rather than sets something:
 
 | Group | What it holds |
 | --- | --- |
@@ -57,6 +59,7 @@ stored in `localStorage` and covers five groups:
 | **Screen** | Scanlines, refresh sweep, strike shake, detector clicks |
 | **Map** | Storm cells and how much detail they carry, the density window, cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
 | **Panel** | Rate trace, the session day, activity ranking, strike feed |
+| **Session** | The two exports: strikes as CSV, the frame as PNG |
 
 ## Layout
 
@@ -70,6 +73,7 @@ stored in `localStorage` and covers five groups:
 | `src/lib/storms.js` | Clusters strikes into cells and tracks them between passes to derive motion and flash-rate trend |
 | `src/lib/burn.js` | Burn-in as a pure function of the strikes and an instant, which is what makes replay possible |
 | `src/lib/day.js` | Arrivals banked by the minute and kept for a day: the one window here longer than an hour |
+| `src/lib/save.js` | The two ways something leaves: the retained strikes as CSV, the frame as PNG |
 | `src/lib/tour.js` | Whether this browser has been walked through the instrument, and when the walk may start |
 | `src/lib/fix.js` | How well a strike was located, derived from the stations that fixed it |
 | `src/lib/stations.js` | The detecting network, assembled from the strikes as they arrive |
@@ -291,6 +295,32 @@ other. Adding a capital to the list can never make the map busier.
 The labels ride the burn-in layer rather than the live loop: they change on the
 same twice-a-second cadence as the cells that light them, and `fillText` per
 label per frame is not a cost worth paying for something that changes at 2 Hz.
+
+## Notes on leaving with something
+
+Everything here is derived from a stream nobody archives and held for an hour in
+a tab. Closing it loses the hour, which is right for a live map and wrong for
+the one afternoon the storm was worth keeping.
+
+The CSV is exactly what is retained and nothing reconstructed. A retained strike
+is four numbers, because the memory budget above set it at four: the naming and
+the fix quality are computed at the flush that reports them and deliberately not
+kept. So the file has four columns and no more, and what it does carry it
+carries exactly — the gap between `flash_utc` and `received_utc` is the
+network's own delay, strike by strike, which is the figure the panel only ever
+shows you the median of.
+
+The PNG is the answer to a thing the address cannot do. The hash already carries
+the view, and it was tempting to extend it with the instant so a rewound moment
+could be linked. It would not work: the strikes under that instant are this
+session's own, they are never uploaded anywhere, and a link cannot bring them.
+Someone opening it would land on the right coordinates with whatever weather
+happened to be there. An image of the frame has the weather in it, and because
+it is read off the canvas rather than re-derived, it is the frame as drawn —
+scrub to the squall and save, and what you get is the squall.
+
+It is the canvas alone. The scanlines, the sweep and the bloom are CSS over the
+top and belong to the screen being looked at rather than to the reading.
 
 ## Notes on the map
 

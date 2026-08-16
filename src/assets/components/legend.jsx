@@ -339,7 +339,16 @@ export default function Legend({ onClose }) {
         <Entry term="Linking">
           Zoom in and the address carries the view: longitude, latitude, magnification. Hand it to
           someone and the tube opens where you left it. The whole world writes nothing, being where
-          it starts.
+          it starts. It carries the view and not the moment: the strikes belong to this session and
+          cannot travel with a link, so a shared address opens on the right coordinates and
+          whatever weather is there when it is opened.
+        </Entry>
+        <Entry term="Saving">
+          Two things can leave, both under Session in configuration. The strikes still retained go
+          out as CSV — where each one was, when it happened, and when this browser heard about it,
+          the gap between the last two being the network&rsquo;s own delay. The tube goes out as a
+          PNG of the frame as drawn, rewound or live, which is the only way an actual moment can be
+          handed to somebody.
         </Entry>
         <Entry term="Moving">
           Drag to pan, wheel or pinch to zoom, up to about a 200 km span. The named regions across
