@@ -218,10 +218,12 @@ retained for, which is exactly why this is a curve and not a longer rewind. It
 can say how hard the world was firing at four this morning and nothing whatever
 about where.
 
-Three things keep it honest. The minute in progress is left out, because it is
-only ever part of a minute and would draw the newest point as a dive, once a
-minute, forever; the trace above it already shows the present at full
-resolution. A minute the session was not running for is absent rather than zero,
+Three things keep it honest. Both ends are trimmed: the minute in progress holds
+only as much of itself as has happened, and the minute the session opened in
+only as much as was watched, so drawn they are a dive at the right-hand end
+every minute and a ramp up from nothing at the left. Neither is weather, and the
+trace above already shows the present at full resolution. A minute the session
+was not running for is absent rather than zero,
 since drawn, a gap and a lull look identical and only one of them is weather.
 And the curve is as wide as the session is long rather than as wide as a day: a
 full day's axis with twenty minutes of reading in the corner is a picture of

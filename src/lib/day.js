@@ -34,6 +34,13 @@ export function createDay() {
   // the length of a batch.
   const counts = new Int32Array(SPAN);
   const stamps = new Int32Array(SPAN).fill(-1);
+  // The first minute anything landed in. A session almost never begins on a
+  // minute boundary, so that minute holds only the part of itself that was
+  // watched and reads low by the rest — the same defect as the minute in
+  // progress, at the other end, and it has to go for the same reason. Left in,
+  // every session opens on a ramp from nothing up to the true rate, which is a
+  // picture of the tab being opened rather than of the weather.
+  let first = null;
 
   // The reading is rebuilt only when the minute rolls over, and handed back by
   // identity in between. It is read twice a second by a panel that re-renders
@@ -52,16 +59,19 @@ export function createDay() {
         counts[slot] = 0;
       }
       counts[slot] += n;
+      if (first === null) first = minute;
     },
 
     /**
      * The curve, oldest first, in strikes per minute.
      *
-     * The minute in progress is left out. It is only ever part of a minute, so
-     * it reads low by however much of it is still to come, and would draw the
-     * newest point of the curve as a dive every single minute. The trace above
-     * it is already showing the present at full resolution; this one can afford
-     * to end a minute ago and be true.
+     * Both ends are trimmed, and for one reason. The minute in progress holds
+     * only as much of itself as has happened, and the minute the session opened
+     * in holds only as much as was watched; each reads low by the rest, and
+     * drawn they are a dive at the right-hand end every single minute and a
+     * ramp up from nothing at the left. Neither is weather. The trace above is
+     * already showing the present at full resolution, so this one can afford to
+     * start and end a minute short and be true.
      */
     read(now) {
       const current = Math.floor(now / MINUTE_MS);
@@ -74,7 +84,7 @@ export function createDay() {
         // A minute the session was not running for is absent rather than zero.
         // Drawn, a gap and a lull look the same and only one of them is
         // weather, so the session's own start has to stay visible.
-        if (stamps[slot] !== minute) continue;
+        if (stamps[slot] !== minute || minute === first) continue;
         const point = { t: minute * MINUTE_MS, rate: counts[slot] };
         series.push(point);
         if (!peak || point.rate > peak.rate) peak = point;

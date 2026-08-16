@@ -17,11 +17,20 @@ function Label({ children, trailing }) {
   );
 }
 
-function Readout({ label, value, unit }) {
+/**
+ * One figure and what it is.
+ *
+ * `quiet` drops the glow. It is the whole of the difference between the two
+ * kinds of number in this panel: what the weather is doing is lit, and what the
+ * instrument is doing while it watches is not. Same size, same column, same
+ * type — a status figure that had been shrunk as well would read as unimportant
+ * rather than as a different subject, and the fix gap is not unimportant.
+ */
+function Readout({ label, value, unit, quiet }) {
   return (
     <div className="flex items-baseline justify-between border-b border-line py-2.5 last:border-b-0">
       <span className="text-2xs uppercase tracking-label text-dim">{label}</span>
-      <span className="text-base text-text glow">
+      <span className={`text-base ${quiet ? "text-dim" : "text-text glow"}`}>
         {value}
         {unit && <span className="ml-1 text-2xs text-dim">{unit}</span>}
       </span>
@@ -210,56 +219,18 @@ function Sidebar({
 
   return (
     <aside className="flex w-full shrink-0 flex-col border-line bg-panel lg:w-[340px] lg:border-l">
-      <section data-tour="rate" className="border-b border-line px-4 pb-4 pt-4">
-        <Label>Rate</Label>
-        <div className="mt-2 flex items-baseline justify-between">
-          <span className="text-base text-text glow-hot">{fmt(stats.rate)}</span>
-          <span className="text-2xs uppercase tracking-label text-dim">strikes / min</span>
-        </div>
+      {/* Now. The unit rides on the heading rather than beside the figure, the
+          way it already does on the ranking below, which leaves the reading
+          itself alone on its line: one large number per group is what makes a
+          panel scannable, and there is exactly one here worth being large. */}
+      <section data-tour="rate" className="border-b border-line px-4 pb-1 pt-4">
+        <Label trailing="strikes / min">Rate</Label>
+        <div className="mt-2 text-base text-text glow-hot">{fmt(stats.rate)}</div>
         {settings.trace && (
           <div className="mt-1">
             <RateTrace samples={samples} />
           </div>
         )}
-      </section>
-
-      {/* The long view. Absent rather than empty until there is a curve to
-          draw: two minutes is the least this can be and still be a line, and
-          an empty box labelled "session" for the first two minutes of every
-          visit is a worse introduction than nothing at all. */}
-      {settings.day && day?.series?.length > 1 && (
-        <section className="border-b border-line px-4 pb-4 pt-4">
-          <Label trailing={span(day.spanMs)}>Session</Label>
-          <div className="mt-1">
-            <DayTrace day={day} />
-          </div>
-          {/* The peak is the one figure the curve cannot be read off precisely,
-              and the one worth knowing: how hard the world was firing at its
-              hardest, and when. UTC, like the footer clock and for the same
-              reason — the peak is somebody's afternoon, and whose it was is
-              the reading. */}
-          <div className="mt-1 flex items-baseline justify-between text-2xs uppercase tracking-label text-dim">
-            <span>Peak</span>
-            <span>
-              <span className="text-text">{fmt(day.peak.rate)}</span> / min at{" "}
-              <span className="text-text">
-                {new Date(day.peak.t).toISOString().slice(11, 16)}
-              </span>
-              z
-            </span>
-          </div>
-        </section>
-      )}
-
-      <section data-tour="stats" className="border-b border-line px-4 py-1">
-        <Readout label="Detected" value={fmt(stats.total)} />
-        <Readout label="Latency" value={stats.delay ?? "—"} unit={stats.delay ? "s" : ""} />
-        <Readout label="Stations" value={stats.stations ?? "—"} />
-        <Readout
-          label="Fix gap"
-          value={stats.gap ?? "—"}
-          unit={stats.gap === null ? "" : "°"}
-        />
         {/* The count of cells, and how many of them are winding up. The second
             figure is only ever drawn when there is one: a surge is rare by
             construction, and a row reading zero all afternoon teaches the eye
@@ -271,10 +242,61 @@ function Sidebar({
         />
       </section>
 
+      {/* Since the tab was opened. The trace is absent rather than empty until
+          there is a curve to draw — two minutes is the least it can be and
+          still be a line — but the total is always here, so the group never
+          disappears out from under a figure somebody was watching. */}
+      <section className="border-b border-line px-4 pb-1 pt-4">
+        <Label trailing={day?.series?.length > 1 ? span(day.spanMs) : null}>Session</Label>
+        {settings.day && day?.series?.length > 1 && (
+          <>
+            <div className="mt-1">
+              <DayTrace day={day} />
+            </div>
+            {/* The peak is the one figure the curve cannot be read off
+                precisely, and the one worth knowing: how hard the world was
+                firing at its hardest, and when. UTC, like the footer clock and
+                for the same reason — the peak is somebody's afternoon, and
+                whose it was is the reading. */}
+            <div className="mt-1 flex items-baseline justify-between text-2xs uppercase tracking-label text-dim">
+              <span>Peak</span>
+              <span>
+                <span className="text-text">{fmt(day.peak.rate)}</span> / min at{" "}
+                <span className="text-text">
+                  {new Date(day.peak.t).toISOString().slice(11, 16)}
+                </span>
+                z
+              </span>
+            </div>
+          </>
+        )}
+        <Readout label="Detected" value={fmt(stats.total)} />
+      </section>
+
+      {/* The instrument, reporting on itself.
+          These three were sitting among the weather figures in one
+          undifferentiated list, which is what made the fix gap look like a
+          reading about the storm. It is not: all three are properties of the
+          detection geometry and of the link, they move on the network's
+          schedule rather than the weather's, and under their own heading they
+          say so without a word of explanation. Unlit, for the same reason. */}
+      <section data-tour="stats" className="border-b border-line px-4 pb-1 pt-4">
+        <Label>Link</Label>
+        <Readout quiet label="Latency" value={stats.delay ?? "—"} unit={stats.delay ? "s" : ""} />
+        <Readout quiet label="Stations" value={stats.stations ?? "—"} />
+        <Readout
+          quiet
+          label="Fix gap"
+          value={stats.gap ?? "—"}
+          unit={stats.gap === null ? "" : "°"}
+        />
+      </section>
+
       {/* Only ever present once the reader has asked to be located. Nothing
           about it is stored, and it disappears with the session. */}
       {watch && (
-        <section className="border-b border-line px-4 py-1">
+        <section className="border-b border-line px-4 pb-1 pt-4">
+          <Label>Here</Label>
           <Readout
             label="Nearest strike"
             value={watch.nearest === null ? "—" : fmt(Math.round(watch.nearest))}

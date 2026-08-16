@@ -88,10 +88,11 @@ const STEPS = [
     side: "left",
     body: (
       <>
-        Rate is the whole world&rsquo;s last minute, traced beneath itself. The
-        three under it describe the network rather than the weather: how long it
-        took to place the last strikes, how many detectors solved them, and the
-        fix gap: the widest direction those strikes were{" "}
+        Rate is the whole world&rsquo;s last minute, traced beneath itself, and
+        Session is as much of a day as you have watched. Under Link the
+        instrument reports on itself rather than on the weather: how long it took
+        to place the last strikes, how many detectors solved them, and the fix
+        gap: the widest direction those strikes were{" "}
         <Key>not</Key> heard from. Ringed by detectors, a strike reads low; heard
         from one side only it reads past 180&deg;, and is placed the more loosely
         for it.

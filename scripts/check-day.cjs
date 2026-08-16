@@ -37,15 +37,31 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/day.js")).href).then(({ cr
       day.record(to - from, t0 + minute * MINUTE + batch * 500);
     }
   }
+  // 179 rather than 180: the minute the session opened in is dropped. See
+  // below.
   const read = day.read(t0 + 180 * MINUTE);
-  check(read.series.length === 180, "180 minutes held", `(${read.series.length})`);
+  check(read.series.length === 179, "the settled minutes are held", `(${read.series.length})`);
   check(
-    read.series.every((point, i) => Math.abs(point.rate - rate(i)) < 1),
+    read.series.every((point, i) => Math.abs(point.rate - rate(i + 1)) < 1),
     "every minute reads the rate it was given"
   );
-  check(read.spanMs === 180 * MINUTE, "the span is the session", `(${read.spanMs / MINUTE}m)`);
-  const wanted = Math.max(...Array.from({ length: 180 }, (unused, i) => rate(i)));
+  check(read.spanMs === 179 * MINUTE, "the span is the session", `(${read.spanMs / MINUTE}m)`);
+  const wanted = Math.max(...Array.from({ length: 179 }, (unused, i) => rate(i + 1)));
   check(Math.abs(read.peak.rate - wanted) < 1, "the peak is the busiest minute", `(${read.peak.rate})`);
+
+  // The minute a session opens in holds only the part of itself that was
+  // watched, so it reads low and would draw every session as opening on a ramp
+  // up from nothing. Same defect as the minute in progress, other end.
+  console.log("\nleaving out the minute it opened in");
+  const late = createDay();
+  late.record(9, t0 + 40000); // twenty seconds of a minute, and then all of them
+  for (let minute = 1; minute < 6; minute++) late.record(300, t0 + minute * MINUTE);
+  const opened = late.read(t0 + 6 * MINUTE);
+  check(opened.series.length === 5, "the part-minute at the start is dropped", `(${opened.series.length})`);
+  check(
+    opened.series.every((point) => point.rate === 300),
+    "nothing reads low that was only partly watched"
+  );
 
   // The minute in progress is short by however much of it has not happened, and
   // must not be drawn as a collapse in the rate.
@@ -54,7 +70,7 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/day.js")).href).then(({ cr
   for (let minute = 0; minute < 10; minute++) live.record(300, t0 + minute * MINUTE);
   live.record(20, t0 + 10 * MINUTE + 4000); // four seconds into the eleventh
   const partial = live.read(t0 + 10 * MINUTE + 4000);
-  check(partial.series.length === 10, "only settled minutes are returned", `(${partial.series.length})`);
+  check(partial.series.length === 9, "only settled minutes are returned", `(${partial.series.length})`);
   check(
     partial.series.every((point) => point.rate === 300),
     "none of them is the part-minute"
@@ -93,7 +109,7 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/day.js")).href).then(({ cr
   for (let minute = 0; minute < 5; minute++) slept.record(200, t0 + minute * MINUTE);
   for (let minute = 65; minute < 70; minute++) slept.record(200, t0 + minute * MINUTE);
   const gapped = slept.read(t0 + 70 * MINUTE);
-  check(gapped.series.length === 10, "the hour asleep is absent, not zero", `(${gapped.series.length})`);
+  check(gapped.series.length === 9, "the hour asleep is absent, not zero", `(${gapped.series.length})`);
   check(
     gapped.series.every((point) => point.rate === 200),
     "nothing reads as a lull that was a gap"
