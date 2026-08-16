@@ -67,6 +67,10 @@ const STORM_MIN_PX = 3;
 // the smallest cell that gets drawn at all, close enough that it stays the
 // same cell rather than becoming a halo around it.
 const JUMP_GAP_PX = 3;
+// Breathing room around a label when it is tested against its neighbours. Two
+// readouts that merely fail to overlap still read as one run of digits, so the
+// box is a little larger than the text in it.
+const LABEL_PAD = 2;
 // The trail holds a centroid every 20s for an hour: 180 points, far more than
 // a track needs to read as a curve, and each one costs a projection every
 // frame. Subsampled to this, a point every couple of minutes.
@@ -1058,6 +1062,13 @@ const WorldMap = ({
     // Placed in prominence order and collision-culled, so a squall over the
     // Low Countries lights Brussels or Amsterdam, not both on top of each
     // other. Anything overlapping a label already placed is simply dropped.
+    // Where the names ended up, in this layer's own coordinates. Handed on with
+    // the bitmap so the live loop can keep the storm labels off them: the two
+    // sets of text are drawn on different canvases at different cadences, and
+    // without this they collide freely — which is what put a cell's readout
+    // through the middle of "Washington".
+    const namePlaced = [];
+
     if (settings.capitals && bins.length) {
       // Cell key → how much life its burn has left. Keyed exactly as App bins,
       // so lighting a label is a handful of lookups rather than a scan over
@@ -1076,7 +1087,7 @@ const WorldMap = ({
       ctx.fillStyle = palette.void;
       ctx.lineJoin = "round";
       ctx.miterLimit = 2;
-      const placed = [];
+      const placed = namePlaced;
 
       for (const capital of capitals) {
         // Off the tube: dropped here, before the burn scan below rather than
@@ -1143,7 +1154,7 @@ const WorldMap = ({
       ctx.globalAlpha = 1;
     }
 
-    historyLayer.current = { canvas, view: settled };
+    historyLayer.current = { canvas, view: settled, labels: namePlaced };
   }, [
     burnFull,
     bins,
@@ -1331,6 +1342,7 @@ const WorldMap = ({
       ctx.fillStyle = palette.text;
       ctx.font = '10px "IBM Plex Mono", ui-monospace, monospace';
       ctx.textBaseline = "middle";
+      const labels = [];
       for (const storm of settings.storms ? stormsRef.current : []) {
         const centre = projection([storm.lon, storm.lat]);
         const edge = projection([storm.lon + storm.radius, storm.lat]);
@@ -1440,20 +1452,72 @@ const WorldMap = ({
           ctx.stroke();
         }
 
-        ctx.globalAlpha = 0.45 + weight * 0.4;
         // The speed is the one reading that needs a unit to be read at all, so
         // it goes with the level that has room for it. Below that the label is
         // the count alone, which needs nothing.
         //
-        // A jump adds a figure, and is allowed to make the label long, because
-        // it is rare: almost every cell on the map is not doing this, and the
-        // one that is has earned the width. Below `full` it adds the arrow
-        // alone — the ring has already said it, and an arrow needs no unit.
+        // A jump adds a figure at that level too, and is allowed to make the
+        // label long because it is rare: almost every cell is not doing this.
+        // It adds no arrow. There was one, and it read as a digit at 10px —
+        // "↑47/min" is "747/min" at a glance — while saying nothing the second
+        // ring had not already said more clearly.
         const parts = [`${storm.count}`];
         if (track && showAhead) parts.push(`${Math.round(track.kmh)}km/h`);
-        if (rate?.jump && showAhead) parts.push(`↑${Math.round(rate.rate)}/min`);
-        const label = parts.join(" · ") + (rate?.jump && !showAhead ? " ↑" : "");
-        ctx.fillText(label, centre[0] + r + 5, centre[1]);
+        if (rate?.jump && showAhead) parts.push(`${Math.round(rate.rate)}/min`);
+        labels.push({
+          text: parts.join(" · "),
+          x: centre[0] + r + 5,
+          y: centre[1],
+          alpha: 0.45 + weight * 0.4,
+          // Who wins the pixels. A cell winding up is the most urgent thing on
+          // the map and keeps its readout; after that the busiest cell does.
+          rank: (rate?.jump ? 1e9 : 0) + storm.count,
+        });
+      }
+
+      // ── The labels ────────────────────────────────────────────────────────
+      //
+      // Placed after every ring, in one pass of their own, because placement
+      // order is collision priority and the order cells happen to arrive in is
+      // not a priority. Anything that would land on text already placed is
+      // dropped rather than drawn over: two readouts on top of each other are
+      // not two readings, they are none, and the ring underneath still says
+      // there is a cell there.
+      //
+      // The capitals are already on the glass, on the history layer, drawn at
+      // that layer's own view. They are seeded into the occupied list through
+      // the same delta the bitmap itself is drawn through, so a pan cannot slide
+      // a name under a readout. Names win: a place name is orientation and
+      // cannot be moved, while a cell's figures can go and lose nothing the ring
+      // was not already saying.
+      const taken = [];
+      const names = historyLayer.current;
+      if (names?.labels?.length) {
+        const live = viewRef.current;
+        const k = live.k / names.view.k;
+        const dx = live.x - k * names.view.x;
+        const dy = live.y - k * names.view.y;
+        for (const box of names.labels) {
+          taken.push([box[0] * k + dx, box[1] * k + dy, box[2] * k + dx, box[3] * k + dy]);
+        }
+      }
+
+      labels.sort((a, b) => b.rank - a.rank);
+      for (const label of labels) {
+        const w = ctx.measureText(label.text).width;
+        const box = [
+          label.x - LABEL_PAD,
+          label.y - 6 - LABEL_PAD,
+          label.x + w + LABEL_PAD,
+          label.y + 6 + LABEL_PAD,
+        ];
+        const clash = taken.some(
+          (other) => box[0] < other[2] && box[2] > other[0] && box[1] < other[3] && box[3] > other[1]
+        );
+        if (clash) continue;
+        taken.push(box);
+        ctx.globalAlpha = label.alpha;
+        ctx.fillText(label.text, label.x, label.y);
       }
       ctx.globalAlpha = 1;
 
