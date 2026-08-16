@@ -105,6 +105,14 @@ const bounds = (
   </svg>
 );
 
+// Rain: patchy where the cloud is continuous, with a core inside a band.
+const rainMark = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    <path d="M2 9h4v2H2zM7 6h5v2H7zM14 10h6v2h-6zM9 11h3v2H9z" className="fill-land" opacity="0.75" />
+    <rect x="15" y="6" width="4" height="3" className="fill-text" opacity="0.85" />
+  </svg>
+);
+
 // Cloud, and the harder core of it: the two passes the layer is drawn in.
 const cloudMark = (
   <svg viewBox="0 0 24 16" className="h-4 w-6">
@@ -237,6 +245,32 @@ export default function Legend({ onClose }) {
           show. Between twenty and forty minutes old depending on the satellite, and never a
           forecast: every pixel was measured. It is also the only layer here that is fetched rather
           than derived, so it can be absent, and when it is the sky simply reads as clear.
+          <br />
+          <br />
+          One field at a time: this or the rain below, chosen under Field in configuration. They
+          are looking at opposite ends of the same column, so where they overlap they draw the same
+          storm twice.
+        </Entry>
+        <Entry mark={rainMark} term="Rain field">
+          A ground-radar composite: what is actually falling, rather than how high the cloud over it
+          reached. The body is the rain, and the harder cores are the convective centres — the same
+          thing the cloud field&rsquo;s bright tops are looking for, seen from underneath instead of
+          from orbit. Where the two disagree is interesting: an anvil with nothing under it is a
+          storm that has finished.
+          <br />
+          <br />
+          Its footprint is not the planet. Radar is built and maintained by national services, so
+          this covers the ground somebody put a network on and stops — sharply, and often at a
+          coastline. Empty here means unwatched, not dry, which is the opposite of what empty means
+          on every other layer of this map. Most of the ocean is unwatched.
+          <br />
+          <br />
+          The tiles arrive rendered rather than raw, so the reading is taken back out of the
+          picture: the service publishes its colour scheme as a table of one colour per dBZ, and the
+          map inverts it. That is exact rather than approximate, and it is checked against live
+          tiles by <span className="text-text">npm run check:rain</span> — a palette read wrongly
+          would draw a plausible field that is quantitatively false, which is the one failure worth
+          testing for. From RainViewer, published in ten-minute frames.
         </Entry>
         <Entry mark={daylight} term="Daylight">
           The terminator, and the hemisphere it divides: light added on the tube, ink laid down on

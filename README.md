@@ -17,7 +17,7 @@ npm install
 npm run dev      # dev server
 npm run build    # production build
 npm run lint
-npm run check    # capitals, sun, storm tracking, the lightning jump, the session day
+npm run check    # capitals, sun, storm tracking, the session day, cloud and rain fields
 ```
 
 No configuration or API keys are required.
@@ -57,7 +57,7 @@ something rather than sets something:
 | **Tube** | Phosphor (white, green, amber, ice), contrast, and bloom: the medium itself, before anything is drawn on it |
 | **Layout** | Whether the side panel, header and footer are shown at all |
 | **Screen** | Scanlines, refresh sweep, strike shake, detector clicks |
-| **Map** | Storm cells and how much detail they carry, the density window, cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
+| **Map** | Which field is behind the map (off, cloud, rain), storm cells and how much detail they carry, the density window, cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
 | **Panel** | Rate trace, the session day, activity ranking, strike feed |
 | **Session** | The two exports: strikes as CSV, the frame as PNG |
 
@@ -74,6 +74,9 @@ something rather than sets something:
 | `src/lib/burn.js` | Burn-in as a pure function of the strikes and an instant, which is what makes replay possible |
 | `src/lib/day.js` | Arrivals banked by the minute and kept for a day: the one window here longer than an hour |
 | `src/lib/save.js` | The two ways something leaves: the retained strikes as CSV, the frame as PNG |
+| `src/lib/field.js` | The tiled-field machinery both backdrops run on: pyramid, queue, ancestors, crossfade |
+| `src/lib/ir.js` | The cloud field: the geostationary ring, its territories and its calibration |
+| `src/lib/rain.js` | The rain field: a ground-radar composite, and the inversion of the palette it is served in |
 | `src/lib/tour.js` | Whether this browser has been walked through the instrument, and when the walk may start |
 | `src/lib/fix.js` | How well a strike was located, derived from the stations that fixed it |
 | `src/lib/stations.js` | The detecting network, assembled from the strikes as they arrive |
@@ -270,6 +273,63 @@ It runs once, on a first visit, after the boot readout clears. That flag is its
 own key in `localStorage` rather than a field in the configuration, because the
 configuration has a `[ defaults ]` button and resetting the phosphor is not a
 request to be taught the instrument again.
+
+## Notes on the two fields
+
+The map carries one backdrop at a time, and there are two to choose from.
+Infrared reads the top of the column from orbit; radar reads what is falling out
+of the bottom of it from the ground. They are alternatives rather than layers
+because where they overlap they are drawing the same storm, and two washes with
+two sets of bright cores over one another is one wash too many for a map whose
+subject is the marks on top of them.
+
+Their footprints are nearly complementary, which is the more interesting half of
+the choice. Infrared covers the whole ring including every ocean. Radar covers
+the ground somebody built and maintains a network on, and stops — sharply, often
+at a coastline. So empty means something different on each: on the cloud field
+it means clear, and on the rain field it means unwatched, which over most of the
+planet is what it is.
+
+Everything stateful is shared. The pyramid, the fetch queue ordered from the
+middle of the screen outward, the ancestor that stands in for a tile still in
+the air, the eviction budget and the crossfade from one published frame to the
+next are in `field.js` and know nothing about either source; a source supplies
+how finely it is sampled, how deep the pyramid goes, how to fetch a tile and how
+to paint one. That was not a refactor done for its own sake — it was the cloud
+field's own machinery, and the alternative was three hundred lines of it kept in
+step with a copy by hand.
+
+### Reading a picture
+
+The radar composite arrives rendered rather than raw. There is a colour
+parameter in the tile URL and it is ignored: every tile comes back in one scheme
+whatever is asked for. So the measurement has to be taken back out of the image,
+which is exactly as fragile as it sounds unless it is done exactly.
+
+It can be done exactly. The scheme is published as a table of one RGBA entry per
+dBZ, so `rain.js` carries that table and the inversion is a lookup rather than a
+fit. Two conditions make it hold, and both are in the request for that reason
+alone: smoothing off, because a blurred tile interpolates between palette entries
+and produces colours that are not in the table and do not mean anything; and
+snow off, because the separate snow ramp is a second table over the same pixels.
+Above 65 dBZ the scheme stops being injective — white covers 65 to 74, green
+everything past — and the lowest reading of any repeated colour is taken, which
+is the only direction that does not invent intensity out of a palette that has
+run out of colours. All of that is past the top of real precipitation anyway.
+
+`npm run check:rain` pulls live tiles over four separate national networks and
+asserts that every lit pixel in them inverts, because a table that has drifted
+still draws a plausible field over a plausible map and there is no way to see
+the error by looking. The reduction from the served 256 to the stored 64 takes
+the strongest sample of each block rather than the mean, for the same reason the
+second pass exists at all: a hail core is small, and a mean is precisely the
+operation that dissolves it into the rain around it.
+
+The frames are indexed rather than guessed at. The cloud field has to assume how
+far behind its satellites are running and ask for a rounded-off moment in the
+hope something is there; the radar service publishes exactly which frames exist,
+so a moment is resolved against that list — the newest at or before it, which is
+what makes a rewound map show the weather that was there.
 
 ## Notes on the labels
 

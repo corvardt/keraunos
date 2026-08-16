@@ -33,11 +33,14 @@ export const DEFAULTS = {
   // has been over the session's own hour.
   density: "4m",
   // The one layer that is fetched rather than derived, and the only thing on
-  // this map that comes from outside the strike feed. On, because it is the
-  // context the strikes are missing and it is not clutter over the reading:
-  // it sits behind the world rather than on it. Off, the map is exactly what it
-  // was before, and nothing is requested.
-  ir: true,
+  // this map that comes from outside the strike feed. Cloud by default, because
+  // it is the context the strikes are missing, it covers the whole planet, and
+  // it is not clutter over the reading: it sits behind the world rather than on
+  // it. Rain is the same idea measured from underneath — a ground-radar
+  // composite of what is actually falling — and the two are alternatives rather
+  // than layers, since where they overlap they are drawing the same storm.
+  // Off, the map is exactly what it was before, and nothing is requested.
+  field: "cloud",
   graticule: true,
   frontiers: true,
   daylight: true,

@@ -25,6 +25,12 @@ import {
   STEP_MS as IR_STEP_MS,
   LAG_MS as IR_LAG_MS,
 } from "../../lib/ir.js";
+import {
+  createRain,
+  REFRESH_MS as RAIN_REFRESH_MS,
+  STEP_MS as RAIN_STEP_MS,
+  LAG_MS as RAIN_LAG_MS,
+} from "../../lib/rain.js";
 import Transport from "./transport.jsx";
 import { Ticks } from "./crt.jsx";
 import GeoData from "../../lib/world.json";
@@ -122,6 +128,23 @@ const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
 // really stopped. It was more than twice this, which put two thirds of a second
 // between the map coming to rest and the request even leaving.
 const IR_SETTLE_MS = 160;
+
+/**
+ * The two fields that can sit behind the map, and the cadence each runs on.
+ *
+ * One at a time, never both. They are looking at opposite ends of the same
+ * column — infrared at the top of it from orbit, radar at what is falling out
+ * of the bottom from the ground — so where they overlap they land on the same
+ * storm, and two washes with two sets of bright cores over one another is one
+ * wash too many for a map whose subject is the strikes on top of it.
+ *
+ * Both sources present the same four calls, so everything below is written
+ * once and reads the cadence out of here.
+ */
+const FIELDS = {
+  cloud: { make: createSky, refresh: IR_REFRESH_MS, step: IR_STEP_MS, lag: IR_LAG_MS },
+  rain: { make: createRain, refresh: RAIN_REFRESH_MS, step: RAIN_STEP_MS, lag: RAIN_LAG_MS },
+};
 const DRAG_SLOP = 4; // pixels of movement that turn a click into a drag
 const HERE_SPAN = 20; // degrees framed around a located reader: regional, not a street
 
@@ -883,8 +906,17 @@ const WorldMap = ({
   // a tile landed would re-render the whole map thirty times to fill one
   // screen. This end only says which moment is wanted, where the map is
   // looking, and what colour the sky is.
+  const kind = FIELDS[settings.field] ? settings.field : null;
   const sky = useRef(null);
-  if (!sky.current) sky.current = createSky();
+  const held = useRef(null);
+  // The outgoing pyramid is dropped whole rather than cleared: nothing in it
+  // answers for the source coming in, and a store nobody holds a reference to
+  // takes its tiles with it.
+  if (held.current !== kind) {
+    sky.current = kind ? FIELDS[kind].make() : null;
+    held.current = kind;
+  }
+  const cadence = FIELDS[kind] ?? FIELDS.cloud;
 
   // Rounded to the ten minutes the satellites themselves run at. Live, that is
   // the clock less the time it takes a scan to reach a server; rewound, it is
@@ -899,10 +931,10 @@ const WorldMap = ({
   // to re-render when the moment it names has moved on.
   const [irTick, setIrTick] = useState(0);
   useEffect(() => {
-    if (!settings.ir) return;
-    const id = setInterval(() => setIrTick((n) => n + 1), IR_REFRESH_MS);
+    if (!kind) return;
+    const id = setInterval(() => setIrTick((n) => n + 1), cadence.refresh);
     return () => clearInterval(id);
-  }, [settings.ir]);
+  }, [kind, cadence.refresh]);
 
   // A tab nobody is looking at is asked for again the moment it is. The fetch
   // below stands down while the page is hidden — see there for why — so this
@@ -917,21 +949,17 @@ const WorldMap = ({
   }, []);
 
   const irAt =
-    Math.floor((replay ? replay.at : Date.now() - IR_LAG_MS) / IR_STEP_MS) * IR_STEP_MS;
+    Math.floor((replay ? replay.at : Date.now() - cadence.lag) / cadence.step) * cadence.step;
 
   // The tokens the field is painted in. A palette change repaints the tiles
   // that are on screen from bytes already in hand; it does not go back to the
   // satellites for a picture that has not changed.
   useEffect(() => {
-    sky.current.palette(palette.land, palette.text);
-  }, [palette.land, palette.text]);
+    sky.current?.palette(palette.land, palette.text);
+  }, [palette.land, palette.text, kind]);
 
   useEffect(() => {
-    if (!settings.ir) {
-      sky.current.clear();
-      return;
-    }
-    if (!layerProjection || !width || !height) return;
+    if (!kind || !layerProjection || !width || !height) return;
     // A hidden tab is not a reader. The clock keeps moving behind a background
     // page — the ten-minute tick still fires — so without this the map would
     // spend a night fetching thirty megabytes of weather nobody can see, from
@@ -947,7 +975,7 @@ const WorldMap = ({
       sky.current.want(layerProjection, width, height, irAt);
     }, IR_SETTLE_MS);
     return () => clearTimeout(id);
-  }, [settings.ir, layerProjection, width, height, irAt, irTick]);
+  }, [kind, layerProjection, width, height, irAt, irTick]);
 
   // Cumulative density: redrawn twice a second, so the backing canvas is
   // allocated once per resize and cleared rather than reallocated.

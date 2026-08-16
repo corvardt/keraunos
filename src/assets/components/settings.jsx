@@ -171,11 +171,12 @@ export default function Settings({ settings, set, reset, onClose, onKey, onSaveS
       </Group>
 
       <Group title="Map">
-        <Toggle
-          label="Cloud field"
-          hint="Thermal infrared from the five geostationary satellites, behind the map. The bright tops are the cold ones, which is where the lightning is about to be. Fetched from RealEarth (UW&ndash;Madison SSEC) and EUMETSAT; nothing else here leaves the page."
-          value={settings.ir}
-          onChange={(v) => set("ir", v)}
+        <Choice
+          label="Field"
+          hint="What sits behind the map. Cloud is thermal infrared from the five geostationary satellites, and its bright tops are the cold ones, which is where the lightning is about to be. Rain is a ground-radar composite: it covers only the ground somebody built a radar network on, but it is the only layer here that sees what is actually falling. One at a time, because they land on the same storms from opposite ends. From RealEarth (UW&ndash;Madison SSEC), EUMETSAT and RainViewer; nothing else here leaves the page."
+          value={settings.field}
+          options={["off", "cloud", "rain"]}
+          onChange={(v) => set("field", v)}
         />
         <Toggle label="Storm cells" value={settings.storms} onChange={(v) => set("storms", v)} />
         <Choice
@@ -228,6 +229,7 @@ export default function Settings({ settings, set, reset, onClose, onKey, onSaveS
         <Toggle label="Most active" value={settings.regions} onChange={(v) => set("regions", v)} />
         <Toggle label="Strike feed" value={settings.feed} onChange={(v) => set("feed", v)} />
       </Group>
+
       {/* The only group here that does something rather than sets something.
           It sits in this panel because this is where the instrument's own
           controls live, and because the alternative was two more words in a
