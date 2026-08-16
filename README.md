@@ -5,7 +5,8 @@
 Live lightning strikes from the [Blitzortung](https://www.blitzortung.org/) network,
 streamed over WebSocket and plotted on a d3 world map. Rendered as a phosphor
 instrument: strikes arrive at full white and decay, worked cells burn into the
-map, and clusters are tracked as storm cells with a bearing and a ground speed.
+map, and clusters are tracked as storm cells with a bearing, a ground speed, and
+a second ring when their flash rate is climbing.
 The instrument also reports on itself, showing how well each strike was located
 and by which detectors, and the last hour can be rewound and replayed.
 
@@ -16,7 +17,7 @@ npm install
 npm run dev      # dev server
 npm run build    # production build
 npm run lint
-npm run check    # capitals, solar position, storm tracking
+npm run check    # capitals, solar position, storm tracking, the lightning jump
 ```
 
 No configuration or API keys are required.
@@ -66,7 +67,7 @@ stored in `localStorage` and covers five groups:
 | `src/assets/components/transport.jsx` | The rewind track: seek into the retained window and play forward from there |
 | `src/assets/components/tour.jsx` | The guided pass: lights one real control at a time and leaves the hole open |
 | `src/lib/view.js` | Pan/zoom as a screen transform over the fitted world; clamping, region framing, visible extent |
-| `src/lib/storms.js` | Clusters strikes into cells and tracks them between passes to derive motion |
+| `src/lib/storms.js` | Clusters strikes into cells and tracks them between passes to derive motion and flash-rate trend |
 | `src/lib/burn.js` | Burn-in as a pure function of the strikes and an instant, which is what makes replay possible |
 | `src/lib/tour.js` | Whether this browser has been walked through the instrument, and when the walk may start |
 | `src/lib/fix.js` | How well a strike was located, derived from the stations that fixed it |
@@ -111,6 +112,42 @@ every station that helped place it, for under a second: a strike caught in a
 full sheaf was pinned from every side, one wearing a fan was heard from a single
 direction. Nobody publishes where the detectors are, so their positions are
 assembled from the strikes themselves.
+
+## Notes on the jump
+
+Everything else a cell carries is a description: this many strikes, this fast,
+this way. The flash rate is the one reading that leads. A cell whose rate climbs
+sharply is a cell whose updraught has just got faster, and the updraught fast
+enough to separate charge at that rate is the same one carrying the hail, so the
+rise arrives ten to twenty minutes ahead of what it causes at the ground.
+
+Nothing is fetched for it. The strikes are already in memory and the cells
+already keep an identity between passes, so the rate rides along on the trail
+that was already being kept for the heading: one more field per point, sampled
+on the same cadence, dropped with the same points.
+
+The test is against the cell's own recent past. The last three minutes are
+compared with the three before them, and the two windows are held apart
+deliberately — each trail point's rate is itself a boxcar over the three minutes
+ending there, so a baseline taken any closer would contain most of the surge it
+was being used to measure and every jump would shrink against itself.
+
+The threshold is in standard deviations rather than in per cent because flashes
+are counted, and the noise on a count is its square root. A cell firing four
+flashes reads as a 25% rise every time it fires a fifth; against ±2 it reads as
+nothing, which is what it is. Two sigma is the figure in the literature
+(Schultz et al. 2009). It is a floor and not a proof: flashes within a storm
+arrive in bursts rather than independently, so the true variance runs above
+Poisson and the sigma alone is optimistic. A second gate asks for ten flashes a
+minute in absolute terms, and the reading rests on the pair.
+
+A cell younger than the rate window has a rate still filling from zero, which
+climbs whatever the weather is doing. Points are therefore only used once their
+own window lies inside the cell's life, which costs the first three minutes of
+every cell and is why a storm violent from birth is caught late rather than
+early. `npm run check:storms` flies a synthetic cell whose rate steps up, and
+tests the false alarm as hard as the alarm: a cell firing at a constant rate
+from birth must not report a surge once in twenty-five minutes.
 
 ## Notes on rewinding
 

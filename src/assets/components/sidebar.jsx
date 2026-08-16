@@ -167,7 +167,15 @@ function Sidebar({
           value={stats.gap ?? "—"}
           unit={stats.gap === null ? "" : "°"}
         />
-        <Readout label="Storm cells" value={fmt(stats.storms)} />
+        {/* The count of cells, and how many of them are winding up. The second
+            figure is only ever drawn when there is one: a surge is rare by
+            construction, and a row reading zero all afternoon teaches the eye
+            to skip the row on the afternoon it doesn't. */}
+        <Readout
+          label="Storm cells"
+          value={fmt(stats.storms)}
+          unit={stats.surging ? `↑${stats.surging}` : ""}
+        />
       </section>
 
       {/* Only ever present once the reader has asked to be located. Nothing

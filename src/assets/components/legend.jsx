@@ -54,6 +54,14 @@ const storm = (
   </svg>
 );
 
+const jump = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    <circle cx="10" cy="8" r="4.5" className="stroke-text" fill="none" strokeWidth="1" opacity="0.45" />
+    <circle cx="10" cy="8" r="7" className="stroke-text" fill="none" strokeWidth="1" opacity="0.9" />
+    <path d="M20 11V5M17.8 7.2 20 5l2.2 2.2" className="stroke-text" fill="none" strokeWidth="1" opacity="0.9" />
+  </svg>
+);
+
 const track = (
   <svg viewBox="0 0 24 16" className="h-4 w-6">
     <path d="M2 12c3 .5 5-1 7-3" className="stroke-text" fill="none" strokeWidth="1" opacity="0.25" />
@@ -175,6 +183,26 @@ export default function Legend({ onClose }) {
           tracked long enough, its ground speed. The arrow gives the bearing of travel: the
           direction is to scale, the length is not.
         </Entry>
+        <Entry mark={jump} term="Lightning jump">
+          A second ring, and the rate that earned it. Every other reading on a cell says what it is
+          doing; this one says what it is about to do. A flash rate climbing sharply leads severe
+          weather at the ground by ten to twenty minutes, because the updraught fast enough to
+          separate charge at that rate is the same updraught carrying the hail.
+          <br />
+          <br />
+          The test is against the cell&rsquo;s own recent past, not against other cells: the last
+          three minutes are compared with the three before them, and the ring appears when the
+          excess passes two standard deviations of the count. Flashes are counted, so the noise on
+          a count is the square root of it, which is what keeps a quiet cell of four flashes from
+          reading as a doubling every time it fires a fifth. A second gate asks for at least 10
+          flashes a minute in absolute terms, because flashes within a storm arrive in bursts
+          rather than independently and the sigma alone runs optimistic.
+          <br />
+          <br />
+          It is drawn at every cell detail, unlike everything else a cell carries. The rest is
+          context you can turn down; this is the one mark on the map about something that has not
+          happened yet.
+        </Entry>
         <Entry mark={track} term="Cell track">
           Up to an hour of where a storm cell has been, brightening toward the present, with its
           next hour dashed on ahead. Both are drawn to scale: an ordinary cell covers only tens of
@@ -264,7 +292,8 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry term="Storm cells">
           Clusters currently being tracked. Not grid squares: a cluster needs at least 12 strikes
-          across adjacent ~45 km bins to count.
+          across adjacent ~45 km bins to count. A trailing{" "}
+          <span className="text-text">&uarr;n</span> is how many of them are in a lightning jump.
         </Entry>
         <Entry term="Nearest strike">
           Appears only once you have pressed <span className="text-text">here</span>: how far away
@@ -348,6 +377,14 @@ export default function Legend({ onClose }) {
           Tracks extrapolate observed motion. They say where an existing cell is heading over the
           next few minutes, not where the next strike will land, and nothing about cells that have
           yet to form.
+        </p>
+        <p className="py-1 text-xs leading-relaxed text-dim">
+          A jump needs six minutes of a cell before it can be read at all, and the cell&rsquo;s
+          first three are spent filling the window the rate is measured over, so a storm that is
+          violent from birth is caught late rather than early. Two cells merging adds one
+          cell&rsquo;s flashes to the other&rsquo;s count and can read as a surge in the survivor;
+          that is a real event drawn for a slightly wrong reason. And the jump says that a cell is
+          intensifying, which is not the same as saying anything reached the ground.
         </p>
       </Group>
     </Panel>

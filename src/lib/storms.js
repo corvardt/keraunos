@@ -39,6 +39,41 @@ const MIN_TRAIL_POINTS = 15; // samples the regression needs to be meaningful
 const MIN_KMH = 8; // below this a cell is drifting, not tracking
 const MAX_KMH = 140; // above this it is a tracking error, not weather
 
+// The lightning jump.
+//
+// Where a cell is going is one reading; whether it is winding up is the other,
+// and it is the one that leads. A cell's flash rate climbing sharply precedes
+// severe weather at the ground by ten to twenty minutes, because the updraught
+// that separates charge fast enough to fire at that rate is the same updraught
+// that carries hail and produces the gust. The map already holds everything
+// needed to see it: the strikes are in memory and the cells keep an identity
+// between passes, so this is arithmetic over what is already there.
+//
+// Every trail point therefore records the rate as well as the position, and
+// the rate is read the same way the heading is: regressed over a window rather
+// than differenced between two samples.
+const RECENT_MIN = RECENT_MS / 60000; // the rate window, in minutes
+// Short, unlike the velocity fit. A heading is a property of a storm and holds
+// for tens of minutes; a jump is by definition a departure from what the cell
+// was doing, and regressing half an hour of it would average the surge away
+// with the calm before it.
+const RATE_FIT_MS = 360000; // 6 min
+const MIN_RATE_POINTS = 12; // 4 minutes of samples, at one per 20s
+const MIN_BASELINE_POINTS = 3; // a minute of settled rate to compare against
+
+// Flashes are counted, so the noise on a count is Poisson: a baseline that
+// predicts N flashes will deliver N ± √N without anything having changed. The
+// test is therefore in standard deviations rather than in per cent, which is
+// what keeps a quiet cell of four flashes from reading as a doubling every
+// time it fires a fifth. Two sigma is the threshold in the literature.
+//
+// It is a floor rather than a proof. Flashes within a storm arrive in bursts
+// rather than independently, so the true variance runs above Poisson and this
+// overstates significance; the absolute rate below is the second gate, and the
+// pair of them is what the reading rests on rather than the sigma alone.
+const JUMP_SIGMA = 2;
+const MIN_JUMP_RATE = 10; // flashes/min: below this a surge is not a storm yet
+
 let nextId = 1;
 
 // Least-squares slope of a coordinate against time, in degrees per second.
@@ -165,9 +200,22 @@ export function trackStorms(previous, current, now) {
       }
     }
 
+    // The rate rides along on the trail rather than in a history of its own:
+    // it is sampled on the same cadence, over the same lifetime, and thrown
+    // away with the same points.
+    const sample = { lon: storm.tlon, lat: storm.tlat, t: now, r: storm.recent / RECENT_MIN };
+
     if (!match) {
-      const trail = [{ lon: storm.tlon, lat: storm.tlat, t: now }];
-      return { ...storm, id: nextId++, trail, vlon: 0, vlat: 0, baseline: 0, age: 0, t: now };
+      return {
+        ...storm,
+        id: nextId++,
+        trail: [sample],
+        vlon: 0,
+        vlat: 0,
+        baseline: 0,
+        age: 0,
+        t: now,
+      };
     }
 
     claimed.add(match.id);
@@ -176,9 +224,7 @@ export function trackStorms(previous, current, now) {
     // keeps the trail small however long a cell lives.
     const trail = match.trail.filter((p) => now - p.t <= TRAIL_MS);
     const latest = trail[trail.length - 1];
-    if (!latest || now - latest.t >= TRAIL_STEP_MS) {
-      trail.push({ lon: storm.tlon, lat: storm.tlat, t: now });
-    }
+    if (!latest || now - latest.t >= TRAIL_STEP_MS) trail.push(sample);
 
     // The whole trail is kept, but only its recent end is fitted.
     const fit = trail.filter((p) => now - p.t <= FIT_MS);
@@ -216,6 +262,49 @@ export function motion(storm) {
     ux: storm.vlon / Math.hypot(storm.vlon, storm.vlat),
     uy: storm.vlat / Math.hypot(storm.vlon, storm.vlat),
   };
+}
+
+/**
+ * How hard the cell is firing, and whether that is changing.
+ *
+ * `rate` is flashes per minute now. `trend` is the slope of that rate over the
+ * last six minutes, in flashes per minute per minute. `sigma` is how far the
+ * present three minutes sits above what the three before it predicted, in
+ * Poisson standard deviations, and `jump` is that test passed alongside a rate
+ * worth calling a storm.
+ *
+ * The two windows do not overlap. Each trail point's rate is itself a boxcar
+ * over the three minutes ending at that point, so the baseline is taken from
+ * points at least that far back: without that the cell would be compared
+ * against a period containing most of the surge being tested for, and every
+ * jump would be measured against itself and shrink.
+ *
+ * Null until the cell has been watched long enough for any of it to mean
+ * something, on the same principle as `motion`. A cell younger than the rate
+ * window has a rate still filling from zero, which climbs whatever the weather
+ * is doing, and reading a jump off that would fire on every cell at birth.
+ */
+export function surge(storm) {
+  const now = storm.t;
+  // Points whose own window lies entirely within the cell's life, so the ramp
+  // of a filling boxcar is never mistaken for a rising storm.
+  const settled = storm.trail.filter(
+    (p) => now - p.t <= RATE_FIT_MS && storm.age * 1000 - (now - p.t) >= RECENT_MS
+  );
+  if (settled.length < MIN_RATE_POINTS) return null;
+
+  const before = settled.filter((p) => now - p.t >= RECENT_MS);
+  if (before.length < MIN_BASELINE_POINTS) return null;
+
+  const rate = storm.recent / RECENT_MIN;
+  const expected = (before.reduce((sum, p) => sum + p.r, 0) / before.length) * RECENT_MIN;
+  // A baseline of nothing still carries the noise of one flash. Without the
+  // floor the test divides by zero in exactly the case where the rise is most
+  // obvious: a cell that was silent and is now firing.
+  const sigma = (storm.recent - expected) / Math.sqrt(Math.max(expected, 1));
+  const trend = slope(settled, "r") * 60;
+
+  return { rate, trend, sigma, jump: sigma >= JUMP_SIGMA && rate >= MIN_JUMP_RATE };
 }
 
 /**

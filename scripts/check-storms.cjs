@@ -15,15 +15,23 @@ const path = require("path");
 const KM_PER_DEG = 111.32;
 const WINDOW_MS = 12 * 60 * 1000; // must match STORM_WINDOW_MS in App.jsx
 const STEP_MS = 2000; // and STORM_EVERY_MS
+const JUMP_SIGMA = 2; // and the threshold in storms.js
 
 // Deterministic, so a failure is reproducible rather than a coin toss.
 let seed = 20260724;
 const random = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 
 import(pathToFileURL(path.join(__dirname, "../src/lib/storms.js")).href).then(
-  ({ detectStorms, trackStorms, motion, forecast }) => {
-    /** Runs a cell across the sky at a known speed and bearing. */
-    function fly({ kmh, bearing, lat0, lon0, minutes }) {
+  ({ detectStorms, trackStorms, motion, forecast, surge }) => {
+    /**
+     * Runs a cell across the sky at a known speed and bearing.
+     *
+     * `perStep` sets how many strikes it fires each pass, as a function of the
+     * minutes it has been alive, so a cell can be given a rate history as well
+     * as a course. `watch` sees every pass rather than only the last, which is
+     * what a jump has to be caught in.
+     */
+    function fly({ kmh, bearing, lat0, lon0, minutes, perStep = () => 40, watch }) {
       const rad = (bearing * Math.PI) / 180;
       const north = (Math.cos(rad) * kmh) / 3600 / KM_PER_DEG;
       const east =
@@ -40,7 +48,7 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/storms.js")).href).then(
         const lat = lat0 + north * seconds;
         // A blob of strikes around the moving centre, dense enough to clear
         // MIN_STORM_STRIKES and scattered enough to be a real cluster.
-        for (let i = 0; i < 40; i++) {
+        for (let i = 0; i < perStep(seconds / 60); i++) {
           strikes.push({
             lon: lon + (random() - 0.5) * 0.5,
             lat: lat + (random() - 0.5) * 0.5,
@@ -49,6 +57,7 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/storms.js")).href).then(
         }
         strikes = strikes.filter((s) => now - s.t <= WINDOW_MS);
         tracked = trackStorms(tracked, detectStorms(strikes, now, WINDOW_MS), now);
+        watch?.(tracked, seconds / 60);
       }
       return tracked;
     }
@@ -120,6 +129,100 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/storms.js")).href).then(
       young.every((storm) => motion(storm) === null),
       "no speed offered at 7 minutes"
     );
+
+    // The rate reading. A jump is an alarm, so the cost of a false one is
+    // higher than the cost of a late one, and the steady cases below are the
+    // half of this worth testing hardest: a cell that fires at a constant rate
+    // from birth must never once report a surge, however long it is watched.
+    console.log("\nreading the flash rate");
+
+    // 30/min, unchanging. The birth ramp is the trap: for its first three
+    // minutes the cell's own rate window is still filling, so a reading taken
+    // without the age gate climbs from zero to 30 and looks exactly like a
+    // storm winding up.
+    let jumped = 0;
+    let steadyRate = null;
+    fly({
+      kmh: 50,
+      bearing: 90,
+      lat0: 45,
+      lon0: 10,
+      minutes: 25,
+      perStep: () => 1,
+      watch: (tracked) => {
+        const reading = tracked[0] && surge(tracked[0]);
+        if (!reading) return;
+        if (reading.jump) jumped++;
+        steadyRate = reading;
+      },
+    });
+    check(jumped === 0, "a steady cell never jumps, across 25 minutes", `(${jumped} times)`);
+    check(
+      steadyRate && Math.abs(steadyRate.rate - 30) < 3,
+      "  reads 30/min",
+      `(${steadyRate ? steadyRate.rate.toFixed(1) : "null"})`
+    );
+    check(
+      steadyRate && Math.abs(steadyRate.trend) < 1.5,
+      "  reports a flat trend",
+      `(${steadyRate ? steadyRate.trend.toFixed(2) : "null"}/min per min)`
+    );
+
+    // Ten quiet minutes and then four times the rate, which is what an
+    // intensifying updraught looks like from here.
+    let firstJumpAt = null;
+    let earlyJump = false;
+    fly({
+      kmh: 50,
+      bearing: 90,
+      lat0: 45,
+      lon0: 10,
+      minutes: 25,
+      perStep: (minutes) => (minutes < 10 ? 1 : 4),
+      watch: (tracked, minutes) => {
+        const reading = tracked[0] && surge(tracked[0]);
+        if (!reading?.jump) return;
+        if (minutes < 10) earlyJump = true;
+        if (firstJumpAt === null) firstJumpAt = minutes;
+      },
+    });
+    check(!earlyJump, "no jump reported before the cell steps up");
+    check(firstJumpAt !== null, "the step up is caught", `at ${firstJumpAt?.toFixed(1)} min`);
+    // The rate window is a three-minute boxcar, so a step change arrives as a
+    // ramp and cannot be seen in full before it has passed through. Caught
+    // inside that window is as early as this measurement can honestly be.
+    check(
+      firstJumpAt !== null && firstJumpAt - 10 <= 3,
+      "  within the rate window of the step",
+      `${(firstJumpAt - 10).toFixed(1)} min after`
+    );
+
+    // A cell falling apart is the same arithmetic with the sign turned over,
+    // and must read as such rather than as an absence of anything. Measured
+    // across the collapse rather than at the end of the run: the baseline is
+    // the cell's own recent past, so fifteen minutes later a quiet cell has
+    // become its own normal again and reads flat, correctly.
+    let lowest = Infinity;
+    let falling = Infinity;
+    let decayJumped = 0;
+    fly({
+      kmh: 50,
+      bearing: 90,
+      lat0: 45,
+      lon0: 10,
+      minutes: 25,
+      perStep: (minutes) => (minutes < 10 ? 4 : 1),
+      watch: (tracked) => {
+        const reading = tracked[0] && surge(tracked[0]);
+        if (!reading) return;
+        if (reading.jump) decayJumped++;
+        lowest = Math.min(lowest, reading.sigma);
+        falling = Math.min(falling, reading.trend);
+      },
+    });
+    check(decayJumped === 0, "a collapsing cell never reads as a jump", `(${decayJumped} times)`);
+    check(lowest < -JUMP_SIGMA, "  falls below its own baseline", `(${lowest.toFixed(1)} sigma)`);
+    check(falling < -5, "  reports a falling trend", `(${falling.toFixed(1)}/min per min)`);
 
     console.log(ok ? "\nstorms: ok" : "\nstorms: FAILED");
     process.exit(ok ? 0 : 1);

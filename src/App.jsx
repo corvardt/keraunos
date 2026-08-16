@@ -17,7 +17,7 @@ import { useTheme } from "./lib/theme.js";
 import { usePalette } from "./lib/palette.js";
 import { useSettings, DENSITY } from "./lib/settings.js";
 import { useTour } from "./lib/tour.js";
-import { detectStorms, trackStorms } from "./lib/storms.js";
+import { detectStorms, trackStorms, surge } from "./lib/storms.js";
 import { binStrikes } from "./lib/burn.js";
 import geoData from "./lib/world.json";
 
@@ -139,6 +139,7 @@ function App() {
     rate: 0,
     total: 0,
     storms: 0,
+    surging: 0,
     delay: null,
     stations: null,
     gap: null,
@@ -344,6 +345,10 @@ function App() {
         rate: next.reduce((sum, n) => sum + n, 0),
         total: total.current,
         storms: tracked.current.length,
+        // How many of those are winding up. Read off the same tracked cells the
+        // map is drawing rings around, so the figure and the rings can never
+        // disagree about how many there are.
+        surging: tracked.current.filter((storm) => surge(storm)?.jump).length,
         delay: batch.length ? medianDelay(batch) : null,
         // How well the network is currently placing what it hears. Both are
         // properties of the detection geometry rather than of the weather,

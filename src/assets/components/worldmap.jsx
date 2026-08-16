@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { indexFeatures, findFeature, distanceKm } from "../../lib/geo.js";
 import { readMedium } from "../../lib/theme.js";
-import { motion, forecast } from "../../lib/storms.js";
+import { motion, forecast, surge } from "../../lib/storms.js";
 import { PERSISTENCE, DENSITY } from "../../lib/settings.js";
 import {
   LAT_LIMIT,
@@ -57,6 +57,10 @@ const ARROW_PX = 17; // storm bearing arrow; a fixed length, not a distance
 // renderer and the hit test read it, because a cell you cannot see is a cell
 // you cannot have meant to pick.
 const STORM_MIN_PX = 3;
+// The second ring a surging cell wears. Far enough out to read as two rings at
+// the smallest cell that gets drawn at all, close enough that it stays the
+// same cell rather than becoming a halo around it.
+const JUMP_GAP_PX = 3;
 // The trail holds a centroid every 20s for an hour: 180 points, far more than
 // a track needs to read as a curve, and each one costs a projection every
 // frame. Subsampled to this, a point every couple of minutes.
@@ -1308,6 +1312,20 @@ const WorldMap = ({
 
         // Null until the cell has been watched long enough to mean anything.
         const track = motion(storm);
+        const rate = surge(storm);
+
+        // A cell whose flash rate is climbing gets a second ring, and gets it
+        // at every level of detail: the rest of what a cell carries is context
+        // you can turn down, and this is the one thing on the map that is
+        // about to happen rather than happening. Concentric rather than
+        // brighter, because weight already means how much is firing and would
+        // then mean two things at once.
+        if (rate?.jump) {
+          ctx.globalAlpha = 0.55 + weight * 0.45;
+          ctx.beginPath();
+          ctx.arc(centre[0], centre[1], r + JUMP_GAP_PX, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
         // Where it has been, and where that course takes it. Both are drawn to
         // scale, unlike the bearing arrow below, which is why both disappear
@@ -1391,8 +1409,15 @@ const WorldMap = ({
         // The speed is the one reading that needs a unit to be read at all, so
         // it goes with the level that has room for it. Below that the label is
         // the count alone, which needs nothing.
-        const label =
-          track && showAhead ? `${storm.count} · ${Math.round(track.kmh)}km/h` : `${storm.count}`;
+        //
+        // A jump adds a figure, and is allowed to make the label long, because
+        // it is rare: almost every cell on the map is not doing this, and the
+        // one that is has earned the width. Below `full` it adds the arrow
+        // alone — the ring has already said it, and an arrow needs no unit.
+        const parts = [`${storm.count}`];
+        if (track && showAhead) parts.push(`${Math.round(track.kmh)}km/h`);
+        if (rate?.jump && showAhead) parts.push(`↑${Math.round(rate.rate)}/min`);
+        const label = parts.join(" · ") + (rate?.jump && !showAhead ? " ↑" : "");
         ctx.fillText(label, centre[0] + r + 5, centre[1]);
       }
       ctx.globalAlpha = 1;
