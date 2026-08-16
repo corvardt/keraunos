@@ -2,6 +2,9 @@ import { memo, useEffect, useState } from "react";
 
 const TRACE_W = 300;
 const TRACE_H = 34;
+// Taller than the 60s trace above it. That one is a heartbeat and is read as a
+// level; this one is a shape, and a day of weather has more in it to resolve.
+const DAY_H = 44;
 
 /** Caps label trailed by a rule to the panel edge: a terminal section break. */
 function Label({ children, trailing }) {
@@ -53,6 +56,67 @@ function RateTrace({ samples }) {
           vectorEffect="non-scaling-stroke"
         />
       )}
+    </svg>
+  );
+}
+
+// How long the session has been running, in the coarsest form that is still
+// true: minutes until there is an hour, hours after that. A day trace labelled
+// "1h 3m" invites a precision the curve underneath does not have.
+function span(ms) {
+  const minutes = Math.round(ms / 60000);
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
+}
+
+/**
+ * The session's own day: arrivals per minute, for as long as this tab has been
+ * open, up to a day.
+ *
+ * Drawn as wide as the reading is rather than as wide as a day, for the same
+ * reason the rewind track is: a full-width axis with twenty minutes of curve in
+ * the corner of it is a picture of what is missing. It starts a minute long and
+ * grows, and the span beside the heading says how much of a day it has become.
+ *
+ * The one mark on it is midnight UTC, and only once there is a midnight inside
+ * the window. The whole reason to watch a day of this is that the planet fires
+ * on a schedule — Africa, then the Americas, then Asia, each in their own
+ * afternoon — and a curve with three humps in it says nothing at all unless you
+ * can see where the day begins.
+ */
+function DayTrace({ day }) {
+  const series = day?.series ?? [];
+  if (series.length < 2) return null;
+
+  const peak = Math.max(1, day.peak.rate);
+  const first = series[0].t;
+  const width = Math.max(1, series[series.length - 1].t - first);
+  const x = (t) => ((t - first) / width) * TRACE_W;
+  const points = series.map((point) => [
+    x(point.t),
+    DAY_H - (point.rate / peak) * (DAY_H - 2) - 1,
+  ]);
+  const line = points.map(([px, py], i) => `${i ? "L" : "M"}${px.toFixed(1)} ${py.toFixed(1)}`).join(" ");
+
+  const midnights = [];
+  const DAY_MS = 86400000;
+  for (let t = Math.ceil(first / DAY_MS) * DAY_MS; t <= series[series.length - 1].t; t += DAY_MS) {
+    midnights.push(x(t));
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${TRACE_W} ${DAY_H}`}
+      preserveAspectRatio="none"
+      className="h-[44px] w-full"
+      role="img"
+      aria-label={`Strike arrival rate over the last ${span(day.spanMs)}`}
+    >
+      {midnights.map((px) => (
+        <line key={px} x1={px} y1="0" x2={px} y2={DAY_H} className="stroke-line" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      ))}
+      <path d={`${line} L${points[points.length - 1][0]} ${DAY_H} L${points[0][0]} ${DAY_H} Z`} className="fill-line" />
+      <path d={line} className="stroke-text" fill="none" strokeWidth="1" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -123,6 +187,7 @@ function Sidebar({
   samples,
   feed,
   settings,
+  day,
   regions,
   selection,
   watch,
@@ -157,6 +222,34 @@ function Sidebar({
           </div>
         )}
       </section>
+
+      {/* The long view. Absent rather than empty until there is a curve to
+          draw: two minutes is the least this can be and still be a line, and
+          an empty box labelled "session" for the first two minutes of every
+          visit is a worse introduction than nothing at all. */}
+      {settings.day && day?.series?.length > 1 && (
+        <section className="border-b border-line px-4 pb-4 pt-4">
+          <Label trailing={span(day.spanMs)}>Session</Label>
+          <div className="mt-1">
+            <DayTrace day={day} />
+          </div>
+          {/* The peak is the one figure the curve cannot be read off precisely,
+              and the one worth knowing: how hard the world was firing at its
+              hardest, and when. UTC, like the footer clock and for the same
+              reason — the peak is somebody's afternoon, and whose it was is
+              the reading. */}
+          <div className="mt-1 flex items-baseline justify-between text-2xs uppercase tracking-label text-dim">
+            <span>Peak</span>
+            <span>
+              <span className="text-text">{fmt(day.peak.rate)}</span> / min at{" "}
+              <span className="text-text">
+                {new Date(day.peak.t).toISOString().slice(11, 16)}
+              </span>
+              z
+            </span>
+          </div>
+        </section>
+      )}
 
       <section data-tour="stats" className="border-b border-line px-4 py-1">
         <Readout label="Detected" value={fmt(stats.total)} />

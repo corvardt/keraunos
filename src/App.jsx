@@ -19,6 +19,7 @@ import { useSettings, DENSITY } from "./lib/settings.js";
 import { useTour } from "./lib/tour.js";
 import { detectStorms, trackStorms, surge } from "./lib/storms.js";
 import { binStrikes } from "./lib/burn.js";
+import { createDay } from "./lib/day.js";
 import geoData from "./lib/world.json";
 
 const FEED_LENGTH = 60; // strikes listed in the recent feed
@@ -135,6 +136,7 @@ function App() {
   const [bins, setBins] = useState([]);
   const [storms, setStorms] = useState([]);
   const [samples, setSamples] = useState(() => Array(SAMPLES).fill(0));
+  const [day24, setDay] = useState(null);
   const [stats, setStats] = useState({
     rate: 0,
     total: 0,
@@ -263,6 +265,10 @@ function App() {
   const total = useRef(0);
   const nextId = useRef(0);
   const rates = useRef(Array(SAMPLES).fill(0));
+  // The same arrivals, counted by the minute and kept for a day. Costs 1,440
+  // integers, holds no strikes, and is the only window here longer than an
+  // hour.
+  const day = useRef(createDay());
   const feedQueue = useRef([]);
   // Cell key → place name. Cells never move, so this is filled once each, and
   // never evicted; it doesn't need to be. There are only 360×180 one-degree
@@ -341,6 +347,12 @@ function App() {
       const next = [...rates.current.slice(1), batch.length];
       rates.current = next;
       setSamples(next);
+      // The same batch, banked by the minute. `read` hands back the identical
+      // object until the minute rolls over, so this is a no-op re-render 119
+      // times out of 120 and the panel is not asked to redraw a curve that has
+      // not moved.
+      day.current.record(batch.length, Date.now());
+      setDay(day.current.read(Date.now()));
       setStats({
         rate: next.reduce((sum, n) => sum + n, 0),
         total: total.current,
@@ -699,6 +711,7 @@ function App() {
         <Sidebar
           stats={stats}
           samples={samples}
+          day={day24}
           feed={feed}
           settings={settings}
           regions={regions}

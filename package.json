@@ -9,11 +9,12 @@
     "lint": "eslint .",
     "build:water": "node scripts/build-water.cjs",
     "shrink:geo": "node scripts/shrink-geo.cjs",
-    "check": "npm run check:capitals && npm run check:sun && npm run check:storms && npm run check:ir",
+    "check": "npm run check:capitals && npm run check:sun && npm run check:storms && npm run check:day && npm run check:ir",
     "check:ir": "node scripts/check-ir.cjs",
     "check:capitals": "node scripts/check-capitals.cjs",
     "check:sun": "node scripts/check-sun.cjs",
     "check:storms": "node scripts/check-storms.cjs",
+    "check:day": "node scripts/check-day.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

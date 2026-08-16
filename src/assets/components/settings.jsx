@@ -209,6 +209,7 @@ export default function Settings({ settings, set, reset, onClose, onKey }) {
 
       <Group title="Panel">
         <Toggle label="Rate trace" value={settings.trace} onChange={(v) => set("trace", v)} />
+        <Toggle label="Session day" value={settings.day} onChange={(v) => set("day", v)} />
         <Toggle label="Most active" value={settings.regions} onChange={(v) => set("regions", v)} />
         <Toggle label="Strike feed" value={settings.feed} onChange={(v) => set("feed", v)} />
       </Group>

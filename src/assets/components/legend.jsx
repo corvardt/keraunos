@@ -295,6 +295,20 @@ export default function Legend({ onClose }) {
           across adjacent ~45 km bins to count. A trailing{" "}
           <span className="text-text">&uarr;n</span> is how many of them are in a lightning jump.
         </Entry>
+        <Entry term="Session">
+          The same rate, banked by the minute and kept for a day. Every other window here is
+          measured in minutes; this is the one that can show what lightning mostly does, which is
+          run on a schedule. The planet fires hardest over land in the afternoon, so the global
+          rate rises and falls roughly three times a day as Africa, then the Americas, then Asia
+          come around into the sun. The hairline is midnight UTC, drawn once there is one inside
+          the window, because three humps say nothing unless you can see where the day begins.
+          <br />
+          <br />
+          It is as wide as the session is long, and grows: no strikes are kept to fill it in, so
+          the curve starts when you did. What is stored is one count per minute and nothing else,
+          which is why it can say how hard the world was firing at four this morning and nothing at
+          all about where. It goes when the tab does, like everything else here.
+        </Entry>
         <Entry term="Nearest strike">
           Appears only once you have pressed <span className="text-text">here</span>: how far away
           the closest strike of the last few minutes fell. A dash means nothing has landed within

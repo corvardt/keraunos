@@ -17,7 +17,7 @@ npm install
 npm run dev      # dev server
 npm run build    # production build
 npm run lint
-npm run check    # capitals, solar position, storm tracking, the lightning jump
+npm run check    # capitals, sun, storm tracking, the lightning jump, the session day
 ```
 
 No configuration or API keys are required.
@@ -56,7 +56,7 @@ stored in `localStorage` and covers five groups:
 | **Layout** | Whether the side panel, header and footer are shown at all |
 | **Screen** | Scanlines, refresh sweep, strike shake, detector clicks |
 | **Map** | Storm cells and how much detail they carry, the density window, cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
-| **Panel** | Rate trace, activity ranking, strike feed |
+| **Panel** | Rate trace, the session day, activity ranking, strike feed |
 
 ## Layout
 
@@ -69,6 +69,7 @@ stored in `localStorage` and covers five groups:
 | `src/lib/view.js` | Pan/zoom as a screen transform over the fitted world; clamping, region framing, visible extent |
 | `src/lib/storms.js` | Clusters strikes into cells and tracks them between passes to derive motion and flash-rate trend |
 | `src/lib/burn.js` | Burn-in as a pure function of the strikes and an instant, which is what makes replay possible |
+| `src/lib/day.js` | Arrivals banked by the minute and kept for a day: the one window here longer than an hour |
 | `src/lib/tour.js` | Whether this browser has been walked through the instrument, and when the walk may start |
 | `src/lib/fix.js` | How well a strike was located, derived from the stations that fixed it |
 | `src/lib/stations.js` | The detecting network, assembled from the strikes as they arrive |
@@ -193,6 +194,43 @@ than show stale rings over a past sky the map shows none. Bolts and the chassis
 knock are events, and an event does not happen twice. And live arrivals keep
 draining silently behind you, so returning to live finds the present already
 there rather than empty.
+
+## Notes on the day
+
+Every other window in the instrument is measured in minutes: sixty seconds of
+rate, four of burn, twelve of clustering, an hour of history. None of them can
+show the thing lightning does most reliably, which is run on a schedule. The
+planet fires hardest over land in the afternoon, so the global rate rises and
+falls about three times a day as Africa, then the Americas, then Asia come round
+into the sun. An hour cannot contain that. A day of it is the difference between
+a heartbeat and a climatology.
+
+What it costs is one count per minute: 1,440 integers, in a ring indexed by
+wall-clock minute. No strikes are retained beyond the hour they were already
+retained for, which is exactly why this is a curve and not a longer rewind. It
+can say how hard the world was firing at four this morning and nothing whatever
+about where.
+
+Three things keep it honest. The minute in progress is left out, because it is
+only ever part of a minute and would draw the newest point as a dive, once a
+minute, forever; the trace above it already shows the present at full
+resolution. A minute the session was not running for is absent rather than zero,
+since drawn, a gap and a lull look identical and only one of them is weather.
+And the curve is as wide as the session is long rather than as wide as a day: a
+full day's axis with twenty minutes of reading in the corner is a picture of
+what is missing.
+
+It is session-scoped, like everything else here, and that is a decision rather
+than an oversight. Keeping 1,440 integers in `localStorage` would be trivial and
+would hand back a real day across reloads. It is not done because the burn-in,
+the history and the ranking are all this session's own and go when the tab does,
+and one figure that quietly outlived the tab would be the only thing on screen
+you could not account for by having watched it.
+
+The ring is checked rather than watched (`npm run check:day`): a buffer over
+clock minutes works perfectly for a session and then reports yesterday's traffic
+on the afternoon someone leaves the tab open past its own length, and that
+failure draws a plausible curve out of stale counts.
 
 ## Notes on the guide
 

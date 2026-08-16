@@ -51,6 +51,12 @@ export const DEFAULTS = {
   // panel
   feed: true,
   trace: true,
+  // The long view: the same rate the trace shows, banked by the minute and kept
+  // for a day. Separate from `trace` because they answer different questions —
+  // one is what is arriving now, the other is what kind of day it has been —
+  // and because this one is empty for the first minutes of a session, which is
+  // a reason someone might want it out of the way.
+  day: true,
   regions: true,
 };
 
