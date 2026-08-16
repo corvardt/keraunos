@@ -6,13 +6,34 @@ const TRACE_H = 34;
 // level; this one is a shape, and a day of weather has more in it to resolve.
 const DAY_H = 44;
 
-/** Caps label trailed by a rule to the panel edge: a terminal section break. */
-function Label({ children, trailing }) {
+/**
+ * What a figure is, for as long as you are pointing at it.
+ *
+ * The panel is terse on purpose and the key panel says everything at length,
+ * but there is a gap between those two: the moment you are looking straight at
+ * a number and want one sentence, not a catalogue. This is that sentence.
+ *
+ * Drawn over what follows rather than pushing it down. A panel that reflowed
+ * under the pointer would move the next figure out from under the eye that was
+ * about to read it, which is the one thing an instrument must not do.
+ */
+function Hint({ children }) {
+  if (!children) return null;
   return (
-    <div className="flex items-center gap-2.5">
+    <p className="pointer-events-none absolute left-0 right-0 top-full z-10 hidden -translate-y-px border border-line bg-panel px-3 py-2 text-xs leading-snug text-dim group-hover:block">
+      {children}
+    </p>
+  );
+}
+
+/** Caps label trailed by a rule to the panel edge: a terminal section break. */
+function Label({ children, trailing, hint }) {
+  return (
+    <div className={`group relative flex items-center gap-2.5 ${hint ? "cursor-help" : ""}`}>
       <span className="shrink-0 text-2xs uppercase tracking-label text-dim">{children}</span>
       <span className="h-px flex-1 bg-line" />
       {trailing && <span className="shrink-0 text-2xs uppercase tracking-label text-dim">{trailing}</span>}
+      <Hint>{hint}</Hint>
     </div>
   );
 }
@@ -26,14 +47,21 @@ function Label({ children, trailing }) {
  * type — a status figure that had been shrunk as well would read as unimportant
  * rather than as a different subject, and the fix gap is not unimportant.
  */
-function Readout({ label, value, unit, quiet }) {
+function Readout({ label, value, unit, quiet, hint }) {
   return (
-    <div className="flex items-baseline justify-between border-b border-line py-2.5 last:border-b-0">
-      <span className="text-2xs uppercase tracking-label text-dim">{label}</span>
-      <span className={`text-base ${quiet ? "text-dim" : "text-text glow"}`}>
-        {value}
-        {unit && <span className="ml-1 text-2xs text-dim">{unit}</span>}
-      </span>
+    <div
+      className={`group relative border-b border-line py-2.5 last:border-b-0 ${
+        hint ? "cursor-help" : ""
+      }`}
+    >
+      <div className="flex items-baseline justify-between">
+        <span className="text-2xs uppercase tracking-label text-dim">{label}</span>
+        <span className={`text-base ${quiet ? "text-dim" : "text-text glow"}`}>
+          {value}
+          {unit && <span className="ml-1 text-2xs text-dim">{unit}</span>}
+        </span>
+      </div>
+      <Hint>{hint}</Hint>
     </div>
   );
 }
@@ -157,6 +185,7 @@ const Thunder = memo(function Thunder({ thunder }) {
       label="Thunder"
       value={left <= 0 ? "now" : Math.ceil(left)}
       unit={left <= 0 ? "" : `s · ${Math.round(thunder.km)}km`}
+      hint="The flash is already here; this is its sound, still coming, at 343 m/s. Past 25 km thunder is rarely audible and no count is offered."
     />
   );
 });
@@ -224,7 +253,12 @@ function Sidebar({
           itself alone on its line: one large number per group is what makes a
           panel scannable, and there is exactly one here worth being large. */}
       <section data-tour="rate" className="border-b border-line px-4 pb-1 pt-4">
-        <Label trailing="strikes / min">Rate</Label>
+        <Label
+          trailing="strikes / min"
+          hint="Strikes detected anywhere on earth in the last 60 seconds, traced beneath itself at two samples a second."
+        >
+          Rate
+        </Label>
         <div className="mt-2 text-base text-text glow-hot">{fmt(stats.rate)}</div>
         {settings.trace && (
           <div className="mt-1">
@@ -239,6 +273,7 @@ function Sidebar({
           label="Storm cells"
           value={fmt(stats.storms)}
           unit={stats.surging ? `↑${stats.surging}` : ""}
+          hint="Clusters being tracked: 12 strikes or more across adjacent ~45 km bins. The arrow counts those whose flash rate is climbing sharply, which leads severe weather at the ground."
         />
       </section>
 
@@ -247,7 +282,12 @@ function Sidebar({
           still be a line — but the total is always here, so the group never
           disappears out from under a figure somebody was watching. */}
       <section className="border-b border-line px-4 pb-1 pt-4">
-        <Label trailing={day?.series?.length > 1 ? span(day.spanMs) : null}>Session</Label>
+        <Label
+          trailing={day?.series?.length > 1 ? span(day.spanMs) : null}
+          hint="Arrivals banked by the minute, for as long as this tab has been open, up to a day. The hairline is midnight UTC. Nothing is fetched to fill it in, so it starts when you did."
+        >
+          Session
+        </Label>
         {settings.day && day?.series?.length > 1 && (
           <>
             <div className="mt-1">
@@ -270,7 +310,11 @@ function Sidebar({
             </div>
           </>
         )}
-        <Readout label="Detected" value={fmt(stats.total)} />
+        <Readout
+          label="Detected"
+          value={fmt(stats.total)}
+          hint="Every strike this browser has received since the page was opened."
+        />
       </section>
 
       {/* The instrument, reporting on itself.
@@ -281,14 +325,28 @@ function Sidebar({
           schedule rather than the weather's, and under their own heading they
           say so without a word of explanation. Unlit, for the same reason. */}
       <section data-tour="stats" className="border-b border-line px-4 pb-1 pt-4">
-        <Label>Link</Label>
-        <Readout quiet label="Latency" value={stats.delay ?? "—"} unit={stats.delay ? "s" : ""} />
-        <Readout quiet label="Stations" value={stats.stations ?? "—"} />
+        <Label hint="The instrument reporting on itself. These three describe how well the detector network is hearing, not what the weather is doing, and they move on the network's schedule rather than the weather's.">
+          Link
+        </Label>
+        <Readout
+          quiet
+          label="Latency"
+          value={stats.delay ?? "—"}
+          unit={stats.delay ? "s" : ""}
+          hint="Median time between a strike happening and this browser hearing about it. The median of the last half-second, not the last strike: one measurement of a network swings by whole seconds."
+        />
+        <Readout
+          quiet
+          label="Stations"
+          value={stats.stations ?? "—"}
+          hint="Median detectors used to place the last strikes. The feed caps its station list at 40, so 40 means forty or more."
+        />
         <Readout
           quiet
           label="Fix gap"
           value={stats.gap ?? "—"}
           unit={stats.gap === null ? "" : "°"}
+          hint="The widest direction the last strikes were not heard from. Ringed by detectors a strike reads low; heard from one side only it reads past 180°, and is placed the more loosely for it."
         />
       </section>
 
@@ -296,11 +354,14 @@ function Sidebar({
           about it is stored, and it disappears with the session. */}
       {watch && (
         <section className="border-b border-line px-4 pb-1 pt-4">
-          <Label>Here</Label>
+          <Label hint="Measured from the position you gave the browser when you pressed here. It is not stored and not sent anywhere.">
+            Here
+          </Label>
           <Readout
             label="Nearest strike"
             value={watch.nearest === null ? "—" : fmt(Math.round(watch.nearest))}
             unit={watch.nearest === null ? "" : "km"}
+            hint="How far away the closest strike of the last few minutes fell. A dash means nothing has landed within 2,000 km."
           />
           <Thunder thunder={watch.thunder} />
         </section>
@@ -308,7 +369,12 @@ function Sidebar({
 
       {settings.regions && (
         <section data-tour="active" className="border-b border-line px-4 pb-4 pt-4">
-          <Label trailing="strikes">Most active</Label>
+          <Label
+            trailing="strikes"
+            hint="The places holding the cells still burning on the map — roughly the last few minutes, not the session total, so the list and the picture can never disagree."
+          >
+            Most active
+          </Label>
           <ul className="mt-2">
             {regions.length === 0 && (
               <li className="py-1 text-xs text-dim">&gt; nothing burning</li>
