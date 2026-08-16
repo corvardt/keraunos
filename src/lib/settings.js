@@ -32,6 +32,12 @@ export const DEFAULTS = {
   // default; the longer windows turn the same layer into where the lightning
   // has been over the session's own hour.
   density: "4m",
+  // The one layer that is fetched rather than derived, and the only thing on
+  // this map that comes from outside the strike feed. On, because it is the
+  // context the strikes are missing and it is not clutter over the reading:
+  // it sits behind the world rather than on it. Off, the map is exactly what it
+  // was before, and nothing is requested.
+  ir: true,
   graticule: true,
   frontiers: true,
   daylight: true,

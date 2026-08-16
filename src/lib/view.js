@@ -120,3 +120,35 @@ export function visibleBounds(projection, width, height) {
     Math.min(LAT_LIMIT, Math.max(a[1], b[1])),
   ];
 }
+
+// Web Mercator's own metre, which is what a WMS bbox is quoted in.
+const EARTH_R = 6378137;
+
+/**
+ * The screen rectangle, in EPSG:3857 metres.
+ *
+ * A raster fetched for the map has to be fetched for *the canvas*, corner to
+ * corner, because that is where it will be drawn. `visibleBounds` above answers
+ * a different question, and answering this one with it is a real bug: it
+ * reports the part of the world that is on screen, which at world zoom is
+ * inset from the canvas by the fit's padding and at every zoom is clipped to
+ * ±180 and ±LAT_LIMIT. An image covering that box, stretched over the whole
+ * canvas, lands offset and mis-scaled, and the error changes with k, so the
+ * imagery slides against the coastlines as you zoom.
+ *
+ * Derived rather than inverted, so it stays exact off the edges of the world
+ * where `invert` starts wrapping longitude. d3's Mercator is
+ *   x = k·λ + tx,  y = ty − k·ln(tan(π/4 + φ/2))
+ * and EPSG:3857 is the same pair scaled by the earth's radius, so the two are
+ * one multiplication apart and the corners fall straight out.
+ */
+export function mercatorFrame(projection, width, height) {
+  const k = projection.scale();
+  const [tx, ty] = projection.translate();
+  return {
+    minX: (EARTH_R * (0 - tx)) / k,
+    maxX: (EARTH_R * (width - tx)) / k,
+    minY: (EARTH_R * (ty - height)) / k,
+    maxY: (EARTH_R * (ty - 0)) / k,
+  };
+}

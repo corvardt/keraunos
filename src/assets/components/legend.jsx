@@ -97,6 +97,18 @@ const bounds = (
   </svg>
 );
 
+// Cloud, and the harder core of it: the two passes the layer is drawn in.
+const cloudMark = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    <path
+      d="M3 11c1-3 4-4 6-2 1-3 5-4 7-1 2-1 4 0 4 3H3Z"
+      className="fill-land"
+      opacity="0.55"
+    />
+    <ellipse cx="13" cy="8.5" rx="3.6" ry="2.4" className="fill-text" opacity="0.75" />
+  </svg>
+);
+
 const station = (
   <svg viewBox="0 0 24 16" className="h-4 w-6">
     {[[3, 3], [2, 9], [6, 14], [21, 5], [22, 11]].map(([x, y]) => (
@@ -184,6 +196,19 @@ export default function Legend({ onClose }) {
           map is an instrument rather than an atlas, and a place name earns its space at exactly one
           moment: when something is happening there. A quiet map carries none; point at it instead,
           and it names whatever is under the cursor.
+        </Entry>
+        <Entry mark={cloudMark} term="Cloud field">
+          Thermal infrared, at 10.8&micro;m, from the five geostationary satellites that between them
+          hold the whole ring: two of NASA&rsquo;s over the Pacific and the Americas, two of
+          EUMETSAT&rsquo;s over Africa and the Indian Ocean, and Himawari over Asia. That wavelength
+          reads the temperature of the highest thing in the column, so what is drawn is not cloud
+          exactly but cloud height: the faint wash is the body of it, and the bright cores are the
+          tops cold enough to have been driven up near the tropopause. Those are the ones that
+          matter. A column climbing that hard is the thing that separates charge, which is to say
+          the second pass is very nearly a map of where this map is about to have something to
+          show. Between five and thirty-five minutes old depending on the satellite, and never a
+          forecast: every pixel was measured. It is also the only layer here that is fetched rather
+          than derived, so it can be absent, and when it is the sky simply reads as clear.
         </Entry>
         <Entry mark={daylight} term="Daylight">
           The terminator, and the hemisphere it divides: light added on the tube, ink laid down on

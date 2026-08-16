@@ -19,6 +19,7 @@ import frontiers from "../../lib/frontiers.js";
 import { fixQuality } from "../../lib/fix.js";
 import { stations } from "../../lib/stations.js";
 import { tick } from "../../lib/click.js";
+import { createSky, REFRESH_MS as IR_REFRESH_MS, STEP_MS as IR_STEP_MS } from "../../lib/ir.js";
 import Transport from "./transport.jsx";
 import { Ticks } from "./crt.jsx";
 import GeoData from "../../lib/world.json";
@@ -106,6 +107,12 @@ const LINK_MS = 900;
 const LINK_ALPHA = 0.16;
 
 const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
+// The same wait again, on top of the settle that produced the view: the land
+// matrix costs this page some of its own milliseconds, the cloud field costs
+// somebody else a request, so it wants one more beat of proof that the map has
+// really stopped. It was more than twice this, which put two thirds of a second
+// between the map coming to rest and the request even leaving.
+const IR_SETTLE_MS = 160;
 const DRAG_SLOP = 4; // pixels of movement that turn a click into a drag
 const HERE_SPAN = 20; // degrees framed around a located reader: regional, not a street
 
@@ -846,6 +853,61 @@ const WorldMap = ({
     height,
   ]);
 
+  // ── The cloud field ──────────────────────────────────────────────────────
+  //
+  // The only layer on this map that is not drawn from something the page was
+  // given. It is fetched, from five satellites belonging to two agencies, and
+  // that makes it the one layer that can be late, wrong, or absent, so it is
+  // built to fail quietly: a tile that does not answer is a tile the level
+  // above it covers for, and a sky that never answers at all reads as clear.
+  //
+  // Almost nothing of it lives here. The pyramid holds its own tiles, its own
+  // queue and its own crossfade, because all three change on the network's
+  // schedule rather than the render's: a component that re-rendered every time
+  // a tile landed would re-render the whole map thirty times to fill one
+  // screen. This end only says which moment is wanted, where the map is
+  // looking, and what colour the sky is.
+  const sky = useRef(null);
+  if (!sky.current) sky.current = createSky();
+
+  // Rounded to the ten minutes the satellites themselves run at. Live, that is
+  // a refresh counter; rewound, it is where the transport is standing, which is
+  // what makes the cloud move when the map is scrubbed instead of hanging over
+  // the past like a still. Each of those ten-minute steps is a moment the
+  // pyramid can hold, so scrubbing back over an hour already seen costs nothing.
+  const [irTick, setIrTick] = useState(0);
+  useEffect(() => {
+    if (!settings.ir) return;
+    const id = setInterval(() => setIrTick((n) => n + 1), IR_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [settings.ir]);
+
+  const irAt = replay ? Math.floor(replay.at / IR_STEP_MS) * IR_STEP_MS : null;
+
+  // The tokens the field is painted in. A palette change repaints the tiles
+  // that are on screen from bytes already in hand; it does not go back to the
+  // satellites for a picture that has not changed.
+  useEffect(() => {
+    sky.current.palette(palette.land, palette.text);
+  }, [palette.land, palette.text]);
+
+  useEffect(() => {
+    if (!settings.ir) {
+      sky.current.clear();
+      return;
+    }
+    if (!layerProjection || !width || !height) return;
+    // Held back past the map's own settle. What the wait is for has changed:
+    // it used to stop a pan from throwing away five full-screen requests it had
+    // just paid for, and a settle now mostly asks for tiles already in hand and
+    // keeps the ones it does not whatever happens next. It stays because a drag
+    // still has no reason to queue the ground it is only passing over.
+    const id = setTimeout(() => {
+      sky.current.want(layerProjection, width, height, irAt);
+    }, IR_SETTLE_MS);
+    return () => clearTimeout(id);
+  }, [settings.ir, layerProjection, width, height, irAt, irTick]);
+
   // Cumulative density: redrawn twice a second, so the backing canvas is
   // allocated once per resize and cleared rather than reallocated.
   useEffect(() => {
@@ -1138,7 +1200,44 @@ const WorldMap = ({
       if (moved) ctx.restore();
     };
 
-    const drawLayers = () => {
+    // Cloud under the land matrix rather than over it. Physically it is the
+    // wrong way round and on the glass it is the only way round: the dot matrix
+    // is how you know where you are looking, and a wash laid over it takes the
+    // coastline away exactly where the weather is. Underneath, the same wash
+    // reads as something lit behind the world, which is what a tube does best
+    // and costs the map nothing it was using.
+    // `now` is the render loop's own clock, handed down rather than re-read: the
+    // sky's fades are timed against it and a second reading here would put them
+    // a fraction of a frame away from everything else that is decaying.
+    const drawLayers = (now = performance.now()) => {
+      // Kept inside the world. The land and history layers are drawn from
+      // coordinates and simply have nothing to say off the ends of the earth;
+      // the pyramid's tiles are clamped to the grid and so cannot stray either,
+      // but a tile at the very edge is placed by rounding and can put a pixel
+      // over the line. Clipped, so the margin the fit leaves around the world
+      // at k = 1 stays void.
+      const live = projectionRef.current;
+      if (sky.current && live) {
+        const [west] = live([-180, 0]);
+        const [east] = live([180, 0]);
+        const [, top] = live([0, LAT_LIMIT]);
+        const [, bottom] = live([0, -LAT_LIMIT]);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(west, top, east - west, bottom - top);
+        ctx.clip();
+        // Drawn against the *live* projection, not the settled one. Every other
+        // layer here is a bitmap rasterised for a past view and stretched
+        // through the delta to this one, because re-plotting twenty thousand
+        // points a frame is not affordable. The sky has no view to be stretched
+        // from: a tile is a rectangle of the world, and asking the projection
+        // where that rectangle is now is four multiplications. So it tracks a
+        // drag exactly, at its own resolution, instead of sliding and softening
+        // with everything else and snapping back on the settle.
+        sky.current.draw(ctx, live, width, height, now);
+        ctx.restore();
+      }
+
       drawLayer(landLayer.current);
       drawLayer(historyLayer.current);
     };
@@ -1155,7 +1254,7 @@ const WorldMap = ({
       // Painted, not cleared: multiply blending needs opaque pixels beneath it.
       ctx.fillStyle = palette.void;
       ctx.fillRect(0, 0, width, height);
-      drawLayers();
+      drawLayers(now);
 
       // Storm cells: coherent clusters, ringed and labelled with how they are
       // moving. Few enough to draw per frame.
