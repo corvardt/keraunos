@@ -185,7 +185,7 @@ const Thunder = memo(function Thunder({ thunder }) {
       label="Thunder"
       value={left <= 0 ? "now" : Math.ceil(left)}
       unit={left <= 0 ? "" : `s · ${Math.round(thunder.km)}km`}
-      hint="The flash is already here; this is its sound, still coming, at 343 m/s. Past 25 km thunder is rarely audible and no count is offered."
+      hint="The sound of a strike already seen, still travelling, at 343 m/s."
     />
   );
 });
@@ -255,7 +255,7 @@ function Sidebar({
       <section data-tour="rate" className="border-b border-line px-4 pb-1 pt-4">
         <Label
           trailing="strikes / min"
-          hint="Strikes detected anywhere on earth in the last 60 seconds, traced beneath itself at two samples a second."
+          hint="The last 60 seconds, sampled twice a second."
         >
           Rate
         </Label>
@@ -273,7 +273,7 @@ function Sidebar({
           label="Storm cells"
           value={fmt(stats.storms)}
           unit={stats.surging ? `↑${stats.surging}` : ""}
-          hint="Clusters being tracked: 12 strikes or more across adjacent ~45 km bins. The arrow counts those whose flash rate is climbing sharply, which leads severe weather at the ground."
+          hint="Clusters of 12 strikes or more in adjacent ~45 km bins. The arrow counts those whose flash rate is climbing sharply."
         />
       </section>
 
@@ -284,7 +284,7 @@ function Sidebar({
       <section className="border-b border-line px-4 pb-1 pt-4">
         <Label
           trailing={day?.series?.length > 1 ? span(day.spanMs) : null}
-          hint="Arrivals banked by the minute, for as long as this tab has been open, up to a day. The hairline is midnight UTC. Nothing is fetched to fill it in, so it starts when you did."
+          hint="Arrivals by the minute, for as long as this tab has been open. The hairline is midnight UTC."
         >
           Session
         </Label>
@@ -310,11 +310,7 @@ function Sidebar({
             </div>
           </>
         )}
-        <Readout
-          label="Detected"
-          value={fmt(stats.total)}
-          hint="Every strike this browser has received since the page was opened."
-        />
+        <Readout label="Detected" value={fmt(stats.total)} />
       </section>
 
       {/* The instrument, reporting on itself.
@@ -325,28 +321,26 @@ function Sidebar({
           schedule rather than the weather's, and under their own heading they
           say so without a word of explanation. Unlit, for the same reason. */}
       <section data-tour="stats" className="border-b border-line px-4 pb-1 pt-4">
-        <Label hint="The instrument reporting on itself. These three describe how well the detector network is hearing, not what the weather is doing, and they move on the network's schedule rather than the weather's.">
-          Link
-        </Label>
+        <Label>Link</Label>
         <Readout
           quiet
           label="Latency"
           value={stats.delay ?? "—"}
           unit={stats.delay ? "s" : ""}
-          hint="Median time between a strike happening and this browser hearing about it. The median of the last half-second, not the last strike: one measurement of a network swings by whole seconds."
+          hint="Median time from a strike happening to this browser hearing it."
         />
         <Readout
           quiet
           label="Stations"
           value={stats.stations ?? "—"}
-          hint="Median detectors used to place the last strikes. The feed caps its station list at 40, so 40 means forty or more."
+          hint="Median detectors used to place the last strikes. The feed caps its list at 40, so 40 means forty or more."
         />
         <Readout
           quiet
           label="Fix gap"
           value={stats.gap ?? "—"}
           unit={stats.gap === null ? "" : "°"}
-          hint="The widest direction the last strikes were not heard from. Ringed by detectors a strike reads low; heard from one side only it reads past 180°, and is placed the more loosely for it."
+          hint="The widest direction the last strikes were not heard from. Past 180° means they were heard from one side only, and placed the more loosely for it."
         />
       </section>
 
@@ -354,14 +348,11 @@ function Sidebar({
           about it is stored, and it disappears with the session. */}
       {watch && (
         <section className="border-b border-line px-4 pb-1 pt-4">
-          <Label hint="Measured from the position you gave the browser when you pressed here. It is not stored and not sent anywhere.">
-            Here
-          </Label>
+          <Label>Here</Label>
           <Readout
             label="Nearest strike"
             value={watch.nearest === null ? "—" : fmt(Math.round(watch.nearest))}
             unit={watch.nearest === null ? "" : "km"}
-            hint="How far away the closest strike of the last few minutes fell. A dash means nothing has landed within 2,000 km."
           />
           <Thunder thunder={watch.thunder} />
         </section>
@@ -371,7 +362,7 @@ function Sidebar({
         <section data-tour="active" className="border-b border-line px-4 pb-4 pt-4">
           <Label
             trailing="strikes"
-            hint="The places holding the cells still burning on the map — roughly the last few minutes, not the session total, so the list and the picture can never disagree."
+            hint="Places holding the cells still burning now, not session totals."
           >
             Most active
           </Label>
