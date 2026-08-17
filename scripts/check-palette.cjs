@@ -68,11 +68,15 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/palette.js")).href).then((
   };
 
   const base = baselines();
-  const phosphors = Object.keys(PHOSPHOR);
   const contrasts = Object.keys(CONTRAST);
   let combinations = 0;
 
   for (const medium of ["dark", "light"]) {
+    // What the configuration actually offers here. The borrowed palettes are
+    // dark only, and running them on light would not be testing them: they fall
+    // back to the instrument's ink, so it would re-test white under six other
+    // names and report a larger number for the same coverage.
+    const phosphors = mod.phosphorsFor(medium);
     for (const phosphor of phosphors) {
       for (const contrast of contrasts) {
         combinations++;
@@ -145,7 +149,8 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/palette.js")).href).then((
 
   console.log(
     ok
-      ? `palette: ok  (${combinations} combinations of ${phosphors.length} phosphors, ${contrasts.length} contrasts, 2 media)`
+      ? `palette: ok  (${combinations} combinations over ${contrasts.length} contrasts and 2 media, ` +
+        `${mod.phosphorsFor("dark").length} phosphors on dark and ${mod.phosphorsFor("light").length} on light)`
       : "\npalette: FAILED"
   );
   process.exit(ok ? 0 : 1);

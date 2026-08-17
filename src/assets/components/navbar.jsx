@@ -68,14 +68,19 @@ function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey, onGuide }
           data-tour="controls"
           className="flex items-center gap-1 border-l border-line pl-2.5 sm:gap-3 sm:pl-4"
         >
-          {/* Two media, named for what they are rather than "light"/"dark". */}
+          {/* Named for the two modes rather than for the two media. The media
+              are real — light emitted on glass, ink deposited on a sheet, and
+              they composite differently — but that belongs in the key panel.
+              A control has one job, and a reader scanning a strip of controls
+              for the brightness switch should not have to work out that the
+              tube is the dark one. */}
           <button
             type="button"
             onClick={() => onTheme(theme === "dark" ? "light" : "dark")}
-            aria-label={`switch to ${theme === "dark" ? "paper" : "tube"}`}
+            aria-label={`switch to ${theme === "dark" ? "light" : "dark"} mode`}
             className={item}
           >
-            {theme === "dark" ? "tube" : "paper"}
+            {theme === "dark" ? "dark" : "light"}
           </button>
           <Rule />
           {/* First of the three, and the only one that walks: it is what the

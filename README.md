@@ -38,7 +38,7 @@ the terminal: `node KeraunosSeeker.cjs`.
 | **Save** | Configuration holds two exports: the retained strikes as CSV, and the frame as drawn — rewound or live — as a PNG |
 | **Hold** | The feed stops advancing while the pointer rests on it, and queues arrivals behind |
 | **Guide** | Seven steps that light each control on the running map in turn. Opens itself once on a first visit; `g` or `guide` afterwards, `esc` to skip |
-| **Keys** | `k` key panel · `c` configuration · `g` guide · `t` tube/paper · `+` `-` zoom · `0` whole world · `esc` close or clear. The rewind track takes arrow keys, `home` and `end` when focused |
+| **Keys** | `k` key panel · `c` configuration · `g` guide · `t` dark/light · `+` `-` zoom · `0` whole world · `esc` close or clear. The rewind track takes arrow keys, `home` and `end` when focused |
 
 The guide is the way in and the key panel is the reference; they are not the
 same document and neither one replaces the other. The guide runs on the live
@@ -54,7 +54,7 @@ something rather than sets something:
 
 | Group | What it holds |
 | --- | --- |
-| **Tube** | Phosphor (white, green, amber, ice, and the borrowed palettes oil, crimson, demon), contrast, and bloom: the medium itself, before anything is drawn on it |
+| **Tube** | Phosphor (white, green, amber, ice, and in dark mode the borrowed palettes oil, crimson, demon), contrast, and bloom: the medium itself, before anything is drawn on it |
 | **Layout** | Whether the side panel, header and footer are shown at all |
 | **Screen** | Scanlines, refresh sweep, strike shake, detector clicks |
 | **Map** | Cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
@@ -467,7 +467,17 @@ along the line between it and the ground until it sits at exactly the contrast
 the reference palette gives that token. Hue and chroma are the palette's, the
 level is the instrument's.
 
-Across all 56 combinations of phosphor, contrast and medium, the hierarchy the
+Those three are offered in dark mode only, and that is the weight rule's doing
+rather than a shortage of nice light schemes. The correction is small on a dark
+ground and large on a light one, because a light ground's marks have to travel
+much further down to carry the same contrast and the only way along that line
+is toward the paper: crimson's red graticule arrived as pale sand and its wine
+mid-tone as washed mauve. A palette that survives that is not the palette, so
+in light mode the map keeps its own ink. `phosphorsFor` leaves them off the
+list there and `derive` refuses to apply one, which has to be both — hiding
+alone would strand a reader who chose one and then switched.
+
+Across all 44 combinations of phosphor, contrast and medium, the hierarchy the
 palette was built with survives: line under land under dim under text under
 strike, with text never below 3:1 against the background. That was a claim
 nothing checked while every phosphor was one ratio over the whole tube, and it

@@ -657,6 +657,7 @@ function App() {
           settings={settings}
           set={set}
           reset={reset}
+          theme={theme}
           onClose={closeConfig}
           onKey={configToKey}
           onSaveStrikes={saveHistory}

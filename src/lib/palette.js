@@ -24,7 +24,7 @@ import { TOKENS } from "./theme.js";
 // the mark that was the brightest thing on screen still is. That is the first
 // four, and they are the instrument's own.
 //
-// A `{ dark, light }` object is a palette: colours chosen against each other by
+// A `{ dark }` object is a palette: colours chosen against each other by
 // somebody, which no single ratio can produce. These are borrowed rather than
 // invented, with the author named, because picking hex values by eye is how the
 // first attempt at this ended up as a violet wash with one loud magenta grid.
@@ -33,6 +33,17 @@ import { TOKENS } from "./theme.js";
 // hands over a set of colours and the instrument decides how far from the
 // ground each of them sits, which is what keeps a scheme from redecorating the
 // hierarchy the whole interface is read through.
+//
+// All three are dark only, and that is the weight rule's doing rather than a
+// shortage of nice light schemes. Holding a colour to the weight the grey
+// reference gives its token is a small correction on a dark ground and a large
+// one on a light ground, because a light ground's marks have to travel much
+// further down to carry the same contrast, and the only way along that line is
+// toward the paper. It arrives desaturated: crimson's red graticule came out
+// pale sand, its wine mid-tone came out washed mauve, and what was left was
+// beige with a hint of bruise. A palette that survives that is not the palette.
+// So in light mode the map returns to its own ink, and `phosphorsFor` below is
+// what keeps the three off the list there.
 export const PHOSPHOR = {
   white: null,
   green: [0.55, 1, 0.62], // P1, the oscilloscope green
@@ -41,9 +52,8 @@ export const PHOSPHOR = {
 
   // Oil 6, by GrafxKid. https://lospec.com/palette-list/oil-6
   //
-  // The one that carries both media on its own: it runs cream to dark navy
-  // through sand, rose, mauve and slate, so the tube reads it upward and the
-  // paper reads it downward and neither is an inversion of the other.
+  // Cream to dark navy through sand, rose, mauve and slate. The tube reads it
+  // from the navy end up, which is the end it has the most room in.
   oil: {
     dark: {
       void: "#272744",
@@ -53,15 +63,6 @@ export const PHOSPHOR = {
       dim: "#c69fa5",
       text: "#f2d3ab",
       strike: "#fbf5ef",
-    },
-    light: {
-      void: "#fbf5ef",
-      panel: "#f2d3ab",
-      line: "#f2d3ab",
-      land: "#c69fa5",
-      dim: "#8b6d9c",
-      text: "#494d7e",
-      strike: "#272744",
     },
   },
 
@@ -80,23 +81,12 @@ export const PHOSPHOR = {
       text: "#eff9d6",
       strike: "#eff9d6",
     },
-    light: {
-      void: "#eff9d6",
-      panel: "#ba5044",
-      line: "#ba5044",
-      land: "#ba5044",
-      dim: "#7a1c4b",
-      text: "#1b0326",
-      strike: "#1b0326",
-    },
   },
 
   // Blood Demon RX, by Chicknhawk. https://lospec.com/palette-list/blood-demon-rx
   //
-  // A tube palette and only that: it runs dark navy up through wine and crimson
-  // to a hot pink, and its light end is a colour no page should be. With no
-  // `light` entry the paper medium falls back to its own ink, which is the
-  // honest outcome — some schemes are for the glass.
+  // Dark navy up through wine and crimson to a hot pink. The one that was never
+  // going to have a light end: inverted it is a page the colour of a wound.
   demon: {
     dark: {
       void: "#171f37",
@@ -109,6 +99,20 @@ export const PHOSPHOR = {
     },
   },
 };
+
+/**
+ * What the configuration offers, for a medium.
+ *
+ * The palettes are not listed on paper, and `derive` will not apply one there
+ * either. Both halves are needed: hiding it alone would leave a reader who
+ * chose `demon` on the tube and then switched to paper looking at a palette the
+ * panel says is not available, and refusing it alone would leave an option in
+ * the list that visibly does nothing.
+ */
+export const phosphorsFor = (medium) =>
+  Object.keys(PHOSPHOR).filter((name) => medium === "dark" || !isPalette(PHOSPHOR[name]));
+
+const isPalette = (entry) => Boolean(entry) && !Array.isArray(entry);
 
 // Distance from the background, scaled. Everything that is not the ground moves
 // away from it or toward it together, so the hierarchy the palette was built
@@ -245,10 +249,12 @@ function baseline(theme) {
  */
 export function derive(colours, { phosphor, contrast, medium = "dark" }) {
   const entry = PHOSPHOR[phosphor] ?? null;
-  const given = entry && !Array.isArray(entry) ? entry[medium] : null;
-  // Only an array is a tint. A palette with nothing for this medium — `demon`
-  // has no light end that a page could stand — falls back to the instrument's
-  // own ink rather than being forced through arithmetic meant for a coating.
+  // Only an array is a tint, and a tint works on either medium. A palette is
+  // the tube's alone: on paper it falls back to the instrument's own ink rather
+  // than being held to a weight that would strip the colour out of it. Written
+  // as a condition on the medium rather than left to the missing `light` key,
+  // so that adding one back is a decision instead of an accident.
+  const given = isPalette(entry) && medium === "dark" ? entry.dark : null;
   const ratio = Array.isArray(entry) ? entry : null;
   const reach = CONTRAST[contrast] ?? 1;
   const plain = parse(colours.void);
@@ -301,7 +307,10 @@ export function applyPalette(theme, { phosphor, contrast, bloom }) {
   // ink spreading in paper — but a palette may hand over its own, which is what
   // puts a cyan glow around a white strike.
   const entry = PHOSPHOR[phosphor];
-  const given = entry && !Array.isArray(entry) ? entry[theme] : null;
+  // The same test `derive` makes, and it has to stay the same one: a halo
+  // taking a palette's colour while the marks under it had fallen back to ink
+  // is the one way these two can disagree.
+  const given = isPalette(entry) && theme === "dark" ? entry.dark : null;
   const glow = BLOOM[bloom] ?? 1;
   for (const token of BLOOM_TOKENS) {
     // Under a palette the halo takes the strike's own colour, at the medium's

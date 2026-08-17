@@ -276,8 +276,9 @@ export default function Legend({ onClose }) {
           testing for. From RainViewer, published in ten-minute frames.
         </Entry>
         <Entry mark={daylight} term="Daylight">
-          The terminator, and the hemisphere it divides: light added on the tube, ink laid down on
-          paper, so the lit side is the pale one in both. It is here because lightning is a daily
+          The terminator, and the hemisphere it divides: in dark mode light is added to the glass,
+          in light mode ink is laid down on the sheet, so the lit side is the pale one in both. It
+          is here because lightning is a daily
           rhythm before it is anything else: the strike band is afternoon convection, and it walks
           around the planet a step behind this line.
         </Entry>
@@ -411,7 +412,7 @@ export default function Legend({ onClose }) {
           <span className="text-text">k</span> or <span className="text-text">?</span> this panel
           &middot; <span className="text-text">c</span> configuration &middot;{" "}
           <span className="text-text">g</span> guide &middot; <span className="text-text">t</span>{" "}
-          tube / paper &middot; <span className="text-text">+</span>{" "}
+          dark / light &middot; <span className="text-text">+</span>{" "}
           <span className="text-text">&minus;</span> zoom &middot;{" "}
           <span className="text-text">0</span> whole world &middot;{" "}
           <span className="text-text">esc</span> close or clear.

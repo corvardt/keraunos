@@ -1,5 +1,6 @@
 import Panel, { Group } from "./panel.jsx";
 import { wake } from "../../lib/click.js";
+import { phosphorsFor } from "../../lib/palette.js";
 
 /**
  * The name of a control, and a line saying what it does where the name cannot.
@@ -91,7 +92,16 @@ function Action({ label, hint, verb, onClick }) {
   );
 }
 
-export default function Settings({ settings, set, reset, onClose, onKey, onSaveStrikes, onSaveFrame }) {
+export default function Settings({
+  settings,
+  set,
+  reset,
+  theme,
+  onClose,
+  onKey,
+  onSaveStrikes,
+  onSaveFrame,
+}) {
   return (
     <Panel
       title="Configuration"
@@ -130,11 +140,15 @@ export default function Settings({ settings, set, reset, onClose, onKey, onSaveS
           the background away from it together, so the hierarchy the palette
           was built with survives whatever is chosen here. */}
       <Group title="Tube">
+        {/* The list is shorter in light mode, where the three borrowed palettes
+            are not offered: held to the weight the grey reference gives each
+            token, their colours wash out against a pale ground, so the map
+            keeps its own ink there instead. */}
         <Choice
           label="Phosphor"
-          hint="The first four tint the whole tube one hue. The last three are palettes: only their colours change, never how far each mark sits from the ground. Demon is for the tube; on paper the map returns to ink."
+          hint="The first four tint the whole screen one hue. The last three are borrowed palettes: only their colours change, never how far each mark sits from the ground. They are dark mode only — against a pale ground they lose the colour that made them worth borrowing."
           value={settings.phosphor}
-          options={["white", "green", "amber", "ice", "oil", "crimson", "demon"]}
+          options={phosphorsFor(theme)}
           onChange={(v) => set("phosphor", v)}
         />
         <Choice
