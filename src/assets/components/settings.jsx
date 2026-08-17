@@ -176,29 +176,11 @@ export default function Settings({ settings, set, reset, onClose, onKey, onSaveS
         />
       </Group>
 
+      {/* Field, storm cells and the burn window are not here: they are on the
+          tube, beside the region presets. They are the three that get changed
+          while watching rather than set once, and a control you reach for that
+          often does not belong behind a panel. What is left is the furniture. */}
       <Group title="Map">
-        <Choice
-          label="Field"
-          hint="What sits behind the map. Cloud is thermal infrared from the five geostationary satellites, and its bright tops are the cold ones, which is where the lightning is about to be. Rain is a ground-radar composite: it covers only the ground somebody built a radar network on, but it is the only layer here that sees what is actually falling. One at a time, because they land on the same storms from opposite ends. From RealEarth (UW&ndash;Madison SSEC), EUMETSAT and RainViewer; nothing else here leaves the page."
-          value={settings.field}
-          options={["off", "cloud", "rain"]}
-          onChange={(v) => set("field", v)}
-        />
-        <Toggle label="Storm cells" value={settings.storms} onChange={(v) => set("storms", v)} />
-        <Choice
-          label="Cell detail"
-          hint="Ring is the cell and its count, track adds where it has been, full adds where it is going."
-          value={settings.cells}
-          options={["ring", "track", "full"]}
-          onChange={(v) => set("cells", v)}
-        />
-        <Choice
-          label="Density window"
-          hint="How far back the burn-in reaches. Four minutes is where it is raining lightning now; an hour is where it has been this session."
-          value={settings.density}
-          options={["4m", "20m", "1h"]}
-          onChange={(v) => set("density", v)}
-        />
         <Toggle
           label="Cell bounds"
           hint="Corner ticks around a 1° cell that is firing right now."

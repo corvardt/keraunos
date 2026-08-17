@@ -274,6 +274,32 @@ function scaleCanvas(canvas, width, height) {
  * `strikeQueue` is a ref the parent pushes into; the animation loop drains it.
  * Strikes therefore reach the map the instant they arrive, without a render.
  */
+/**
+ * One map setting, cycled in place.
+ *
+ * These live on the tube rather than in the configuration because they are the
+ * ones actually used while watching: which field is behind the map, how much a
+ * storm cell carries, how far the burn-in reaches. Everything left in the
+ * panel is set once and forgotten.
+ *
+ * A cycle rather than a row of choices because it has to fit beside the region
+ * presets on a phone. It shows what it is on, which is the only state worth
+ * seeing, and the key panel says what the other stops are.
+ */
+function Cycle({ label, value, options, onChange, title }) {
+  const at = Math.max(0, options.indexOf(value));
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={() => onChange(options[(at + 1) % options.length])}
+      className="shrink-0 text-2xs uppercase tracking-label text-dim transition-colors hover:text-text active:text-text touch:px-1.5 touch:py-2.5"
+    >
+      {label} <span className="text-text glow">{value}</span>
+    </button>
+  );
+}
+
 const WorldMap = ({
   bins,
   storms,
@@ -295,6 +321,7 @@ const WorldMap = ({
   here,
   onHere,
   onSelect,
+  onSetting,
 }) => {
   const containerRef = useRef(null);
   const screenRef = useRef(null);
@@ -1806,6 +1833,36 @@ const WorldMap = ({
             &#215;{view.k.toFixed(1)}
           </span>
         )}
+
+        <span className="h-2.5 w-px shrink-0 bg-line" aria-hidden="true" />
+        <Cycle
+          label="field"
+          title="What sits behind the map. Cloud is thermal infrared from the geostationary satellites, and its bright tops are the cold ones, which is where the lightning is about to be. Rain is a ground-radar composite: it covers only the ground somebody built a radar network on, but it is the only layer here that sees what is actually falling. One at a time, because they land on the same storms from opposite ends."
+          value={settings.field ?? "cloud"}
+          options={["off", "cloud", "rain"]}
+          onChange={(v) => onSetting("field", v)}
+        />
+        {/* Off is a stop on the same dial rather than a switch of its own: a
+            cell carrying nothing and no cell at all are the two ends of one
+            question, and two controls for it is one more than the strip has
+            room for. */}
+        <Cycle
+          label="cells"
+          title="How much a storm cell carries. Ring is the cell and its count, track adds where it has been, full adds where it is going."
+          value={settings.storms ? settings.cells ?? "full" : "off"}
+          options={["off", "ring", "track", "full"]}
+          onChange={(v) => {
+            onSetting("storms", v !== "off");
+            if (v !== "off") onSetting("cells", v);
+          }}
+        />
+        <Cycle
+          label="burn"
+          title="How far back the burn-in reaches. Four minutes is where it is raining lightning now; an hour is where it has been this session."
+          value={settings.density ?? "4m"}
+          options={["4m", "20m", "1h"]}
+          onChange={(v) => onSetting("density", v)}
+        />
         {/* Only present when the header that usually carries it is not. */}
         {onConfig && (
           <>

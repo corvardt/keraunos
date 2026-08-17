@@ -174,7 +174,8 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry mark={smudge} term="Density">
           Where strikes have accumulated. A cell needs 3 strikes before it marks at all, and the
-          mark fades over the density window set in configuration, so the map empties as storms
+          mark fades over the burn window set on the tube, beside the region presets, so the map
+          empties as storms
           move on.
           <br />
           <br />
@@ -220,7 +221,8 @@ export default function Legend({ onClose }) {
           longer has.
           <br />
           <br />
-          How much of this a cell carries is Cell detail in configuration.{" "}
+          How much of this a cell carries is the cells control on the tube, beside the region
+          presets, which also turns them off altogether.{" "}
           <span className="text-text">Ring</span> is the cell and its strike count and nothing else;{" "}
           <span className="text-text">track</span> adds where it has been and which way it is
           heading; <span className="text-text">full</span> adds the forecast and the speed. Turned
@@ -244,10 +246,11 @@ export default function Legend({ onClose }) {
           the second pass is very nearly a map of where this map is about to have something to
           show. Between twenty and forty minutes old depending on the satellite, and never a
           forecast: every pixel was measured. It is also the only layer here that is fetched rather
-          than derived, so it can be absent, and when it is the sky simply reads as clear.
+          than derived, so it can be absent, and when it is the sky simply reads as clear. From
+          RealEarth (UW&ndash;Madison SSEC) and EUMETSAT; nothing else here leaves the page.
           <br />
           <br />
-          One field at a time: this or the rain below, chosen under Field in configuration. They
+          One field at a time: this or the rain below, chosen with the field control on the tube. They
           are looking at opposite ends of the same column, so where they overlap they draw the same
           storm twice.
         </Entry>

@@ -714,6 +714,7 @@ function App() {
             here={here}
             onHere={setHere}
             onSelect={select}
+            onSetting={set}
           />
         </div>
         {settings.sidebar && (

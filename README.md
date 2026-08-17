@@ -57,9 +57,15 @@ something rather than sets something:
 | **Tube** | Phosphor (white, green, amber, ice, and the borrowed palettes oil, crimson, demon), contrast, and bloom: the medium itself, before anything is drawn on it |
 | **Layout** | Whether the side panel, header and footer are shown at all |
 | **Screen** | Scanlines, refresh sweep, strike shake, detector clicks |
-| **Map** | Which field is behind the map (off, cloud, rain), storm cells and how much detail they carry, the density window, cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
+| **Map** | Cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
 | **Panel** | Rate trace, the session day, activity ranking, strike feed |
 | **Session** | The two exports: strikes as CSV, the frame as PNG |
+
+Three map controls are deliberately not in there. Which field sits behind the
+map, how much a storm cell carries, and how far the burn-in reaches are the ones
+changed while watching rather than set once, so they are on the map strip itself
+beside the region presets, as cycles that show the stop they are on. A control
+reached for that often does not belong behind a panel.
 
 ## Layout
 
