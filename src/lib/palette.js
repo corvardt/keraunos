@@ -34,16 +34,22 @@ import { TOKENS } from "./theme.js";
 // ground each of them sits, which is what keeps a scheme from redecorating the
 // hierarchy the whole interface is read through.
 //
-// All three are dark only, and that is the weight rule's doing rather than a
-// shortage of nice light schemes. Holding a colour to the weight the grey
-// reference gives its token is a small correction on a dark ground and a large
-// one on a light ground, because a light ground's marks have to travel much
-// further down to carry the same contrast, and the only way along that line is
-// toward the paper. It arrives desaturated: crimson's red graticule came out
-// pale sand, its wine mid-tone came out washed mauve, and what was left was
-// beige with a hint of bruise. A palette that survives that is not the palette.
-// So in light mode the map returns to its own ink, and `phosphorsFor` below is
-// what keeps the three off the list there.
+// None of this applies in light mode, where there is no phosphor at all.
+//
+// Both shapes turned out to be describing a tube and only a tube, each failing
+// on paper in its own way. A palette held to the weight the grey reference
+// gives each token has to travel much further down to carry the same contrast
+// against a pale ground, and the only way along that line is toward the page:
+// crimson's red graticule came out pale sand and its wine mid-tone washed
+// mauve. A ratio fails harder still, because multiplying is not what ink does.
+// Light's strike is `#000000`, and black times any ratio is black, so the one
+// mark the instrument is about took no colour in any of the four; meanwhile
+// `line` multiplied up into a saturated stroke lighter than the page, which
+// made the faintest furniture on the map the loudest thing on it.
+//
+// So paper has one ink, and the whole of this constant is the dark medium's.
+// `phosphorsFor` is what says so, and the configuration drops the control
+// entirely rather than offering a list of one.
 export const PHOSPHOR = {
   white: null,
   green: [0.55, 1, 0.62], // P1, the oscilloscope green
@@ -101,16 +107,20 @@ export const PHOSPHOR = {
 };
 
 /**
- * What the configuration offers, for a medium.
+ * What the configuration offers, for a medium: all of them on the tube, none at
+ * all on paper.
  *
- * The palettes are not listed on paper, and `derive` will not apply one there
- * either. Both halves are needed: hiding it alone would leave a reader who
- * chose `demon` on the tube and then switched to paper looking at a palette the
- * panel says is not available, and refusing it alone would leave an option in
- * the list that visibly does nothing.
+ * Empty rather than `["white"]`, because white is not a choice among one — it
+ * is the absence of a coating, which is what paper has. The panel reads the
+ * length of this and drops the control.
+ *
+ * `derive` makes the same test rather than trusting this one. Both halves are
+ * needed: hiding the control alone would leave a reader who chose `demon` on
+ * the tube and then switched to paper looking at a palette the panel no longer
+ * admits to, and refusing it alone would leave a control that visibly does
+ * nothing.
  */
-export const phosphorsFor = (medium) =>
-  Object.keys(PHOSPHOR).filter((name) => medium === "dark" || !isPalette(PHOSPHOR[name]));
+export const phosphorsFor = (medium) => (medium === "dark" ? Object.keys(PHOSPHOR) : []);
 
 const isPalette = (entry) => Boolean(entry) && !Array.isArray(entry);
 
@@ -248,13 +258,12 @@ function baseline(theme) {
  * ever tested, which is a comfortable place for a new palette to break it.
  */
 export function derive(colours, { phosphor, contrast, medium = "dark" }) {
-  const entry = PHOSPHOR[phosphor] ?? null;
-  // Only an array is a tint, and a tint works on either medium. A palette is
-  // the tube's alone: on paper it falls back to the instrument's own ink rather
-  // than being held to a weight that would strip the colour out of it. Written
-  // as a condition on the medium rather than left to the missing `light` key,
-  // so that adding one back is a decision instead of an accident.
-  const given = isPalette(entry) && medium === "dark" ? entry.dark : null;
+  // Neither shape survives paper, so on paper neither is read: whatever is
+  // stored, light derives the instrument's own ink. One condition rather than
+  // two, because it is one fact — a phosphor is a property of a tube.
+  const tube = medium === "dark";
+  const entry = tube ? (PHOSPHOR[phosphor] ?? null) : null;
+  const given = isPalette(entry) ? entry.dark : null;
   const ratio = Array.isArray(entry) ? entry : null;
   const reach = CONTRAST[contrast] ?? 1;
   const plain = parse(colours.void);

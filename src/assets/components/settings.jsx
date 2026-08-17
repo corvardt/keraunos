@@ -135,22 +135,25 @@ export default function Settings({
         </footer>
       }
     >
-      {/* The medium before the marks on it. Phosphor multiplies the palette
-          rather than replacing it, and contrast moves everything that is not
-          the background away from it together, so the hierarchy the palette
+      {/* The medium before the marks on it. Contrast moves everything that is
+          not the background away from it together, so the hierarchy the palette
           was built with survives whatever is chosen here. */}
       <Group title="Tube">
-        {/* The list is shorter in light mode, where the three borrowed palettes
-            are not offered: held to the weight the grey reference gives each
-            token, their colours wash out against a pale ground, so the map
-            keeps its own ink there instead. */}
-        <Choice
-          label="Phosphor"
-          hint="The first four tint the whole screen one hue. The last three are borrowed palettes: only their colours change, never how far each mark sits from the ground. They are dark mode only — against a pale ground they lose the colour that made them worth borrowing."
-          value={settings.phosphor}
-          options={phosphorsFor(theme)}
-          onChange={(v) => set("phosphor", v)}
-        />
+        {/* Absent in light mode rather than disabled. A phosphor is a coating
+            on a tube and paper has none: both the tints and the borrowed
+            palettes are arithmetic for emitted light, and on a pale ground the
+            first turn the graticule into the loudest mark on the map while the
+            second wash out to beige. Paper has one ink, so there is nothing
+            here to choose and no control to choose it with. */}
+        {phosphorsFor(theme).length > 0 && (
+          <Choice
+            label="Phosphor"
+            hint="The first four tint the whole tube one hue. The last three are borrowed palettes: only their colours change, never how far each mark sits from the ground."
+            value={settings.phosphor}
+            options={phosphorsFor(theme)}
+            onChange={(v) => set("phosphor", v)}
+          />
+        )}
         <Choice
           label="Contrast"
           value={settings.contrast}

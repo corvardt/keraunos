@@ -17,7 +17,7 @@ npm install
 npm run dev      # dev server
 npm run build    # production build
 npm run lint
-npm run check    # capitals, sun, storm tracking, the session day, cloud and rain fields
+npm run check    # palette, capitals, sun, storm tracking, the session day, cloud and rain fields
 ```
 
 No configuration or API keys are required.
@@ -54,7 +54,7 @@ something rather than sets something:
 
 | Group | What it holds |
 | --- | --- |
-| **Tube** | Phosphor (white, green, amber, ice, and in dark mode the borrowed palettes oil, crimson, demon), contrast, and bloom: the medium itself, before anything is drawn on it |
+| **Tube** | Phosphor (white, green, amber, ice, and the borrowed palettes oil, crimson, demon — dark mode only, where the control appears at all), contrast, and bloom: the medium itself, before anything is drawn on it |
 | **Layout** | Whether the side panel, header and footer are shown at all |
 | **Screen** | Scanlines, refresh sweep, strike shake, detector clicks |
 | **Map** | Cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
@@ -467,17 +467,25 @@ along the line between it and the ground until it sits at exactly the contrast
 the reference palette gives that token. Hue and chroma are the palette's, the
 level is the instrument's.
 
-Those three are offered in dark mode only, and that is the weight rule's doing
-rather than a shortage of nice light schemes. The correction is small on a dark
-ground and large on a light one, because a light ground's marks have to travel
-much further down to carry the same contrast and the only way along that line
-is toward the paper: crimson's red graticule arrived as pale sand and its wine
-mid-tone as washed mauve. A palette that survives that is not the palette, so
-in light mode the map keeps its own ink. `phosphorsFor` leaves them off the
-list there and `derive` refuses to apply one, which has to be both — hiding
-alone would strand a reader who chose one and then switched.
+None of it applies in light mode, where there is no phosphor at all and the
+configuration drops the control. Both shapes turned out to describe a tube and
+only a tube, each failing on paper in its own way. A palette held to the weight
+the grey reference gives each token has to travel much further down to carry
+the same contrast against a pale ground, and the only way along that line is
+toward the page: crimson's red graticule arrived as pale sand and its wine
+mid-tone as washed mauve. A ratio fails harder, because multiplying is not what
+ink does — light's strike is `#000000` and black times any ratio is black, so
+the one mark the instrument is about took no colour in any of the four tints,
+while `line` multiplied up into a saturated stroke lighter than the page and
+made the faintest furniture on the map the loudest thing on it.
 
-Across all 44 combinations of phosphor, contrast and medium, the hierarchy the
+So paper has one ink. `phosphorsFor` returns nothing for light — empty rather
+than `["white"]`, since white is not a choice among one but the absence of a
+coating — and `derive` reads no phosphor there whatever is stored, which has to
+be both halves: hiding the control alone would strand a reader who chose one
+and then switched.
+
+Across all 28 combinations of phosphor, contrast and medium, the hierarchy the
 palette was built with survives: line under land under dim under text under
 strike, with text never below 3:1 against the background. That was a claim
 nothing checked while every phosphor was one ratio over the whole tube, and it

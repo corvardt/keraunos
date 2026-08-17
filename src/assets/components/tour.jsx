@@ -138,7 +138,7 @@ const STEPS = [
     body: (
       <>
         <Key>key</Key> names every mark on the map and every figure beside it;
-        this pass was the short way round. <Key>cfg</Key> holds the phosphor, the
+        this pass was the short way round. <Key>cfg</Key> holds the palette, the
         layout, and how much the map carries. <Key>dark</Key> and{" "}
         <Key>light</Key> are the two modes, and they are genuinely two media:
         light added on glass, ink laid down on a sheet. All of it is on a single
