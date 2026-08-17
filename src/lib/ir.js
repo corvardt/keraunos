@@ -447,7 +447,7 @@ function refused(data) {
   return false;
 }
 
-function load(src) {
+function attempt(src) {
   return new Promise((resolve) => {
     const img = new Image();
     // The pixels are read back below, so the canvas they land on must not be
@@ -460,6 +460,35 @@ function load(src) {
     img.onerror = () => resolve(null);
     img.src = src;
   });
+}
+
+// Long enough that the second ask is not the same instant as the first, short
+// enough to stay inside the settle that wanted the tile.
+const RETRY_MS = 400;
+
+/**
+ * A disc, asked twice before it is given up on.
+ *
+ * A WMS backend under load and a service that is genuinely down look identical
+ * at the first attempt and are not remotely the same thing. EUMETSAT's GeoServer
+ * answers the occasional 500 to a request that succeeds when repeated a second
+ * later, and without this that costs more than the request: a tile spanning two
+ * territories keeps whatever the other dishes gave it, so the tile is held —
+ * with a hole where this disc should have been — until the frame rolls over ten
+ * minutes later. The refusal path a few lines down already draws exactly this
+ * distinction, and treats a temporary no as no answer at all rather than as an
+ * answer worth keeping.
+ *
+ * One retry and no more. Two failures is the evidence that this is the outage
+ * rather than the blip, and past that the old behaviour is the right one: take
+ * the tile without this disc, because a ring of five is still a map with four
+ * and a service that is down would otherwise be asked forever.
+ */
+async function load(src) {
+  const first = await attempt(src);
+  if (first) return first;
+  await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+  return attempt(src);
 }
 
 /**
