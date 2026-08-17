@@ -54,7 +54,7 @@ something rather than sets something:
 
 | Group | What it holds |
 | --- | --- |
-| **Tube** | Phosphor (white, green, amber, ice), contrast, and bloom: the medium itself, before anything is drawn on it |
+| **Tube** | Phosphor (white, green, amber, ice, and the borrowed palettes oil, crimson, demon), contrast, and bloom: the medium itself, before anything is drawn on it |
 | **Layout** | Whether the side panel, header and footer are shown at all |
 | **Screen** | Scanlines, refresh sweep, strike shake, detector clicks |
 | **Map** | Which field is behind the map (off, cloud, rain), storm cells and how much detail they carry, the density window, cell bounds, graticule, frontiers, daylight, capitals, detector threads, phosphor persistence |
@@ -82,7 +82,7 @@ something rather than sets something:
 | `src/lib/stations.js` | The detecting network, assembled from the strikes as they arrive |
 | `src/lib/geo.js` | Bucketed point-in-polygon lookup shared by the map and the place log, and great-circle distance |
 | `src/lib/frontiers.js` | Interior borders, extracted from the country polygons already bundled |
-| `src/lib/theme.js`, `src/lib/palette.js` | The medium, and the derivation that customises it without letting CSS and canvas drift apart |
+| `src/lib/theme.js`, `src/lib/palette.js` | The medium, and the derivation that customises it without letting CSS and canvas drift apart; every combination it can produce is checked by `npm run check:palette` |
 | `src/lib/click.js` | The detector tick, synthesised rather than sampled |
 | `src/lib/sun.js` | Solar position and the terminator; lightning is a daily rhythm before it is anything else |
 | `src/lib/capitals.js` | Capitals as sparse orientation marks; checked against the country polygons by `npm run check:capitals` |
@@ -449,9 +449,27 @@ stylesheet would quietly stop holding. Contrast moves everything that is not the
 background away from it together, as signed distance, so the same arithmetic
 serves light emitted on black and ink laid down on paper.
 
-Across all 32 combinations of phosphor, contrast and medium, the hierarchy the
+The last three are a different shape: borrowed palettes (from Lospec, each
+credited in `src/lib/palette.js`) rather than tints, because colours chosen
+against each other are not something a single ratio can produce. What is
+borrowed is the hue only. A palette drawn for something else has no opinion
+about which of its colours should be a hairline and which should be a readout,
+and a saturated hue carries far more apparent weight than a grey of the same
+luminance — taken at face value, one of them put the graticule at over twice
+the contrast the grey one has and it took over the map. So each colour is slid
+along the line between it and the ground until it sits at exactly the contrast
+the reference palette gives that token. Hue and chroma are the palette's, the
+level is the instrument's.
+
+Across all 56 combinations of phosphor, contrast and medium, the hierarchy the
 palette was built with survives: line under land under dim under text under
-strike, with text never below 3:1 against the background.
+strike, with text never below 3:1 against the background. That was a claim
+nothing checked while every phosphor was one ratio over the whole tube, and it
+became untenable the moment a palette started giving different tokens different
+hues, so `npm run check:palette` now derives every combination and asserts it —
+including that each rung lands within 20% of the weight the reference palette
+gives it, which is what says a palette is the same instrument in different
+colours rather than a louder one.
 
 ## Notes on cost
 

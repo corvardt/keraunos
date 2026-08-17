@@ -17,7 +17,7 @@ function Row({ label, hint, children }) {
     // is a panel you scroll through twice.
     <div className="py-1.5 touch:py-0">
       <div className="flex items-baseline justify-between gap-3 sm:gap-5">
-        <span className="text-2xs uppercase tracking-label text-dim">{label}</span>
+        <span className="shrink-0 text-2xs uppercase tracking-label text-dim">{label}</span>
         {children}
       </div>
       {/* Beneath the pair rather than beside the name. Sharing the line with the
@@ -52,7 +52,12 @@ function Toggle({ label, hint, value, onChange }) {
 function Choice({ label, hint, value, options, onChange }) {
   return (
     <Row label={label} hint={hint}>
-      <span className="flex shrink-0 items-baseline">
+      {/* Wraps rather than overflowing. Seven options do not fit on one line
+          beside their own name, and a row of them running off the edge of the
+          panel is worse than a second line: the name holds its width and the
+          choices fall under themselves, still right-aligned to the same edge
+          every other control in the panel ends at. */}
+      <span className="flex min-w-0 flex-wrap items-baseline justify-end gap-y-0.5">
         {options.map((option) => (
           <button
             key={option}
@@ -127,8 +132,9 @@ export default function Settings({ settings, set, reset, onClose, onKey, onSaveS
       <Group title="Tube">
         <Choice
           label="Phosphor"
+          hint="The first four tint the whole tube one hue. The last three are palettes: only their colours change, never how far each mark sits from the ground. Demon is for the tube; on paper the map returns to ink."
           value={settings.phosphor}
-          options={["white", "green", "amber", "ice"]}
+          options={["white", "green", "amber", "ice", "oil", "crimson", "demon"]}
           onChange={(v) => set("phosphor", v)}
         />
         <Choice
@@ -220,7 +226,7 @@ export default function Settings({ settings, set, reset, onClose, onKey, onSaveS
           value={settings.persistence}
           options={["short", "normal", "long"]}
           onChange={(v) => set("persistence", v)}
-          />
+        />
       </Group>
 
       <Group title="Panel">
