@@ -10,6 +10,7 @@ import Boot from "./assets/components/boot.jsx";
 import Settings from "./assets/components/settings.jsx";
 import Legend from "./assets/components/legend.jsx";
 import Clock from "./assets/components/clock.jsx";
+import FieldAge from "./assets/components/fieldage.jsx";
 import Tour from "./assets/components/tour.jsx";
 //libs and utils
 import { indexFeatures, findFeature, distanceKm } from "./lib/geo.js";
@@ -742,14 +743,17 @@ function App() {
         <span className="truncate pl-4" role="status" aria-live="polite">
           &gt; {status.message}
         </span>
-        <a
-          className="hidden shrink-0 transition-colors hover:text-text sm:inline"
-          target="_blank"
-          rel="noreferrer"
-          href="https://www.blitzortung.org/"
-        >
-          blitzortung.org network
-        </a>
+        <span className="flex shrink-0 items-center gap-4">
+          <FieldAge kind={settings.field} replayAt={replayAt} />
+          <a
+            className="hidden shrink-0 transition-colors hover:text-text sm:inline"
+            target="_blank"
+            rel="noreferrer"
+            href="https://www.blitzortung.org/"
+          >
+            blitzortung.org network
+          </a>
+        </span>
       </footer>
       )}
     </div>
