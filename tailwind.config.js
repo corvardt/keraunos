@@ -19,6 +19,21 @@ export default {
       // tablet is wide and still coarse.
       screens: {
         touch: { raw: "(pointer: coarse)" },
+        // Where the instrument sits side by side rather than stacked.
+        //
+        // Not a width, for the same reason `touch` is not: the question is
+        // whether there is a landscape to put a world map in, and a phone turned
+        // on its side has one while being nowhere near a desktop's width. Held
+        // at `lg` before, it got the worst of the three layouts — the map clamped
+        // to 45vh of a 390px-tall viewport is a 175px strip, with the panel below
+        // the fold, on the one orientation somebody turned the phone to *for* the
+        // map. The short-landscape arm is what phones and small tablets answer.
+        wide: { raw: "(min-width: 1024px), (orientation: landscape) and (max-height: 560px)" },
+        // That same short landscape on its own. The panel is a fixed column, and
+        // a column sized for a desktop takes half of a phone held sideways, so
+        // there it gives some back. Declared after `wide`, because it is the
+        // narrower case and has to be the one that wins.
+        short: { raw: "(orientation: landscape) and (max-height: 560px)" },
       },
       // The palette stays in CSS, where the canvas can read the same values the
       // stylesheet uses. But a bare `var()` has nowhere to put <alpha-value>,

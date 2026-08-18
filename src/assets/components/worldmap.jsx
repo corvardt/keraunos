@@ -24,12 +24,24 @@ import Transport from "./transport.jsx";
 import { Ticks } from "./crt.jsx";
 import GeoData from "../../lib/world.json";
 
-const GRID_RADIUS_KM = 175; // dot spacing at world zoom
+// Dot spacing at world zoom, in pixels on the glass.
+//
+// This was a distance once — 175km — and a distance is the wrong unit for it.
+// What it lands as on screen depends on how many pixels the world was fitted
+// into, so one constant drew a 6px array on a desktop tube and a 1.5px one on a
+// phone, where the world is a quarter as wide. At that spacing the marks sit
+// closer together than they are across: the matrix stops reading as an array of
+// sensors and becomes a grey fill with the coastlines guessed out of it.
+//
+// So it is stated as what it has to be true of, which is the glass, and the
+// distance is derived from it per view. That is the direction the dependency
+// runs anyway — the array is a property of the display, not of the earth.
+const GRID_GAP_PX = 5.5;
 // How fast that spacing tightens as you close in. Dividing by k outright holds
-// the gap at a constant 5px, which is right over an ocean and wrong once the
-// whole tube is land: a continent fills in as a solid field. At k^0.75 the gap
-// instead opens as k^0.25, roughly 5px to 13px across the zoom range, so the
-// array coarsens as you approach and stays legible as an array.
+// the gap constant, which is right over an ocean and wrong once the whole tube
+// is land: a continent fills in as a solid field. At k^0.75 the gap instead
+// opens as k^0.25, roughly 5px to 14px across the zoom range, so the array
+// coarsens as you approach and stays legible as an array.
 const GRID_FALLOFF = 0.75;
 const EARTH_RADIUS_KM = 6371;
 const RING_MS = 720; // the detection ping thrown on arrival
@@ -433,12 +445,18 @@ const WorldMap = ({
   }, [view]);
 
   const grid = useMemo(() => {
-    if (!layerProjection || !width || !height) return [];
+    if (!base || !layerProjection || !width || !height) return [];
+    // The gap asked for on the glass, converted to the distance that draws it.
+    // Mercator puts x = scale·λ with λ in radians, so a gap of one earth radius
+    // is a gap of `scale` pixels and the conversion is that ratio. `base` is the
+    // world at k = 1; the falloff below carries the zoom, exactly as it did when
+    // this was a fixed distance.
+    const stepKm = (GRID_GAP_PX / base.scale()) * EARTH_RADIUS_KM;
     return buildGrid(
       visibleBounds(layerProjection, width, height),
-      GRID_RADIUS_KM / Math.pow(settled.k, GRID_FALLOFF)
+      stepKm / Math.pow(settled.k, GRID_FALLOFF)
     );
-  }, [layerProjection, settled.k, width, height]);
+  }, [base, layerProjection, settled.k, width, height]);
 
   // Its own slow clock, like the one the footer keeps: the sun moving is not a
   // reason to re-render anything but the layer it shades.

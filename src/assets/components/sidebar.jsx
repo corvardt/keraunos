@@ -7,6 +7,26 @@ const TRACE_H = 34;
 const DAY_H = 44;
 
 /**
+ * Whether the reader has a pointer that can hover at all.
+ *
+ * Watched rather than read once, like the motion query the map keeps: a tablet
+ * with a keyboard folded on and off changes the answer mid-session, and a hint
+ * that could only be opened the way it could not be opened is no hint.
+ */
+function useCoarse() {
+  const [coarse, setCoarse] = useState(
+    () => window.matchMedia("(pointer: coarse)").matches
+  );
+  useEffect(() => {
+    const query = window.matchMedia("(pointer: coarse)");
+    const onChange = (event) => setCoarse(event.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
+  return coarse;
+}
+
+/**
  * What a figure is, for as long as you are pointing at it.
  *
  * The panel is terse on purpose and the key panel says everything at length,
@@ -16,25 +36,66 @@ const DAY_H = 44;
  * Drawn over what follows rather than pushing it down. A panel that reflowed
  * under the pointer would move the next figure out from under the eye that was
  * about to read it, which is the one thing an instrument must not do.
+ *
+ * A finger has no hover, and for as long as this was hover alone the sentence
+ * simply did not exist on a phone — the terse panel with no way to the gloss,
+ * which is the reading of the two that needs it most. So under a coarse pointer
+ * the row becomes a button and the hint is held open by a tap until it is
+ * tapped away. Held, not pressed: reading it is the whole point, and a hint
+ * that lasts exactly as long as the finger covering it is worse than none.
  */
-function Hint({ children }) {
+function Hint({ children, open }) {
   if (!children) return null;
   return (
-    <p className="pointer-events-none absolute left-0 right-0 top-full z-10 hidden -translate-y-px border border-line bg-panel px-3 py-2 text-xs leading-snug text-dim group-hover:block">
+    <p
+      className={`pointer-events-none absolute left-0 right-0 top-full z-10 -translate-y-px border border-line bg-panel px-3 py-2 text-xs leading-snug text-dim ${
+        open ? "block" : "hidden group-hover:block"
+      }`}
+    >
       {children}
     </p>
   );
 }
 
+/**
+ * The tap route in, and nothing at all where there is a pointer that hovers.
+ *
+ * Returns the element the row should be — a real button when it has become one,
+ * so it is reachable by tab and answers Enter without any of that being
+ * reimplemented here — along with whether the hint is currently held open.
+ */
+function useTapHint(hint) {
+  const coarse = useCoarse();
+  const [open, setOpen] = useState(false);
+  const tappable = Boolean(hint) && coarse;
+  return {
+    open: tappable && open,
+    tag: tappable ? "button" : "div",
+    props: tappable
+      ? {
+          type: "button",
+          "aria-expanded": open,
+          onClick: () => setOpen((was) => !was),
+        }
+      : {},
+  };
+}
+
 /** Caps label trailed by a rule to the panel edge: a terminal section break. */
 function Label({ children, trailing, hint }) {
+  const { open, tag: Tag, props } = useTapHint(hint);
   return (
-    <div className={`group relative flex items-center gap-2.5 ${hint ? "cursor-help" : ""}`}>
+    <Tag
+      {...props}
+      className={`group relative flex w-full items-center gap-2.5 text-left ${
+        hint ? "cursor-help" : ""
+      }`}
+    >
       <span className="shrink-0 text-2xs uppercase tracking-label text-dim">{children}</span>
       <span className="h-px flex-1 bg-line" />
       {trailing && <span className="shrink-0 text-2xs uppercase tracking-label text-dim">{trailing}</span>}
-      <Hint>{hint}</Hint>
-    </div>
+      <Hint open={open}>{hint}</Hint>
+    </Tag>
   );
 }
 
@@ -48,9 +109,11 @@ function Label({ children, trailing, hint }) {
  * rather than as a different subject, and the fix gap is not unimportant.
  */
 function Readout({ label, value, unit, quiet, hint }) {
+  const { open, tag: Tag, props } = useTapHint(hint);
   return (
-    <div
-      className={`group relative border-b border-line py-2.5 last:border-b-0 ${
+    <Tag
+      {...props}
+      className={`group relative block w-full border-b border-line py-2.5 text-left last:border-b-0 ${
         hint ? "cursor-help" : ""
       }`}
     >
@@ -61,8 +124,8 @@ function Readout({ label, value, unit, quiet, hint }) {
           {unit && <span className="ml-1 text-2xs text-dim">{unit}</span>}
         </span>
       </div>
-      <Hint>{hint}</Hint>
-    </div>
+      <Hint open={open}>{hint}</Hint>
+    </Tag>
   );
 }
 
@@ -246,8 +309,13 @@ function Sidebar({
     : feed;
   const busiest = Math.max(1, ...regions.map((region) => region.count));
 
+  // The panel fills the column and lets the feed take up the slack, which works
+  // while there is slack. Turned sideways a phone has none: the fixed readouts
+  // above the feed come to more than the whole height, so there the column
+  // scrolls as one and the feed stops trying to absorb a remainder that is
+  // already negative.
   return (
-    <aside className="flex w-full shrink-0 flex-col border-line bg-panel lg:w-[340px] lg:border-l">
+    <aside className="flex w-full shrink-0 flex-col border-line bg-panel wide:w-[340px] wide:border-l short:w-[268px] short:overflow-y-auto short:overscroll-y-contain">
       {/* Now. The unit rides on the heading rather than beside the figure, the
           way it already does on the ranking below, which leaves the reading
           itself alone on its line: one large number per group is what makes a
@@ -407,7 +475,7 @@ function Sidebar({
       )}
 
       {settings.feed && (
-      <section data-tour="feed" className="flex min-h-0 flex-1 flex-col px-4 pt-4">
+      <section data-tour="feed" className="flex min-h-0 flex-1 flex-col px-4 pt-4 short:flex-none">
         {/* The label carries the hold: a stopped feed must never look like a
             dead one. */}
         <Label trailing={hold ? "held" : "delay"}>Recent · UTC</Label>
@@ -428,7 +496,7 @@ function Sidebar({
         )}
 
         <ul
-          className="feed-mask mt-2 min-h-0 flex-1 overflow-y-auto pb-4"
+          className="feed-mask mt-2 min-h-0 flex-1 overflow-y-auto pb-4 short:max-h-52"
           onPointerEnter={() => onHold(true)}
           onPointerLeave={() => {
             onHold(false);

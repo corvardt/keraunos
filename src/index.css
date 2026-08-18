@@ -71,6 +71,21 @@
     height: 100%;
   }
 
+  /* ── The session is the only copy ──────────────────────────────────────────
+     Nothing here is stored. The retained hour, the burn-in, the day trace and
+     every tracked cell live in the tab and nowhere else, which makes an
+     accidental reload not a refresh but the end of the session.
+
+     A phone offers one for free: a downward swipe that starts at the top of a
+     scroller chains to the root and becomes pull-to-refresh. The map is already
+     immune, since it takes the gesture itself, but the panel under it on a
+     narrow screen is a scroller whose top is exactly where a thumb lands. So
+     the chain is cut here. */
+  html,
+  body {
+    overscroll-behavior-y: contain;
+  }
+
   body {
     @apply bg-void text-text font-mono text-xs antialiased;
     /* Digits must not jitter as readouts tick. */

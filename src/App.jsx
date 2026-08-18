@@ -680,8 +680,8 @@ function App() {
         />
       )}
 
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-        <div data-tour="map" className="min-h-[45vh] flex-1 lg:min-h-0">
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain wide:flex-row wide:overflow-hidden">
+        <div data-tour="map" className="min-h-[45vh] flex-1 wide:min-h-0">
           <WorldMap
             // Rewound, the map is drawn from the window rather than from the
             // live accumulation. Storm cells are the one thing not replayed:
