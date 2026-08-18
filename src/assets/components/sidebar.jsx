@@ -1,10 +1,18 @@
 import { memo, useEffect, useState } from "react";
+import { share, WORLD_RATE, WORLD_MARGIN, SCALE_MAX } from "../../lib/share.js";
+import { STEP_KM } from "../../lib/reach.js";
 
 const TRACE_W = 300;
 const TRACE_H = 34;
 // Taller than the 60s trace above it. That one is a heartbeat and is read as a
 // level; this one is a shape, and a day of weather has more in it to resolve.
 const DAY_H = 44;
+// Short, because it is a scale rather than a curve: there is nothing to resolve
+// vertically, and height here would only make it look like a reading over time.
+const GAUGE_H = 11;
+// Two distributions sharing an axis, so it needs the height the day trace needs
+// and not the height the gauge needs.
+const REACH_H = 40;
 
 /**
  * Whether the reader has a pointer that can hover at all.
@@ -160,6 +168,14 @@ function RateTrace({ samples }) {
   );
 }
 
+// One side of the reach reading, as a figure and a trailing gloss: the middle
+// of the distribution, and the tenth of it that carried furthest. Absent as a
+// dash rather than as a zero — a half that has not filled yet has no median,
+// and a zero would be a claim that nothing was heard.
+const far = (side) => (side.median === null ? "—" : Math.round(side.median).toLocaleString("en-US"));
+const unit = (side) =>
+  side.tail === null ? "" : `km · ${(Math.round(side.tail / 100) / 10).toFixed(1)}k far`;
+
 // How long the session has been running, in the coarsest form that is still
 // true: minutes until there is an hour, hours after that. A day trace labelled
 // "1h 3m" invites a precision the curve underneath does not have.
@@ -217,6 +233,116 @@ function DayTrace({ day }) {
       ))}
       <path d={`${line} L${points[points.length - 1][0]} ${DAY_H} L${points[0][0]} ${DAY_H} Z`} className="fill-line" />
       <path d={line} className="stroke-text" fill="none" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+/**
+ * The live rate against the world's, on one scale.
+ *
+ * A dial was the obvious drawing and the wrong one: nothing else in this
+ * instrument is round, and a needle sweeping an arc would be the only thing on
+ * the screen pretending to be a physical object. This is the same comparison
+ * laid flat — the bar is what is being heard, the tick is what the planet is
+ * known to produce, and the distance between them is the whole reading.
+ *
+ * The satellite's ±5 is drawn as a band rather than dropped. It is the one
+ * number on this panel that arrived with its own uncertainty attached, and
+ * hiding that would make a measured figure look like a constant.
+ */
+function Gauge({ perSecond }) {
+  const x = (rate) => Math.min(1, rate / SCALE_MAX) * TRACE_W;
+  const live = x(perSecond);
+  const lo = x(WORLD_RATE - WORLD_MARGIN);
+  const hi = x(WORLD_RATE + WORLD_MARGIN);
+
+  return (
+    <svg
+      viewBox={`0 0 ${TRACE_W} ${GAUGE_H}`}
+      preserveAspectRatio="none"
+      className="h-[11px] w-full"
+      role="img"
+      aria-label={`Detecting ${perSecond.toFixed(1)} strikes per second against a global mean of ${WORLD_RATE} flashes per second`}
+    >
+      {/* The scale it is all measured on, and the satellite's margin sitting on
+          it: a band, not a line, because that is what the figure is. */}
+      <rect x="0" y={GAUGE_H - 1} width={TRACE_W} height="1" className="fill-line" />
+      <rect x={lo} y="0" width={hi - lo} height={GAUGE_H} className="fill-line" />
+      {/* What is actually arriving. Solid to the left edge, because a share is
+          read from zero and not from wherever the eye happens to land. */}
+      <rect x="0" y="2" width={live} height={GAUGE_H - 3} className="fill-text" opacity="0.5" />
+      {/* The mark. The brightest thing here: it is the fixed point, and every
+          other mark on it is only interesting by comparison with this one. */}
+      <line
+        x1={x(WORLD_RATE)}
+        y1="0"
+        x2={x(WORLD_RATE)}
+        y2={GAUGE_H}
+        className="stroke-text"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+/**
+ * The two reach distributions, drawn over each other.
+ *
+ * Over each other rather than side by side, because the reading is not either
+ * shape: it is whether one of them is further right than the other, and two
+ * charts with their own axes is the one arrangement that makes that comparison
+ * hard. Each is scaled to its own peak for the same reason — the question is
+ * where the mass sits, and the two bins fill at whatever rate the weather
+ * offers, so the taller of them is only a fact about the hour.
+ *
+ * Day is the filled shape and night is the line, which is the pairing the day
+ * trace above already uses: the fill is context and the line is the thing being
+ * read. Night gets the line because night is the interesting half.
+ */
+function ReachTrace({ reach }) {
+  // Drawn as far out as anything was actually heard, not as far as the bins go.
+  // Almost all of a session sits inside the first few thousand kilometres, and
+  // an axis running to half the planet would be mostly a picture of the empty
+  // part of it.
+  const { span } = reach;
+  if (span < 3) return null;
+
+  const shape = (counts, total) => {
+    if (!total) return null;
+    const peak = Math.max(...Array.from({ length: span }, (unused, i) => counts[i]));
+    if (!peak) return null;
+    const step = TRACE_W / (span - 1);
+    return Array.from({ length: span }, (unused, i) => [
+      i * step,
+      REACH_H - (counts[i] / peak) * (REACH_H - 2) - 1,
+    ]);
+  };
+
+  const path = (points) =>
+    points.map(([px, py], i) => `${i ? "L" : "M"}${px.toFixed(1)} ${py.toFixed(1)}`).join(" ");
+
+  const lit = shape(reach.day.counts, reach.day.n);
+  const dark = shape(reach.night.counts, reach.night.n);
+
+  return (
+    <svg
+      viewBox={`0 0 ${TRACE_W} ${REACH_H}`}
+      preserveAspectRatio="none"
+      className="h-[40px] w-full"
+      role="img"
+      aria-label={`How far strikes were heard, over paths in daylight against paths in darkness, out to ${Math.round((span * STEP_KM) / 1000)} thousand kilometres`}
+    >
+      {lit && <path d={`${path(lit)} L${TRACE_W} ${REACH_H} L0 ${REACH_H} Z`} className="fill-line" />}
+      {dark && (
+        <path
+          d={path(dark)}
+          className="stroke-text"
+          fill="none"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
     </svg>
   );
 }
@@ -289,6 +415,7 @@ function Sidebar({
   feed,
   settings,
   day,
+  reach,
   regions,
   selection,
   watch,
@@ -308,6 +435,9 @@ function Sidebar({
       )
     : feed;
   const busiest = Math.max(1, ...regions.map((region) => region.count));
+  // The same rate the group at the top is showing, in the unit the figure it is
+  // about to be compared against was published in.
+  const heard = share(stats.rate);
 
   // The panel fills the column and lets the feed take up the slack, which works
   // while there is slack. Turned sideways a phone has none: the fixed readouts
@@ -411,6 +541,77 @@ function Sidebar({
           hint="The widest direction the last strikes were not heard from. Past 180° means they were heard from one side only, and placed the more loosely for it."
         />
       </section>
+
+      {/* Still the instrument reporting on itself, and unlit for the same
+          reason as the group above it — but a different question. That one is
+          how well it is hearing what it hears; this is how much of what there
+          is to hear it is getting at all, which is the question every reader
+          arrives with and nothing on the screen used to answer. */}
+      <section className="border-b border-line px-4 pb-1 pt-4">
+        <Label
+          trailing={`${WORLD_RATE} / s world`}
+          hint="The live rate against 44 ± 5 flashes a second, the global mean the Optical Transient Detector measured from orbit over five years. The tick is that figure and the band around it is its uncertainty."
+        >
+          Coverage
+        </Label>
+        <div className="mt-2">
+          <Gauge perSecond={heard.perSecond} />
+        </div>
+        <Readout
+          quiet
+          label="Heard"
+          value={heard.perSecond.toFixed(1)}
+          unit="/ s"
+        />
+        <Readout
+          quiet
+          label="Global share"
+          value={heard.share === null ? "—" : Math.round(heard.share * 100)}
+          unit={heard.share === null ? "" : "%"}
+          hint="How much of the world's flash rate is reaching this browser. Not a detection efficiency: the satellite counted the flashes inside the cloud as well, which a VLF network barely hears, while what arrives here is strokes, three or four of which can be one flash."
+        />
+      </section>
+
+      {/* The other half of the same subject. Above is how much of the world's
+          lightning is arriving; this is how far it is coming from, and why that
+          changes between noon and midnight. Absent until there is a shape
+          rather than drawn empty: a session opens with nothing in either bin,
+          and an empty pair of curves teaches the eye to stop looking. */}
+      {settings.reach && reach && (
+        <section className="border-b border-line px-4 pb-1 pt-4">
+          <Label
+            trailing={reach.span > 2 ? `0–${Math.round((reach.span * STEP_KM) / 1000)}k km` : null}
+            hint="How far each strike was heard, counted to the most distant station that helped place it. Filled is paths under daylight, the line is paths under darkness."
+          >
+            Reach
+          </Label>
+          <div className="mt-1">
+            <ReachTrace reach={reach} />
+          </div>
+          {/* The two figures the shapes are only the picture of: the middle of
+              each distribution, and its far end.
+              Both, rather than the median alone, because they are not the same
+              reading and the second is the one this exists for. The middle is
+              mostly a fact about where the volunteers live — half the network
+              is in Europe, and that sets how far a typical strike has to carry
+              before somebody hears it, day or night. The far end is where the
+              waveguide shows: it is the ninth strike in ten rather than the
+              farthest of all, because the farthest of all is one strike and one
+              strike is not a propagation condition.
+              Each half appears when it has enough in it. The two fill on the
+              weather's schedule and not on the clock's — at an hour when the
+              world's lightning is all over the Americas, the sunlit side is
+              ready long before the dark one. */}
+          <Readout quiet label="Day" value={far(reach.day)} unit={unit(reach.day)} />
+          <Readout
+            quiet
+            label="Night"
+            value={far(reach.night)}
+            unit={unit(reach.night)}
+            hint="Sunlight makes a lossy layer at 60–70 km that the sferic has to bounce off; after sunset it decays and the reflection moves up to 85–90 km, where less is lost at every hop. The far figure is where that shows, and it should be the longer one at night. Both are floors — the most distant station that heard a strike is not as far as it went."
+          />
+        </section>
+      )}
 
       {/* Only ever present once the reader has asked to be located. Nothing
           about it is stored, and it disappears with the session. */}

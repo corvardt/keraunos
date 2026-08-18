@@ -8,40 +8,28 @@
 // Synthesised rather than sampled: a click is 6ms of filtered noise, which is
 // cheaper to make than to fetch, and no asset can be wrong about the tuning.
 
+import { context } from "./audio.js";
+
 const CLICK_MS = 0.006;
 const MAX_PER_SECOND = 14; // past this it is a tone, not a count
 const BAND_HZ = 1900;
 
-let audio = null;
 let noise = null;
 let recent = [];
 
-// Browsers refuse to start audio without a gesture, which is exactly right.
-// Nothing here runs until the reader has turned the setting on, and that click
-// is the gesture, so the context is built on first use and never before.
-function context() {
-  if (audio) return audio;
-  const Ctor = window.AudioContext || window.webkitAudioContext;
-  if (!Ctor) return null;
-  audio = new Ctor();
-
-  // One buffer of white noise, reused. Allocating per click would make the
-  // garbage collector the loudest thing in the room.
-  const frames = Math.ceil(audio.sampleRate * CLICK_MS);
-  noise = audio.createBuffer(1, frames, audio.sampleRate);
+// One buffer of white noise, reused. Allocating per click would make the
+// garbage collector the loudest thing in the room.
+function buffer(ctx) {
+  if (noise) return noise;
+  const frames = Math.ceil(ctx.sampleRate * CLICK_MS);
+  noise = ctx.createBuffer(1, frames, ctx.sampleRate);
   const channel = noise.getChannelData(0);
   for (let i = 0; i < frames; i++) {
     // Shaped as it is written: a click is an attack and a decay, and noise that
     // stops abruptly is a pop rather than a tick.
     channel[i] = (Math.random() * 2 - 1) * (1 - i / frames) ** 2;
   }
-  return audio;
-}
-
-/** Volunteered by the settings panel, so the gesture that enables it starts it. */
-export function wake() {
-  const ctx = context();
-  if (ctx?.state === "suspended") ctx.resume();
+  return noise;
 }
 
 /**
@@ -60,7 +48,7 @@ export function tick(weight = 0) {
   recent.push(now);
 
   const source = ctx.createBufferSource();
-  source.buffer = noise;
+  source.buffer = buffer(ctx);
 
   const band = ctx.createBiquadFilter();
   band.type = "bandpass";

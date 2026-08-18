@@ -17,6 +17,10 @@ export const DEFAULTS = {
   // Silent unless asked for. A page that makes noise on arrival is a page that
   // gets closed on arrival.
   clicks: false,
+  // The other sound, and a different subject: the click is the instrument
+  // counting, this is the weather arriving. Needs a position before it can do
+  // anything at all, so it is off for a second reason as well.
+  thunder: false,
   // layout
   sidebar: true,
   chrome: true,
@@ -60,6 +64,10 @@ export const DEFAULTS = {
   // and because this one is empty for the first minutes of a session, which is
   // a reason someone might want it out of the way.
   day: true,
+  // How far the network is hearing, split by daylight. Empty for the first
+  // minutes of a session like the day curve, and for the same reason it is a
+  // toggle rather than a fixture.
+  reach: true,
   regions: true,
 };
 

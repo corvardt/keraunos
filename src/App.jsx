@@ -21,7 +21,9 @@ import { useTour } from "./lib/tour.js";
 import { detectStorms, trackStorms, surge } from "./lib/storms.js";
 import { binStrikes } from "./lib/burn.js";
 import { createDay } from "./lib/day.js";
+import { createReach } from "./lib/reach.js";
 import { saveStrikes, saveFrame } from "./lib/save.js";
+import { roll, hush, MAX_KM as THUNDER_MAX_KM } from "./lib/thunder.js";
 import geoData from "./lib/world.json";
 
 const FEED_LENGTH = 60; // strikes listed in the recent feed
@@ -69,9 +71,10 @@ const SILENCE_MS = 25000;
 // piece of physics a lightning map can hand back to the person reading it: the
 // flash is already here, the sound is still coming, and the gap is a distance
 // you can check against your own window. Past 25km it is rarely audible at all,
-// so the count is not offered.
+// so the count is not offered — the range comes from the synthesiser that plays
+// it, so the figure the panel counts down to and the one the ear waits for are
+// the same figure.
 const SPEED_OF_SOUND_KMS = 0.343;
-const THUNDER_MAX_KM = 25;
 
 // Replay runs at life size on a tenth-second beat: fine enough that a strike
 // fades smoothly, coarse enough that re-deriving the window ten times a second
@@ -139,6 +142,9 @@ function App() {
   const [storms, setStorms] = useState([]);
   const [samples, setSamples] = useState(() => Array(SAMPLES).fill(0));
   const [day24, setDay] = useState(null);
+  // How far the network is hearing, split by whether the path lay under a
+  // sunlit ionosphere or a dark one. Two hundred counts, held for the session.
+  const [reach, setReach] = useState(null);
   const [stats, setStats] = useState({
     rate: 0,
     total: 0,
@@ -271,6 +277,10 @@ function App() {
   // integers, holds no strikes, and is the only window here longer than an
   // hour.
   const day = useRef(createDay());
+  // The same arrivals again, banked by how far they carried rather than by
+  // when they landed. Two hundred integers; the strikes themselves are not
+  // kept for it any more than they are kept for the day above.
+  const reachRef = useRef(createReach());
   const feedQueue = useRef([]);
   // Cell key → place name. Cells never move, so this is filled once each, and
   // never evicted; it doesn't need to be. There are only 360×180 one-degree
@@ -295,6 +305,21 @@ function App() {
   // The map drains this itself on every animation frame, so strikes light up
   // the instant they land rather than waiting for the next flush.
   const strikeQueue = useRef([]);
+
+  // What the thunder needs to know, held where the socket callback can reach
+  // it. That callback is deliberately stable — it is what holds the socket open
+  // across a render — so it cannot close over the setting or the position, and
+  // both of them change.
+  const audible = useRef({ on: false, at: null, replaying: false });
+  useEffect(() => {
+    audible.current = { on: settings.thunder, at: here, replaying: replayAt !== null };
+    // Anything already scheduled belonged to the arrangement that has just been
+    // replaced, and a strike at the far edge of the radius is over a minute of
+    // travel: without this, switching the sound off leaves it thundering for
+    // another minute, and moving the reader leaves it thundering from where
+    // they used to be.
+    return hush;
+  }, [settings.thunder, here, replayAt !== null]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const locate = useCallback(
     (lon, lat) => {
@@ -332,6 +357,28 @@ function App() {
     const arrived = Date.now();
     const flash = arrived - (Number(data.delay) || 0) * 1000;
     history.current.push({ lon: data.lon, lat: data.lat, t: arrived, at: flash });
+    // How far this one was heard, filed under what the sky was doing over the
+    // path. Taken here because the station list is only ever a list of ids by
+    // this point and the registry is already holding the positions; nothing is
+    // retained but the count.
+    reachRef.current.record(data.lon, data.lat, data.used, arrived);
+
+    // Thunder, where the reader is near enough to hear it. Scheduled from here
+    // rather than from the watch pass because that pass runs every two seconds
+    // and only ever reports the soonest arrival — a panel wants the next bang
+    // and an ear wants all of them, each at its own moment.
+    const { on, at: here, replaying } = audible.current;
+    // A latitude box first: almost every strike on earth is nowhere near
+    // anybody, and the trigonometry is the expensive part.
+    if (on && here && !replaying && Math.abs(data.lat - here.lat) <= THUNDER_MAX_KM / 111.32) {
+      const km = distanceKm(here.lon, here.lat, data.lon, data.lat);
+      // Timed from the flash rather than from now. The network runs about five
+      // seconds behind and the sound has been travelling for all of them, so
+      // played from arrival every bang would land a mile and a half late.
+      if (km <= THUNDER_MAX_KM) {
+        roll(km, km / SPEED_OF_SOUND_KMS - (arrived - flash) / 1000);
+      }
+    }
     const lon = Math.floor(data.lon / BIN_SIZE) * BIN_SIZE;
     const lat = Math.floor(data.lat / BIN_SIZE) * BIN_SIZE;
     const key = `${lon},${lat}`;
@@ -360,6 +407,9 @@ function App() {
       // not moved.
       day.current.record(batch.length, Date.now());
       setDay(day.current.read(Date.now()));
+      // Same arrangement: identical object back until something has actually
+      // landed in one of the two distributions.
+      setReach(reachRef.current.read());
       setStats({
         rate: next.reduce((sum, n) => sum + n, 0),
         total: total.current,
@@ -724,6 +774,7 @@ function App() {
           stats={stats}
           samples={samples}
           day={day24}
+          reach={reach}
           feed={feed}
           settings={settings}
           regions={regions}

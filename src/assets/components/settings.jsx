@@ -1,5 +1,5 @@
 import Panel, { Group } from "./panel.jsx";
-import { wake } from "../../lib/click.js";
+import { wake } from "../../lib/audio.js";
 import { phosphorsFor } from "../../lib/palette.js";
 
 /**
@@ -191,6 +191,17 @@ export default function Settings({
             set("clicks", v);
           }}
         />
+        {/* Silent until the reader has said where they are: there is no such
+            thing as the sound of a strike from nowhere in particular, and the
+            whole of this is the distance. */}
+        <Toggle
+          label="Thunder"
+          value={settings.thunder}
+          onChange={(v) => {
+            if (v) wake();
+            set("thunder", v);
+          }}
+        />
       </Group>
 
       {/* Field, storm cells and the burn window are not here: they are on the
@@ -231,6 +242,7 @@ export default function Settings({
       <Group title="Panel">
         <Toggle label="Rate trace" value={settings.trace} onChange={(v) => set("trace", v)} />
         <Toggle label="Session day" value={settings.day} onChange={(v) => set("day", v)} />
+        <Toggle label="Reach" value={settings.reach} onChange={(v) => set("reach", v)} />
         <Toggle label="Most active" value={settings.regions} onChange={(v) => set("regions", v)} />
         <Toggle label="Strike feed" value={settings.feed} onChange={(v) => set("feed", v)} />
       </Group>
