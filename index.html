@@ -32,11 +32,23 @@
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:image" content="https://keraunos.corvardt.com/og.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- The face is served from here now, so what is left to save is the wait
+         for the stylesheet to be parsed before the fetch can start. Latin only:
+         the extended ranges are declared beside these, but nothing on the page
+         reaches for them until a place name does. -->
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/ibm-plex-mono-400-latin.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/ibm-plex-mono-600-latin.woff2"
+      crossorigin
     />
     <script>
       // Resolve the medium before first paint so the tube never flashes on paper.
