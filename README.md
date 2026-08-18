@@ -2,13 +2,41 @@
 
 κεραυνός: the thunderbolt.
 
-Live lightning strikes from the [Blitzortung](https://www.blitzortung.org/) network,
+**Every lightning strike on earth, as it is detected.**
+[**Open the instrument →**](https://keraunos.corvardt.com)
+
+![The instrument running: storm cells over the Ionian labelled with their flash counts, beside a panel reporting the strike rate, the session count, the state of the link and which regions are firing](docs/shots/hero.png)
+
+Live strikes from the [Blitzortung](https://www.blitzortung.org/) network,
 streamed over WebSocket and plotted on a d3 world map. Rendered as a phosphor
 instrument: strikes arrive at full white and decay, worked cells burn into the
 map, and clusters are tracked as storm cells with a bearing, a ground speed, and
 a second ring when their flash rate is climbing.
 The instrument also reports on itself, showing how well each strike was located
 and by which detectors, and the last hour can be rewound and replayed.
+
+No account, no key, no server: the page holds a socket open and everything it
+knows goes when the tab does.
+
+### Who heard it
+
+Blitzortung is volunteer hardware. Every strike above is a time-of-arrival fix
+from stations somebody built, powered and hosts, and the instrument will show
+you which ones heard each discharge — the threads run from the strike to each
+station that contributed to its fix.
+
+![Detector threads running from a strike to each station that heard it](docs/shots/network.png)
+
+That layer is off by default, under `stations` in configuration, because most of
+the time you are here for the weather. It is on in the picture above. `Fix gap`
+in the panel is the same reading as a number: the largest angular gap between
+the stations that contributed to the solution, which is why a strike heard from
+one side only is drawn a little softer than one that was surrounded. What that
+number is, and how it was worked out from an undocumented field, is
+[below](#notes-on-the-fix).
+
+Nobody publishes where the detectors are. The ones on the map were assembled
+from the strikes themselves, over about half a minute of listening.
 
 ## Running
 
@@ -24,6 +52,22 @@ No configuration or API keys are required.
 
 `KeraunosSeeker.cjs` is a standalone Node client that prints the same stream to
 the terminal: `node KeraunosSeeker.cjs`.
+
+The pictures in this file are captured from the running instrument rather than
+pasted in once, so they can be taken again when it changes:
+
+```sh
+npm run dev                    # in another terminal
+npm run shots                  # all of them, into docs/shots and public/og.png
+npm run shots -- hero          # one
+VIEW=-99.4/41.2/6 npm run shots -- hero   # framed somewhere else
+```
+
+Each shot soaks before it fires, because the detecting network assembles itself
+from about half a minute of listening and the burn-in needs its window; grabbed
+on load, the instrument is a black rectangle and a fair picture of nothing. Pick
+a `VIEW` that is firing at the time of the run — the panel's activity ranking
+says which — or the hero shows an empty ocean at three in the morning.
 
 ## Using it
 
@@ -48,7 +92,11 @@ rather than reading about it. It says the seven things worth knowing before you
 can read the map at all, and then stops.
 
 The key panel (`k`) is the catalogue the guide hands off to: every mark on the
-map and every figure beside it, in full, for looking up. Configuration (`c`) is
+map and every figure beside it, in full, for looking up.
+
+![The key panel open over a running map, cataloguing every mark on it](docs/shots/key.png)
+
+Configuration (`c`) is
 stored in `localStorage` and covers six groups, the last of which does
 something rather than sets something:
 
@@ -436,6 +484,8 @@ Strikes are held in degrees rather than pixels and projected per frame, so the
 view can move underneath a strike that is still burning.
 
 ## Notes on the palette
+
+![The same map on the crimson phosphor](docs/shots/crimson.png)
 
 The palette lives in CSS so that the stylesheet and the canvas can never drift
 apart: the canvas reads the same custom properties out of computed style as it
