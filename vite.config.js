@@ -11,4 +11,17 @@ export default defineConfig({
       plugins: [tailwindcss(), autoprefixer()],
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // React and the country outlines change on nobody's schedule; the app
+        // changes on every deploy. Split, so a return visit re-fetches only
+        // what actually moved.
+        manualChunks: {
+          react: ['react', 'react-dom'],
+          world: ['./src/lib/world.json'],
+        },
+      },
+    },
+  },
 })
