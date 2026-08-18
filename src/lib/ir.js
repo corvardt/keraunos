@@ -346,8 +346,20 @@ export function scalarFor(stretch, l) {
  * Warm ground and warm sea are most of the planet and are not weather. Painted,
  * they would fog the whole map to no purpose, so the scale is cut here and only
  * what is colder than this is drawn at all.
+ *
+ * It does two things at once, which is worth knowing before moving it. It is a
+ * cut, and it is also the bottom of the stretch below — everything kept is
+ * rescaled across what is left, so lowering it both admits fainter cloud and
+ * makes the cloud already drawn more solid. Dropping it from 0.47 to 0.34 is
+ * the second effect more than the first: a mid cloud at 0.65 roughly doubles in
+ * weight, while the extra ground admitted is thin stuff that lands near the
+ * bottom of the curve and stays faint.
+ *
+ * What it does not touch is the storm tops. TOPS below is defined as a fraction
+ * of what is left above this line, so `v > TOPS` is `t > 0.8` at any floor, and
+ * the second pass draws the same pixels at the same weight wherever this sits.
  */
-const FLOOR = 0.47;
+const FLOOR = 0.34;
 
 // Where the cold tops start, on the 0-255 a tile is stored at. Set just above
 // the -30°C break the two sources were calibrated on, so this is the same cloud
