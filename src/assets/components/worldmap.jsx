@@ -37,6 +37,21 @@ import GeoData from "../../lib/world.json";
 // distance is derived from it per view. That is the direction the dependency
 // runs anyway — the array is a property of the display, not of the earth.
 const GRID_GAP_PX = 5.5;
+// The gap above is right on a desktop tube and too open on a phone. Stating it
+// on the glass fixed the marks at a readable size everywhere, but a phone still
+// has a quarter of the width to spend them across, so the same spacing buys a
+// much coarser outline: the array thins out until the coastline is being
+// guessed from a handful of dots rather than drawn by them. Tightened toward
+// this at narrow widths, and left alone once there is room for the stated gap.
+const GRID_GAP_TIGHT_PX = 2.9;
+const GRID_TIGHT_W = 420; // at or under this, the tight gap
+const GRID_LOOSE_W = 900; // at or over this, the stated one
+
+function gridGap(width) {
+  const t = (width - GRID_TIGHT_W) / (GRID_LOOSE_W - GRID_TIGHT_W);
+  const eased = Math.min(1, Math.max(0, t));
+  return GRID_GAP_TIGHT_PX + (GRID_GAP_PX - GRID_GAP_TIGHT_PX) * eased;
+}
 // How fast that spacing tightens as you close in. Dividing by k outright holds
 // the gap constant, which is right over an ocean and wrong once the whole tube
 // is land: a continent fills in as a solid field. At k^0.75 the gap instead
@@ -451,7 +466,7 @@ const WorldMap = ({
     // is a gap of `scale` pixels and the conversion is that ratio. `base` is the
     // world at k = 1; the falloff below carries the zoom, exactly as it did when
     // this was a fixed distance.
-    const stepKm = (GRID_GAP_PX / base.scale()) * EARTH_RADIUS_KM;
+    const stepKm = (gridGap(width) / base.scale()) * EARTH_RADIUS_KM;
     return buildGrid(
       visibleBounds(layerProjection, width, height),
       stepKm / Math.pow(settled.k, GRID_FALLOFF)
