@@ -205,6 +205,72 @@ const TILE_FADE_MS = 240;
 // short enough that the two are never both legible for long.
 const MOMENT_FADE_MS = 550;
 
+/**
+ * How long a tile that did not answer waits before it is asked for again, and
+ * how many times.
+ *
+ * A tile that fails is deliberately not held — see `fetch` below — so that it
+ * is asked for again rather than remembered as empty. What it was asked for
+ * again *by* was the next settle, and that is the gap this closes: a settle is
+ * the reader panning, and a reader who is not panning is exactly the reader
+ * looking steadily at the hole. On a still map the only other thing that
+ * re-queues anything is the ten-minute frame tick, so one unlucky request left
+ * a square of missing sky on screen for up to ten minutes.
+ *
+ * It shows worst at shallow zoom, where one level-2 tile is a sixteenth of the
+ * planet, and worst of all on the first frame after the layer is switched on,
+ * where there is no older moment underneath to cover for it.
+ *
+ * Bounded, because the two failures this retries are both transient by nature —
+ * a GeoServer 500, and RealEarth's "size limit exceeded", which is the same tile
+ * refused one minute and served the next. Three tries is enough for both. A
+ * service that is genuinely down answers the fourth the same as the first, and
+ * past that the ten-minute tick is the right cadence to keep hoping at rather
+ * than a timer of our own hammering somebody else's server.
+ */
+const RETRY_MS = 4000;
+const RETRIES = 3;
+
+/**
+ * The safety net under the visible level, so that a hole is never a hole.
+ *
+ * `drawTile` covers a missing tile with the best ancestor it can find, and used
+ * to claim that at worst this is level 0 — one tile for the planet, and the
+ * reason a cold start still shows a field. That was not true. `want` queues the
+ * visible level and nothing else, so ancestors exist only where the reader
+ * happened to zoom through them, and a view opened straight at its final depth
+ * — a shared link with a hash in it, which is the ordinary way this map is
+ * arrived at — has an empty pyramid with nothing beneath the one level it is
+ * fetching. One request lost there is a void with no floor under it, and it
+ * shows worst at exactly the moment a reader is first looking.
+ *
+ * So the ancestors are fetched rather than hoped for, and fetched first: a
+ * couple of tiles, before the detail, so the ground is covered from the start
+ * and the detail sharpens onto it.
+ *
+ * Two levels, not the whole chain. `DROP` below the visible one is the working
+ * net — a quarter the linear resolution, and roughly one tile however deep the
+ * view is, because each level up divides the count by four. Level 0 is the
+ * backstop under that, and it is one request for the whole planet, which is
+ * cheap enough to take unconditionally and is what finally makes the sentence
+ * in `drawTile` true. Fetching every level between them would be a dozen
+ * requests at depth to insure against a coincidence.
+ */
+const DROP = 3;
+
+/**
+ * How long a new frame is given to arrive in full before it is allowed up
+ * coarse.
+ *
+ * The handover waits for the incoming moment to cover the screen at its own
+ * level, because a frame let up on ancestors alone would blur the field and
+ * then sharpen, once every ten minutes, for no reason a reader could name. But
+ * "waits" cannot mean "forever": a tile that will not load would pin the map to
+ * a frame that keeps getting older while the footer goes on reporting the age
+ * of the one it asked for. Past this, coarse and honest beats sharp and stale.
+ */
+const PATIENCE_MS = 15_000;
+
 const keyOf = (moment, z, x, y) => `${moment}/${z}/${x}/${y}`;
 
 /**
@@ -226,9 +292,11 @@ export function createField(source) {
   const { samples, tilePx, maxLevel } = source;
   const tiles = new Map(); // key -> { ...source tile, canvas, tinted, born, used }
   const inFlight = new Set();
+  const missed = new Map(); // key -> { job, tries } for tiles that did not answer
   let queue = [];
   let running = 0;
   let clock = 0;
+  let retryAt = null;
 
   let body = "#fff";
   let tops = "#fff";
@@ -248,25 +316,92 @@ export function createField(source) {
   let shown = null;
   let incoming = null;
   let incomingAt = null;
+  // When the incoming frame started waiting, which is what PATIENCE_MS is
+  // measured against. Wall clock rather than the frame moment: it is about how
+  // long the reader has been looking at the old picture.
+  let incomingSince = 0;
   let fadeFrom = 0;
 
   const level = (projection) => levelFor(projection, tilePx, maxLevel);
 
+  /**
+   * A tile that did not answer, put back for another go.
+   *
+   * Only while the tab is being looked at. A hidden page stops its render loop
+   * and stands its fetches down — see the map — so a timer that kept asking
+   * would be spending somebody else's bandwidth on a picture nobody can see.
+   * Coming back to the tab calls `want` again, which re-queues everything still
+   * missing, so nothing is lost by dropping it here.
+   */
+  const miss = (job) => {
+    if (typeof document !== "undefined" && document.hidden) return;
+    const tries = (missed.get(job.key)?.tries ?? 0) + 1;
+    if (tries > RETRIES) {
+      missed.delete(job.key);
+      return;
+    }
+    missed.set(job.key, { job, tries });
+    if (retryAt) return;
+    retryAt = setTimeout(() => {
+      retryAt = null;
+      // Only what is still wanted. A moment can be left behind by a scrub, and
+      // a tile can have arrived by another route, in which case the miss is
+      // simply stale and the entry goes.
+      //
+      // Iterated over a copy, and the entries that survive are left in place
+      // rather than removed and put back. Both halves of that matter: a Map
+      // iterator is live, so deleting a key and re-inserting it during the walk
+      // appends it past the cursor and the loop meets it again — and again, and
+      // the tab locks. Leaving the entry alone also keeps its try count, which
+      // is what makes the bound above bound anything.
+      const target = incoming ?? shown;
+      for (const [key, held] of [...missed]) {
+        if (key.slice(0, key.indexOf("/")) !== target || settled(key) || inFlight.has(key)) {
+          missed.delete(key);
+          continue;
+        }
+        queue.push(held.job);
+      }
+      pump();
+    }, RETRY_MS);
+  };
+
+  // A tile already answered in full. A partial one is held and drawn but is not
+  // done, so it does not close the question the way a complete tile does.
+  const settled = (key) => {
+    const have = tiles.get(key);
+    return have !== undefined && !have.partial;
+  };
+
   const pump = () => {
     while (running < IN_FLIGHT && queue.length) {
       const job = queue.shift();
-      if (tiles.has(job.key) || inFlight.has(job.key)) continue;
+      if (settled(job.key) || inFlight.has(job.key)) continue;
       inFlight.add(job.key);
       running++;
       source
         .fetch(job.z, job.x, job.y, job.at)
         .then((tile) => {
-          if (tile) tiles.set(job.key, { ...tile, born: performance.now(), used: clock });
+          if (tile) {
+            // The arrival time is inherited when one of these replaces a
+            // partial tile already on the glass. It is the same ground being
+            // completed, not a tile arriving, and restarting the fade would
+            // flash the patch that just got better.
+            const had = tiles.get(job.key);
+            tiles.set(job.key, {
+              ...tile,
+              born: had?.born ?? performance.now(),
+              used: clock,
+            });
+            if (tile.partial) miss(job);
+            else missed.delete(job.key);
+          } else {
+            // Not held, so that it is asked for again rather than remembered as
+            // empty ground.
+            miss(job);
+          }
         })
-        .catch(() => {
-          // Same answer as an empty field: the tile goes unheld and is asked
-          // for again on the next settle.
-        })
+        .catch(() => miss(job))
         .finally(() => {
           inFlight.delete(job.key);
           running--;
@@ -335,10 +470,14 @@ export function createField(source) {
     /** Everything goes: the layer was switched off. */
     clear() {
       tiles.clear();
+      missed.clear();
+      if (retryAt) clearTimeout(retryAt);
+      retryAt = null;
       queue = [];
       shown = null;
       incoming = null;
       incomingAt = null;
+      incomingSince = 0;
     },
 
     /**
@@ -365,6 +504,7 @@ export function createField(source) {
       } else if (moment !== incoming) {
         incoming = moment;
         incomingAt = at;
+        incomingSince = performance.now();
         fadeFrom = 0;
       }
 
@@ -393,15 +533,26 @@ export function createField(source) {
       evict();
 
       queue = [];
-      // Centre outward. There is a ceiling on how many of these can be in the
-      // air at once, so the queue's order is the order the field fills in, and
-      // the tile under the reader's eye is worth more than the one in the
-      // corner behind the feed.
-      for (const tile of tilesFor(frame, z, true)) {
+      const add = (tile) => {
         const key = keyOf(target, tile.z, tile.x, tile.y);
-        if (tiles.has(key) || inFlight.has(key)) continue;
+        if (settled(key) || inFlight.has(key)) return;
         queue.push({ ...tile, key, at: targetAt });
+      };
+
+      // The floor first. A handful of tiles at most, and until they are down
+      // there is nothing under the detail level to cover a request that fails.
+      // Cheap enough to ask for on every settle: past the first one they are
+      // already held, and the two lookups above skip them.
+      for (const level of new Set([Math.max(0, z - DROP), 0])) {
+        if (level >= z) continue;
+        for (const tile of tilesFor(frame, level)) add(tile);
       }
+
+      // Then the detail, centre outward. There is a ceiling on how many of
+      // these can be in the air at once, so the queue's order is the order the
+      // field fills in, and the tile under the reader's eye is worth more than
+      // the one in the corner behind the feed.
+      for (const tile of tilesFor(frame, z, true)) add(tile);
       pump();
     },
 
@@ -415,7 +566,17 @@ export function createField(source) {
      * There is no stretched-from-the-old-view step here at all, because there
      * is no view the tiles belong to.
      */
-    draw(ctx, projection, width, height, now) {
+    /**
+     * `debug` overlays the tile grid and what each tile is actually being
+     * drawn from. It exists because this layer's failures are invisible by
+     * construction: a tile that never arrived, a tile covered by a coarse
+     * ancestor, a tile missing one satellite, and a genuinely cloudless sky all
+     * render as the same dark ground. Arguing about which one you are looking
+     * at from a screenshot does not work — this says which.
+     *
+     * Off unless the address carries `?tiles`. See the map.
+     */
+    draw(ctx, projection, width, height, now, debug) {
       if (!projection || !width || !height) return;
       const frame = mercatorFrame(projection, width, height);
       const z = level(projection);
@@ -463,15 +624,29 @@ export function createField(source) {
       // one to be able to cover the screen. Not for every tile at full detail —
       // an ancestor is a real answer — only for there to be nothing missing, so
       // the field never thins out mid-fade.
+      //
+      // At its own level, now that there is always a floor beneath it. Covered
+      // by an ancestor used to be the same test as arrived — only the visible
+      // level was ever fetched, so anything answering for a tile was that tile —
+      // and it stopped being the same test the moment the floor above started
+      // being fetched too. Left as it was, every handover would pass the
+      // instant the coarse net landed, and the whole field would soften and
+      // re-sharpen once every ten minutes.
+      //
+      // Unless it has waited too long, in which case coarse goes up rather than
+      // the map sitting on a frame that is quietly ageing past what the footer
+      // says it is.
       if (incoming && shown !== null && !fadeFrom) {
-        const ready = wanted.every((tile) => {
-          for (let up = tile.z; up >= 0; up--) {
-            const shift = tile.z - up;
-            if (tiles.has(keyOf(incoming, up, tile.x >> shift, tile.y >> shift))) return true;
-          }
-          return false;
-        });
-        if (ready) fadeFrom = now;
+        const arrived = wanted.every((tile) => tiles.has(keyOf(incoming, tile.z, tile.x, tile.y)));
+        const covered = () =>
+          wanted.every((tile) => {
+            for (let up = tile.z; up >= 0; up--) {
+              const shift = tile.z - up;
+              if (tiles.has(keyOf(incoming, up, tile.x >> shift, tile.y >> shift))) return true;
+            }
+            return false;
+          });
+        if (arrived || (now - incomingSince > PATIENCE_MS && covered())) fadeFrom = now;
       }
 
       // How much of the incoming frame to show. Nothing at all until it can
@@ -519,6 +694,53 @@ export function createField(source) {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(buffer, 0, 0, width, height);
       ctx.restore();
+
+      if (debug) {
+        // What each visible tile is actually being drawn from, at the level the
+        // pyramid is working at. `own` is the tile itself; `up N` means the
+        // tile never arrived and a coarser ancestor is standing in for it;
+        // `PARTIAL` means it arrived with a satellite missing; `EMPTY` is a
+        // real answer of no cloud; `MISSING` is the only true void.
+        const moment = incoming ?? shown;
+        ctx.save();
+        ctx.font = "11px ui-monospace, monospace";
+        ctx.textBaseline = "top";
+        ctx.lineWidth = 1;
+        for (const tile of wanted) {
+          const box = place(tile);
+          if (box.w <= 0 || box.h <= 0) continue;
+          const x = box.x * BLOCK_PX;
+          const y = box.y * BLOCK_PX;
+          const w = box.w * BLOCK_PX;
+          const h = box.h * BLOCK_PX;
+          let state = "MISSING";
+          let colour = "#ff3b30";
+          for (let up = tile.z; up >= 0; up--) {
+            const shift = tile.z - up;
+            const held = tiles.get(keyOf(moment, up, tile.x >> shift, tile.y >> shift));
+            if (!held) continue;
+            if (up !== tile.z) {
+              state = `up ${tile.z - up}`;
+              colour = "#ff9500";
+            } else if (held.partial) {
+              state = "PARTIAL";
+              colour = "#ffcc00";
+            } else if (!held.any) {
+              state = "EMPTY";
+              colour = "#34c759";
+            } else {
+              state = "own";
+              colour = "#32ade6";
+            }
+            break;
+          }
+          ctx.strokeStyle = colour;
+          ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+          ctx.fillStyle = colour;
+          ctx.fillText(`${tile.z}/${tile.x}/${tile.y} ${state}`, x + 5, y + 4);
+        }
+        ctx.restore();
+      }
 
       // Handover complete. The frame that was on the glass is one nobody is
       // going to ask for again, so its tiles go rather than sit in the budget

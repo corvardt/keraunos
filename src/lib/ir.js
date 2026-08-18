@@ -252,13 +252,41 @@ export function longitudeWeight(disc, lon) {
 /** And the fade toward the poles, which no neighbour can improve on. */
 const latitudeWeight = (lat) => ramp(Math.abs(lat), LAT_LIMB, LAT_CORE);
 
-/** The dishes with any claim at all on a tile. */
-function discsFor(frame) {
+/**
+ * The dishes with any claim at all on a tile.
+ *
+ * An overlap between two intervals, and it has to be: this asked the two edge
+ * longitudes whether any dish could see them, which is the same question only
+ * while a tile is narrower than the gap between two dishes. A tile wider than a
+ * territory contains that territory *strictly between* its edges, neither edge
+ * is in it, and the dish is never asked at all.
+ *
+ * The tiles that wide are the shallow ones, and the failure was silent in the
+ * worst way. A dish that is not asked is indistinguishable further down from a
+ * dish that answered nothing — `fetchTile` treats a missing image as a disc
+ * missing from the tile rather than as an error, deliberately, because a ring of
+ * five is still a map with four — so the tile came back with a band of the
+ * planet blank in it and was stored as a good answer. Nothing retried it,
+ * because nothing had failed. At level 0, three of the five dishes were being
+ * left out: everything from the eastern Pacific to the Indian Ocean was simply
+ * not on the map, for as long as that tile was held.
+ *
+ * `scripts/check-ir.cjs` now holds every level to this, since it is not a thing
+ * that can be seen by looking — a blank band over an ocean looks like an ocean.
+ */
+export function discsFor(frame) {
   const west = lonAt(frame.minX);
   const east = lonAt(frame.maxX);
-  return DISCS.filter(
-    (disc) => longitudeWeight(disc, west) > 0 || longitudeWeight(disc, east) > 0
-  );
+  return DISCS.filter((disc) => {
+    const { from, to } = TERRITORY.get(disc.id);
+    // Every turn of the globe, for the same reason `longitudeWeight` tries
+    // them: a territory can run off the end of the coordinate system when its
+    // dish sits near the antimeridian.
+    for (const turn of [-360, 0, 360]) {
+      if (from + turn - SEAM < east && to + turn + SEAM > west) return true;
+    }
+    return false;
+  });
 }
 
 // ── Calibration ─────────────────────────────────────────────────────────────
@@ -484,11 +512,30 @@ const RETRY_MS = 400;
  * the tile without this disc, because a ring of five is still a map with four
  * and a service that is down would otherwise be asked forever.
  */
-async function load(src) {
+// Which dishes have already been complained about, so a service that is down
+// says so once rather than sixty times a screen.
+const silent = new Set();
+
+async function load(src, disc) {
   const first = await attempt(src);
   if (first) return first;
   await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
-  return attempt(src);
+  const second = await attempt(src);
+
+  // A dish that will not answer is the one failure here that is completely
+  // invisible: the composite drops it, the tile is kept without it, and its
+  // whole territory draws as clear sky over an ocean, which is a shape nobody
+  // can tell from weather. It has to be said out loud somewhere, and the
+  // console is the only place that costs nothing when nothing is wrong.
+  if (!second && !silent.has(disc.id)) {
+    silent.add(disc.id);
+    console.warn(
+      `[keraunos] ${disc.id} is not answering — its territory will draw as clear sky.\n` +
+        `           ${src}\n` +
+        `           If this is a browser shield or extension, the map cannot tell.`
+    );
+  }
+  return second;
 }
 
 /**
@@ -532,7 +579,7 @@ async function fetchTile(z, x, y, at) {
   }
 
   const tile = { z, x, y };
-  const images = await Promise.all(discs.map((disc) => load(url(disc, tile, frame, at))));
+  const images = await Promise.all(discs.map((disc) => load(url(disc, tile, frame, at), disc)));
   if (!images.some(Boolean)) return null;
 
   // Each disc is decoded on its own sheet rather than after they are stacked.
@@ -553,9 +600,17 @@ async function fetchTile(z, x, y, at) {
   const total = new Float32Array(SAMPLES * SAMPLES);
   let turnedAway = false;
 
+  // Whether a dish that owns ground in this tile failed to hand any over. The
+  // tile is still worth keeping — four fifths of a sky is not nothing, and
+  // throwing it away would leave the ground blank rather than merely
+  // incomplete — but it must not be mistaken for a finished answer, because
+  // what it looks like is clear weather over somebody's afternoon.
+  let short = false;
+
   discs.forEach((disc, i) => {
-    const image = images[i];
-    if (!image) return;
+    // Weighed before the image is looked at. The other order cannot tell a dish
+    // that had nothing to contribute here from one that had plenty and did not
+    // arrive, and those are the two cases this whole flag is here to separate.
     for (let col = 0; col < SAMPLES; col++) {
       const xM = frame.minX + ((col + 0.5) / SAMPLES) * (frame.maxX - frame.minX);
       cols[col] = longitudeWeight(disc, lonAt(xM));
@@ -563,6 +618,12 @@ async function fetchTile(z, x, y, at) {
     // Nothing of this dish reaches this tile after all — the corners said it
     // might, the columns say otherwise.
     if (!cols.some((w) => w > 0)) return;
+
+    const image = images[i];
+    if (!image) {
+      short = true;
+      return;
+    }
 
     ctx.clearRect(0, 0, SAMPLES, SAMPLES);
     ctx.drawImage(image, 0, 0, SAMPLES, SAMPLES);
@@ -607,7 +668,10 @@ async function fetchTile(z, x, y, at) {
   }
   // A clear tile is still a tile: it is the answer "no cloud here", and holding
   // it stops the pyramid asking the same question again on the next pan.
-  return { field, lat, any };
+  //
+  // `partial` is the exception to that: held so there is something on the
+  // ground, and asked again anyway until the dish that was missing turns up.
+  return { field, lat, any, partial: short };
 }
 
 // ── Painting ────────────────────────────────────────────────────────────────

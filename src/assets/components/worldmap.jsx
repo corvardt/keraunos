@@ -19,18 +19,7 @@ import frontiers from "../../lib/frontiers.js";
 import { fixQuality } from "../../lib/fix.js";
 import { stations } from "../../lib/stations.js";
 import { tick } from "../../lib/click.js";
-import {
-  createSky,
-  REFRESH_MS as IR_REFRESH_MS,
-  STEP_MS as IR_STEP_MS,
-  LAG_MS as IR_LAG_MS,
-} from "../../lib/ir.js";
-import {
-  createRain,
-  REFRESH_MS as RAIN_REFRESH_MS,
-  STEP_MS as RAIN_STEP_MS,
-  LAG_MS as RAIN_LAG_MS,
-} from "../../lib/rain.js";
+import { FIELDS, momentFor } from "../../lib/sources.js";
 import Transport from "./transport.jsx";
 import { Ticks } from "./crt.jsx";
 import GeoData from "../../lib/world.json";
@@ -133,22 +122,17 @@ const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
 // between the map coming to rest and the request even leaving.
 const IR_SETTLE_MS = 160;
 
-/**
- * The two fields that can sit behind the map, and the cadence each runs on.
- *
- * One at a time, never both. They are looking at opposite ends of the same
- * column — infrared at the top of it from orbit, radar at what is falling out
- * of the bottom from the ground — so where they overlap they land on the same
- * storm, and two washes with two sets of bright cores over one another is one
- * wash too many for a map whose subject is the strikes on top of it.
- *
- * Both sources present the same four calls, so everything below is written
- * once and reads the cadence out of here.
- */
-const FIELDS = {
-  cloud: { make: createSky, refresh: IR_REFRESH_MS, step: IR_STEP_MS, lag: IR_LAG_MS },
-  rain: { make: createRain, refresh: RAIN_REFRESH_MS, step: RAIN_STEP_MS, lag: RAIN_LAG_MS },
-};
+// `?tiles` in the address puts the field's own state on the glass: the tile
+// grid, and what each tile is being drawn from. Read once, because it is a
+// diagnostic rather than a setting and nothing should re-render for it.
+//
+// It is here because every failure this layer can have looks identical from the
+// outside. A tile that never arrived, one covered by a coarse ancestor, one
+// missing a satellite, and a sky that is genuinely clear all draw as dark
+// ground, and no amount of looking at a screenshot separates them.
+const TILE_DEBUG =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("tiles");
+
 const DRAG_SLOP = 4; // pixels of movement that turn a click into a drag
 const HERE_SPAN = 20; // degrees framed around a located reader: regional, not a street
 
@@ -949,12 +933,9 @@ const WorldMap = ({
   }
   const cadence = FIELDS[kind] ?? FIELDS.cloud;
 
-  // Rounded to the ten minutes the satellites themselves run at. Live, that is
-  // the clock less the time it takes a scan to reach a server; rewound, it is
-  // where the transport is standing, which is what makes the cloud move when
-  // the map is scrubbed instead of hanging over the past like a still. Each of
-  // those ten-minute steps is a moment the pyramid can hold, so scrubbing back
-  // over an hour already seen costs nothing.
+  // Each ten-minute step is a moment the pyramid can hold, so scrubbing back
+  // over an hour already seen costs nothing. `momentFor` says how it is picked,
+  // and the footer reads the same function so the two never disagree.
   //
   // The live end is a named moment rather than "whatever is newest" because the
   // whole screen has to be one frame — a sky assembled out of several is a sky
@@ -979,8 +960,7 @@ const WorldMap = ({
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  const irAt =
-    Math.floor((replay ? replay.at : Date.now() - cadence.lag) / cadence.step) * cadence.step;
+  const irAt = momentFor(kind, replay ? replay.at : null, Date.now());
 
   // The tokens the field is painted in. A palette change repaints the tiles
   // that are on screen from bytes already in hand; it does not go back to the
@@ -1341,7 +1321,7 @@ const WorldMap = ({
         // where that rectangle is now is four multiplications. So it tracks a
         // drag exactly, at its own resolution, instead of sliding and softening
         // with everything else and snapping back on the settle.
-        sky.current.draw(ctx, live, width, height, now);
+        sky.current.draw(ctx, live, width, height, now, TILE_DEBUG);
         ctx.restore();
       }
 

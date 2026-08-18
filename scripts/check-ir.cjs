@@ -42,6 +42,7 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) =
     ancestorPatch,
     url,
     longitudeWeight,
+    discsFor,
     STRETCH,
     scalarFor,
   } = ir;
@@ -266,6 +267,41 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) =
     // Each dish should be at full weight directly beneath itself.
     const nadir = DISCS.every((disc) => longitudeWeight(disc, disc.lon) > 0.999);
     pass(nadir, "each dish is at full weight over its own nadir");
+
+    // A closed ring is not enough on its own: the tile has to actually ask the
+    // dishes that cover it. These are two different questions and they came
+    // apart at the shallow levels, where a tile is wider than a territory —
+    // asking only the tile's edges left every dish whose ground lay strictly
+    // inside it unasked, and the band came back blank and was cached as an
+    // answer. Blank sky over an ocean is invisible to inspection, so it is
+    // checked here instead, at every level of the pyramid.
+    const EARTH_HALF = Math.PI * 6378137;
+    const lonOf = (x) => (x / EARTH_HALF) * 180;
+    let unasked = null;
+    for (let z = 0; z <= MAX_LEVEL && !unasked; z++) {
+      for (let x = 0; x < 2 ** z; x++) {
+        const frame = tileFrame(z, x, 0);
+        const asked = new Set(discsFor(frame).map((d) => d.id));
+        const west = lonOf(frame.minX);
+        const east = lonOf(frame.maxX);
+        for (const disc of DISCS) {
+          if (asked.has(disc.id)) continue;
+          for (let i = 0; i <= 200; i++) {
+            if (longitudeWeight(disc, west + ((east - west) * i) / 200) > 0) {
+              unasked = `${disc.id} at z${z} x${x} (${west.toFixed(0)}..${east.toFixed(0)}°)`;
+              break;
+            }
+          }
+          if (unasked) break;
+        }
+        if (unasked) break;
+      }
+    }
+    pass(
+      unasked === null,
+      "every tile asks every dish that can see into it",
+      unasked === null ? `levels 0-${MAX_LEVEL}` : unasked
+    );
   }
 
   // ── Calibration ───────────────────────────────────────────────────────────
