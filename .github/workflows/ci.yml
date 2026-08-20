@@ -1,0 +1,25 @@
+# Lint and build, on everything that lands.
+#
+# Deliberately not `npm run check`: those pull live tiles from four upstream
+# services, so a check job here would fail on somebody else's outage and teach
+# everyone to ignore a red mark. They run on their own schedule, in upstream.yml.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build

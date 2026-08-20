@@ -1,0 +1,30 @@
+# Whether the services this map reads are still serving what it thinks they are.
+#
+# Three of the checks invert a picture: the rain field decodes a published dBZ
+# table out of rendered tiles, the coverage layer reads a legend ramp back out
+# of a raster, and the cloud field is calibrated per satellite. A ramp that has
+# quietly been restyled still draws a plausible field at plausible intensities
+# over a plausible map, so there is no way to see the error by looking — which
+# is the whole reason these exist, and the reason they are worth running when
+# nobody has touched the code.
+#
+# Nightly rather than per-commit, and against live endpoints, so a failure here
+# means the sky changed rather than the diff did.
+name: upstream
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check

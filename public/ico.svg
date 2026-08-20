@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- The instrument at 16px: a strike at full white, blooming, on the void.
+       The tile carries its own ground on purpose. A bare glyph has to guess the
+       colour of the tab bar, and the only tool for that is a prefers-color-scheme
+       query inside the SVG, which browsers resolve inconsistently for an icon and
+       Safari has never been reliable about. A dark tile is legible against light
+       chrome and dark chrome alike, and it is what the page looks like anyway. -->
+  <defs>
+    <radialGradient id="bloom" cx="50%" cy="46%" r="50%">
+      <stop offset="0%" stop-color="#fff" stop-opacity="0.34" />
+      <stop offset="55%" stop-color="#fff" stop-opacity="0.07" />
+      <stop offset="100%" stop-color="#fff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="32" height="32" rx="7" fill="#0a0a0b" />
+  <rect x="0.5" y="0.5" width="31" height="31" rx="6.5" fill="none" stroke="#ffffff" stroke-opacity="0.1" />
+  <circle cx="16" cy="15" r="14" fill="url(#bloom)" />
+  <path d="M19.4 3.2 L8.2 17.6 h6.1 L12.6 28.8 L24.2 13.6 h-6.3 Z" fill="#ffffff" />
+</svg>

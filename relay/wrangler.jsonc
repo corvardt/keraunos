@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "keraunos-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2025-10-01",
+  "observability": { "enabled": true },
+
+  // One class, one instance, holding one socket to Blitzortung.
+  "durable_objects": {
+    "bindings": [{ "name": "FEED", "class_name": "Feed" }]
+  },
+
+  // SQLite-backed, which is the only kind the free plan carries. Nothing here
+  // stores anything — the object keeps an alarm and a socket — but the storage
+  // backend is chosen at the migration and cannot be changed afterwards.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Feed"] }],
+
+  "vars": {
+    // Who may hold the relay open. Empty answers anyone, which is what a local
+    // `wrangler dev` wants; set it before this is reachable from the internet.
+    "ALLOWED_ORIGINS": "https://keraunos.corvardt.com"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "name": "keraunos",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "build:water": "node scripts/build-water.cjs",
+    "build:land": "node scripts/build-land.cjs --apply",
+    "build:sky": "node scripts/build-sky.cjs --apply",
+    "shrink:geo": "node scripts/shrink-geo.cjs",
+    "check": "npm run check:palette && npm run check:capitals && npm run check:sun && npm run check:storms && npm run check:day && npm run check:rate && npm run check:reach && npm run check:ir && npm run check:rain && npm run check:land && npm run check:sky && npm run check:flash",
+    "check:land": "node scripts/check-land.cjs",
+    "check:sky": "node scripts/check-sky.cjs",
+    "check:flash": "node scripts/check-flash.cjs",
+    "check:reach": "node scripts/check-reach.cjs",
+    "check:ir": "node scripts/check-ir.cjs",
+    "check:rain": "node scripts/check-rain.cjs",
+    "check:capitals": "node scripts/check-capitals.cjs",
+    "check:palette": "node scripts/check-palette.cjs",
+    "check:sun": "node scripts/check-sun.cjs",
+    "check:storms": "node scripts/check-storms.cjs",
+    "check:day": "node scripts/check-day.cjs",
+    "check:rate": "node scripts/check-rate.cjs",
+    "shots": "node scripts/shots.cjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@turf/boolean-point-in-polygon": "^7.1.0",
+    "d3-geo": "^3.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.16",
+    "globals": "^15.13.0",
+    "postcss": "^8.4.49",
+    "puppeteer-core": "^25.8.0",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.0.3"
+  }
+}

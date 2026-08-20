@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="ico.svg" />
+    <!-- Saved to a home screen, iOS ignores the favicon and will screenshot the
+         page unless it is handed one of these. It masks its own rounded corners,
+         so this one is drawn square and full bleed with the bolt held clear of
+         the crop; rounding it here would round it twice and show void at the
+         corners. -->
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#dedee0" media="(prefers-color-scheme: light)" />
+    <meta name="description" content="Keraunos: live global lightning strike detection, streamed from the Blitzortung network." />
+    <title>Keraunos</title>
+
+    <!-- What a pasted link renders as. The card is the whole first impression
+         for a project that spreads by link, and without it the preview is a
+         grey box with a domain in it. The image is captured from the running
+         instrument by `npm run shots`, not drawn, so it cannot drift from what
+         the page actually looks like. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://keraunos.corvardt.com/" />
+    <meta property="og:title" content="Keraunos — live global lightning" />
+    <meta
+      property="og:description"
+      content="Every lightning strike on earth, streamed from the Blitzortung network and plotted as a phosphor instrument. No account, no key, nothing stored."
+    />
+    <meta property="og:image" content="https://keraunos.corvardt.com/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://keraunos.corvardt.com/og.png" />
+    <!-- The face is served from here now, so what is left to save is the wait
+         for the stylesheet to be parsed before the fetch can start. Latin only:
+         the extended ranges are declared beside these, but nothing on the page
+         reaches for them until a place name does. -->
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/ibm-plex-mono-400-latin.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="/fonts/ibm-plex-mono-600-latin.woff2"
+      crossorigin
+    />
+    <script>
+      // Resolve the medium before first paint so the tube never flashes on paper.
+      // The cookie is set on `.corvardt.com`, so it is shared with the index and
+      // every other project.
+      (function () {
+        var m = document.cookie.match(/(?:^|;\s*)corvardt-theme=(dark|light)/);
+        var t = m ? m[1] : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
