@@ -162,6 +162,39 @@ const GLOBE_MIN_K = 0.55;
 // next time it is touched, half a minute later.
 const SWAP_DECAY_MS = 320;
 
+// How far into the crossing leaning on the rail is allowed to show.
+//
+// The threshold above was invisible until it fired: a reader zooming out at the
+// whole world got nothing, nothing, nothing, and then the planet. Whether the
+// gesture was doing anything at all was unknowable until it had already done
+// everything, which is the one question a control has to answer continuously.
+//
+// So the push drives the crossing directly, and what it buys is the first fifth
+// of it — the map lifting at its edges, plainly the beginning of the move that
+// fires at the end. A fifth is enough to read as the world starting to come
+// apart and far too little to be mistaken for having arrived, which is what
+// keeps it an offer rather than a commitment.
+const PEEK_MAX = 0.2;
+// How quickly the drawn fraction chases the pushed one, as the share of the gap
+// closed per frame at 60Hz. Fast out and slow back, which is the asymmetry every
+// rubber band has: going out is the reader's own hand and has to keep up with
+// it, coming back is the band and wants to be seen.
+//
+// The attack cannot be gentle here. A mouse notch is 0.16 log units against a
+// threshold of 0.8, so a fast wheel spends the whole gesture in five frames; an
+// ease that closed a fifth of the gap each time would have shown a twelfth of
+// the fold by the time it fired, which is an offer nobody can see in time to
+// decline. Half the gap a frame still smooths a notch into a movement rather
+// than a step, and arrives with most of the lean drawn.
+const PEEK_ATTACK = 0.5;
+const PEEK_RELEASE = 0.16;
+// Below this the peek is over and the rail is drawn as itself. Not zero: an
+// exponential approach never arrives, and every frame of the tail it never
+// arrives through is a full repaint of the world for a difference nobody can
+// see. At a fiftieth of the lean, itself a fifth of the crossing, this cuts the
+// spring off at four parts in a thousand of the fold.
+const PEEK_MIN = 0.02;
+
 /**
  * Add refused zoom to `store`, and say whether that is enough to cross.
  *
@@ -1206,10 +1239,35 @@ const WorldMap = ({
     // that exists to not have any. Crossing in past the stop already leaves it
     // here, so this is for the mode being turned on some other way.
     setGlobeK(1);
-    if (reduceMotion || !width || !height) return;
+    if (reduceMotion || !width || !height) {
+      peekRef.current.f = 0;
+      peekRef.current.spin = null;
+      return;
+    }
+    // Taken over from the offer rather than started beside it. A lean that
+    // reached the threshold has the world already part way across, and a swap
+    // beginning at the rail would snap it back to flat for one frame before
+    // running the same move again — the one visible seam this whole mechanism
+    // exists to remove. The peek's own rotation comes with it for the same
+    // reason: it is the world the reader has been looking at.
+    const peek = peekRef.current;
+    const from = peek.f > 0 ? (spinning ? 1 - peek.f * PEEK_MAX : peek.f * PEEK_MAX) : spinning ? 1 : 0;
+    const spin = peek.spin ?? target;
+    peek.f = 0;
+    peek.spin = null;
     // `t` is the unfold's own number: 0 is the sphere, 1 is the map. Which way
     // it runs is the whole of the difference between the two directions.
-    swapRef.current = { from: spinning ? 1 : 0, to: spinning ? 0 : 1, at: null, spin: target };
+    const to = spinning ? 0 : 1;
+    swapRef.current = {
+      from,
+      to,
+      at: null,
+      spin,
+      // Paced rather than fixed, so the part already crossed is not run again in
+      // the time the whole of it would have taken. The rate is what the unfold
+      // has always had; only the distance left is different.
+      ms: Math.max(1, UNFOLD_MS * Math.abs(to - from)),
+    };
   }, [spinning, layerProjection, reduceMotion, width, height, stopTurn]);
 
   // Whether the globe was already on when the page opened, which is the one
@@ -1562,6 +1620,15 @@ const WorldMap = ({
 
   // Zoom asked for at a rail and refused. See `spend`.
   const swapPush = useRef({ amount: 0, at: 0 });
+  // How much of that refusal is currently on the glass.
+  //
+  // `f` is the eased fraction actually being drawn, 0 at the rail and 1 at the
+  // threshold; `spin` is where the planet has to be pointed for the half-folded
+  // world to be the same world, captured once when the lean begins so it cannot
+  // wander mid-gesture. Everything else about the peek is derived from the push
+  // store above each frame, which is what keeps the two from disagreeing about
+  // how hard the reader is pushing.
+  const peekRef = useRef({ f: 0, spin: null });
   /**
    * Offer refused zoom towards a crossing, and cross if it is enough.
    *
@@ -2681,23 +2748,8 @@ const WorldMap = ({
      * does: while a world is between the two shapes, every layer that is a
      * bitmap rasterised for one of them is in the wrong place.
      */
-    const drawSwap = (now) => {
-      const swap = swapRef.current;
-      if (!swap) return false;
-      if (swap.at === null) swap.at = now;
-      const p = (now - swap.at) / UNFOLD_MS;
-      if (p >= 1) {
-        swapRef.current = null;
-        // And nothing is done to the sky here. It was faded up after the boot,
-        // where the field is arriving from a cold cache and a tile landing is a
-        // rectangle snapping in; there is no such thing to hide at the end of a
-        // swap, because the same field has been on the same ground for the
-        // whole of it. Restarting that fade — which this did — is the sky going
-        // out and coming back on a move that was meant to be continuous.
-        return false;
-      }
-      const t = swap.from + (swap.to - swap.from) * glide(p);
-      const rotate = rotationFor(swap.spin);
+    const drawMorph = (t, spin, now) => {
+      const rotate = rotationFor(spin);
       const morph = unfoldProjection(t, width, height, rotate);
       // How much of the far side has arrived. One number, read by the land and
       // by the sky, so the weather cannot come round the limb ahead of the
@@ -2760,6 +2812,78 @@ const WorldMap = ({
           shade: 1,
         },
       });
+    };
+
+    const drawSwap = (now) => {
+      const swap = swapRef.current;
+      if (!swap) return false;
+      if (swap.at === null) swap.at = now;
+      const p = (now - swap.at) / swap.ms;
+      if (p >= 1) {
+        swapRef.current = null;
+        // And nothing is done to the sky here. It was faded up after the boot,
+        // where the field is arriving from a cold cache and a tile landing is a
+        // rectangle snapping in; there is no such thing to hide at the end of a
+        // swap, because the same field has been on the same ground for the
+        // whole of it. Restarting that fade — which this did — is the sky going
+        // out and coming back on a move that was meant to be continuous.
+        return false;
+      }
+      drawMorph(swap.from + (swap.to - swap.from) * glide(p), swap.spin, now);
+      return true;
+    };
+
+    /**
+     * The crossing, held part way open by a reader still leaning on the rail.
+     *
+     * The same move `drawSwap` runs, at a fraction the gesture is choosing
+     * rather than one a clock is. Nothing here advances: let go and the fraction
+     * falls back to the rail, push on and it goes to the threshold and fires.
+     * That is the whole of what makes it an offer — the reader can see what the
+     * gesture means before it means it, and can decline by stopping.
+     *
+     * Derived from the push store every frame rather than kept in step with it.
+     * The store is the one record of how hard the rail is being leant on, and a
+     * second copy of that, updated from the wheel handler, is a second thing to
+     * be wrong: the two would disagree on exactly the frames that matter, which
+     * are the ones where the gesture ends.
+     */
+    const drawPeek = (now) => {
+      const peek = peekRef.current;
+      const push = swapPush.current;
+      // Effort decays where it is spent. A rail leant on and let go springs
+      // back on the same clock that stops it firing.
+      const stale = now - push.at > SWAP_DECAY_MS;
+      const target = stale ? 0 : Math.min(1, push.amount / SWAP_PUSH);
+      peek.f += (target - peek.f) * (target > peek.f ? PEEK_ATTACK : PEEK_RELEASE);
+
+      if (peek.f < PEEK_MIN && target === 0) {
+        peek.f = 0;
+        peek.spin = null;
+        return false;
+      }
+
+      // Where the planet has to be pointed for this to be the same world, taken
+      // once at the start of the lean. The flat map's answer is whatever is
+      // under the middle of the tube — the same question the swap asks when it
+      // arms, and it has to be the same answer or the world would jump at the
+      // moment the offer became a crossing.
+      if (!peek.spin) {
+        let spin = spinRef.current;
+        const live = projectionRef.current;
+        if (!spinningRef.current && live?.invert) {
+          const centre = live.invert([width / 2, height / 2]);
+          if (centre && isFinite(centre[0]) && isFinite(centre[1])) {
+            spin = [centre[0], Math.max(-70, Math.min(70, centre[1]))];
+          }
+        }
+        peek.spin = spin;
+      }
+
+      // `t = 1` is the flat map and `t = 0` is the sphere, so which way the lean
+      // runs is which rail it is being made at.
+      const t = spinningRef.current ? peek.f * PEEK_MAX : 1 - peek.f * PEEK_MAX;
+      drawMorph(t, peek.spin, now);
       return true;
     };
 
@@ -2870,6 +2994,10 @@ const WorldMap = ({
       if (particles.current.length) return null;
       if (replayRef.current) return null;
       if (swapRef.current) return null;
+      // A world held part way into the crossing is a world moving on the
+      // reader's own clock, and springing back is motion nothing else here can
+      // see. Both are frames that have to be painted.
+      if (peekRef.current.f > 0) return null;
       if (!unfoldRef.current.done) return null;
       // The sky comes up over the better part of a second once the world has
       // finished flattening, and a ramp is time, not state.
@@ -2949,7 +3077,7 @@ const WorldMap = ({
       ctx.fillStyle = palette.void;
       ctx.fillRect(0, 0, width, height);
 
-      if (drawSwap(now) || drawUnfold(now)) {
+      if (drawSwap(now) || drawPeek(now) || drawUnfold(now)) {
         frame = requestAnimationFrame(render);
         return;
       }
