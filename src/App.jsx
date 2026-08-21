@@ -24,6 +24,7 @@ import { createDay } from "./lib/day.js";
 import { createRate } from "./lib/rate.js";
 import { createReach } from "./lib/reach.js";
 import { saveStrikes, saveFrame } from "./lib/save.js";
+import { parseArchive, createPlayer, MAX_BYTES as ARCHIVE_MAX_BYTES } from "./lib/archive.js";
 import { roll, hush, MAX_KM as THUNDER_MAX_KM } from "./lib/thunder.js";
 import geoData from "./lib/world.json";
 
@@ -92,6 +93,11 @@ const WATCH_MAX_DEG = WATCH_MAX_KM / 111.32;
 // a new array on every frame and defeat its memoisation.
 const EMPTY = [];
 
+// What the panel reads before anything has arrived. Hoisted out of the state
+// declaration because a session can now start twice: loading an archive, and
+// leaving one, both put the instrument back to exactly this.
+const NO_STATS = { rate: 0, total: 0, storms: 0, surging: 0, delay: null, stations: null };
+
 // Strikes are appended in arrival order, so any window over them is a
 // contiguous run and its start can be found rather than scanned for.
 //
@@ -149,14 +155,7 @@ function App() {
   // How far the network is hearing, split by whether the path lay under a
   // sunlit ionosphere or a dark one. Two hundred counts, held for the session.
   const [reach, setReach] = useState(null);
-  const [stats, setStats] = useState({
-    rate: 0,
-    total: 0,
-    storms: 0,
-    surging: 0,
-    delay: null,
-    stations: null,
-  });
+  const [stats, setStats] = useState(NO_STATS);
   const [status, setStatus] = useState({ phase: "idle", message: "idle", host: null });
   // Nothing has arrived for a while, whatever the socket believes about itself.
   const [silent, setSilent] = useState(false);
@@ -446,7 +445,10 @@ function App() {
       // Burn-in releases: cells untouched for the burn window are dropped, and
       // the rest carry how much life they have left. Runs even in a lull, so
       // the map empties itself when the storms move on.
-      setSilent(now - lastArrival.current > SILENCE_MS);
+      // An archive with a quiet quarter of an hour in it is not a feed that has
+      // stopped, and neither is one that has run out. Both look identical from
+      // here — strikes stop arriving — so the source has to be asked.
+      setSilent(!archiving.current && now - lastArrival.current > SILENCE_MS);
       const active = [];
       const places = new Map();
       for (const [key, cell] of binCounts.current) {
@@ -650,6 +652,144 @@ function App() {
     setReplayAt(behindMs <= REPLAY_LEAD_MS ? null : Date.now() - behindMs);
   }, []);
 
+  // ── Archive ──────────────────────────────────────────────────────────────
+  //
+  // A session that came out of a file rather than off the wire.
+  //
+  // The strikes go in at the front of the same pipe the relay feeds, so nothing
+  // below this line knows about it: the feed, the cells, the rate, the burn-in
+  // and the track behind you are all built exactly as they are live, because
+  // they are being built from the same arrivals in the same order at the same
+  // speed. What the instrument does have to know is that it is not looking at
+  // now, and that is the whole of what is here.
+  const [archive, setArchive] = useState(null);
+  const [archiveError, setArchiveError] = useState(null);
+  const player = useRef(null);
+  // Read on the flush, which is not a render: what it needs to know is whether
+  // silence is a fault, and that question is asked twice a second.
+  const archiving = useRef(false);
+  // The field is fetched for the present, and an archive is not the present, so
+  // an hour from last Tuesday would be drawn under today's clouds — a cell
+  // firing into a clear sky that was overcast at the time, which is the one
+  // kind of quiet lie this map is otherwise careful about. Held rather than
+  // dropped, and put back on the way out.
+  const fieldBefore = useRef(null);
+
+  // Everything a session accumulates, emptied. Two sessions' strikes in one
+  // history is not a longer session: the times overlap, the burn-in draws both
+  // at once and the rate describes neither, so entering an archive and leaving
+  // one both start from nothing.
+  //
+  // The place cache is the exception and stays. It is a 1° cell against the
+  // name of what is under it, and neither of those moves between sessions.
+  const resetSession = useCallback(() => {
+    pending.current = [];
+    history.current = [];
+    tracked.current = [];
+    feedQueue.current = [];
+    strikeQueue.current = [];
+    binCounts.current.clear();
+    total.current = 0;
+    lastArrival.current = Date.now();
+    rates.current = createRate();
+    day.current = createDay();
+    reachRef.current = createReach();
+    setFeed([]);
+    setRegions([]);
+    setBins([]);
+    setStorms([]);
+    setSamples([]);
+    setDay(null);
+    setReach(null);
+    setStats(NO_STATS);
+    setSpan(0);
+    setReplayAt(null);
+    setSelection(null);
+    setFocus(null);
+    setWatch(null);
+    setSilent(false);
+  }, []);
+
+  const loadArchive = useCallback(
+    async (file) => {
+      if (!file) return;
+      setArchiveError(null);
+      let read;
+      try {
+        // Checked before it is read rather than after: `text()` on a file
+        // somebody picked by accident is the expensive way to find out it was
+        // not this.
+        if (file.size > ARCHIVE_MAX_BYTES) {
+          throw new Error("that file is too large to be an hour of strikes");
+        }
+        read = parseArchive(await file.text());
+      } catch (err) {
+        setArchiveError(err.message);
+        return;
+      }
+
+      player.current?.stop();
+      resetSession();
+      archiving.current = true;
+      const play = createPlayer(read.strikes, {
+        onStrike: handleDataReceived,
+        onEnd: () =>
+          setStatus({
+            phase: "ended",
+            message: `${file.name} has run out — the map empties from here`,
+            host: null,
+          }),
+      });
+      player.current = play;
+      setArchive({
+        name: file.name,
+        from: read.from,
+        to: read.to,
+        count: read.strikes.length,
+        dropped: read.dropped,
+        trimmed: read.trimmed,
+        // What the clock has to have taken off it to read as the archive's own
+        // time again. See `createPlayer`.
+        shift: play.shift,
+      });
+      setStatus({ phase: "archive", message: `playing ${file.name}`, host: null });
+      if (settings.field !== "off") {
+        fieldBefore.current = settings.field;
+        set("field", "off");
+      }
+      play.start();
+    },
+    [handleDataReceived, resetSession, set, settings.field]
+  );
+
+  const leaveArchive = useCallback(() => {
+    player.current?.stop();
+    player.current = null;
+    archiving.current = false;
+    resetSession();
+    setArchive(null);
+    setArchiveError(null);
+    // The socket comes back with the component and reports for itself a moment
+    // later; this is only what the footer says in between.
+    setStatus({ phase: "connecting", message: "relinking...", host: null });
+    if (fieldBefore.current !== null) {
+      set("field", fieldBefore.current);
+      fieldBefore.current = null;
+    }
+  }, [resetSession, set]);
+
+  // A timer outliving the page it was feeding.
+  useEffect(() => () => player.current?.stop(), []);
+
+  // What the header shows in place of the node name. The day is worth carrying:
+  // two hours on a clock say nothing about which afternoon this was, and that
+  // is the whole difference between this and the live map.
+  const archiveRange = useMemo(() => {
+    if (!archive) return null;
+    const clock = (ms) => new Date(ms).toISOString().slice(11, 16);
+    return `${new Date(archive.from).toISOString().slice(0, 10)} ${clock(archive.from)}\u2013${clock(archive.to)} UTC`;
+  }, [archive]);
+
   // A storm can deliver dozens of strikes per flush. Releasing them on a steady
   // beat keeps the feed readable and lets each row animate in on its own.
   useEffect(() => {
@@ -730,14 +870,24 @@ function App() {
           onKey={configToKey}
           onSaveStrikes={saveHistory}
           onSaveFrame={saveTube}
+          archive={archive}
+          archiveRange={archiveRange}
+          archiveError={archiveError}
+          onLoadArchive={loadArchive}
+          onLeaveArchive={leaveArchive}
         />
       )}
       <Crt scanlines={settings.scanlines} sweep={settings.sweep} />
-      <Seeker onDataReceived={handleDataReceived} onStatus={setStatus} />
+      {/* Unmounted rather than ignored while an archive is playing. Holding a
+          socket open to drop everything that comes down it would take a share
+          of the relay's one upstream link for a map that is not showing it. */}
+      {!archive && <Seeker onDataReceived={handleDataReceived} onStatus={setStatus} />}
       {settings.chrome && (
         <Navbar
           phase={status.phase}
           host={status.host}
+          archive={archiveRange}
+          onLive={leaveArchive}
           pulse={stats.total}
           theme={theme}
           onTheme={setTheme}
@@ -812,7 +962,7 @@ function App() {
 
       {settings.chrome && (
       <footer className="flex h-7 shrink-0 items-center justify-between border-t border-line px-4 text-2xs text-dim unselectable">
-        <Clock />
+        <Clock offset={archive ? archive.shift : 0} />
         <span className="truncate pl-4" role="status" aria-live="polite">
           &gt; {status.message}
         </span>

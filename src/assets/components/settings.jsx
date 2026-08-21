@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import Panel, { Group } from "./panel.jsx";
 import { wake } from "../../lib/audio.js";
 import { phosphorsFor } from "../../lib/palette.js";
@@ -92,6 +94,44 @@ function Action({ label, hint, verb, onClick }) {
   );
 }
 
+/**
+ * The one control in this panel that takes something in.
+ *
+ * A file input drawn as itself would be the only button here that is not four
+ * letters in brackets, and it would be the loudest thing in the panel by some
+ * margin. So the real input is hidden and the label is the control, which is
+ * also what makes it work from the keyboard.
+ *
+ * The value is cleared on the way out. Without that, picking the same file
+ * twice in a row is silent — the input has not changed, so nothing fires — and
+ * reloading the archive you are already watching is exactly what someone does
+ * after leaving it by accident.
+ */
+function Upload({ label, hint, verb, accept, onFile }) {
+  const id = useId();
+  return (
+    <Row label={label} hint={hint}>
+      <label
+        htmlFor={id}
+        className="shrink-0 cursor-pointer text-2xs uppercase tracking-label text-dim transition-colors hover:text-text active:text-text touch:py-3 touch:pl-6"
+      >
+        [ {verb} ]
+        <input
+          id={id}
+          type="file"
+          accept={accept}
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            onFile(file);
+          }}
+        />
+      </label>
+    </Row>
+  );
+}
+
 export default function Settings({
   settings,
   set,
@@ -101,6 +141,11 @@ export default function Settings({
   onKey,
   onSaveStrikes,
   onSaveFrame,
+  archive,
+  archiveRange,
+  archiveError,
+  onLoadArchive,
+  onLeaveArchive,
 }) {
   return (
     <Panel
@@ -262,15 +307,48 @@ export default function Settings({
         <Action
           label="Strikes"
           verb="csv"
-          hint="Everything still retained, as it is held: where each strike was, when it happened, and when this browser heard about it. The gap between those two times is the network's own delay. Nothing is fetched to fill the file in, so it is as long as the session has been open."
+          hint="Everything still retained, as it is held: where each strike was, when it happened, and when this browser heard about it. The gap between those two times is the network's own delay. Nothing is fetched to fill the file in, so it is as long as the session has been open. It reads back in below."
           onClick={onSaveStrikes}
         />
         <Action
           label="Frame"
           verb="png"
-          hint="The tube as drawn, rewound or live. This is the one way a moment can be handed to somebody: the address already carries the view, but the strikes under it belong to this session and cannot travel with a link, so a shared URL opens on the right coordinates and no weather."
+          hint="The tube as drawn, rewound or live. A picture of the moment rather than the moment itself: the address already carries the view, but the strikes under it belong to this session and cannot travel with a link, so a shared URL opens on the right coordinates and no weather."
           onClick={onSaveFrame}
         />
+        {/* The other end of the CSV above. The file is not played as a
+            recording of a map: the strikes go back into the front of the same
+            pipe the network feeds, one at a time and at life size, so the cells
+            are tracked and the rings drawn and the track fills in behind you,
+            all of it built rather than replayed. */}
+        {archive ? (
+          <Action
+            label="Archive"
+            verb="live"
+            hint={`Playing ${archive.name}: ${archiveRange}, ${archive.count.toLocaleString()} strikes.${
+              archive.dropped ? ` ${archive.dropped.toLocaleString()} unreadable rows were skipped.` : ""
+            }${
+              archive.trimmed
+                ? ` Only the last ${archive.count.toLocaleString()} are played — the file is longer than the hour this instrument holds.`
+                : ""
+            } The field is off while it runs, because the sky behind the map is fetched for now and this is not now. Going back to live empties the session and relinks.`}
+            onClick={onLeaveArchive}
+          />
+        ) : (
+          <Upload
+            label="Archive"
+            verb="load"
+            accept=".csv,text/csv"
+            hint="A strike file saved above, played back at life size from its first strike. The map builds itself from it exactly as it does from the network, so the feed, the storm cells and the rewind track all work — but which detectors placed each strike is not in the file and cannot be, so the reach and the detector count read as unavailable. The live feed stops while it plays."
+            onFile={onLoadArchive}
+          />
+        )}
+        {/* Said in the panel it was asked for in, rather than as a dialog over
+            the map: the file was picked here and this is where the reader is
+            looking. */}
+        {archiveError && (
+          <p className="mt-1 text-xs leading-snug text-text glow">{archiveError}</p>
+        )}
       </Group>
     </Panel>
   );

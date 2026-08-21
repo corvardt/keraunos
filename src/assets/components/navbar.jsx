@@ -18,11 +18,28 @@ const item =
 /** Splits the controls into what they do: display, panels, elsewhere. */
 const Rule = () => <span className="h-2.5 w-px bg-line" aria-hidden="true" />;
 
-function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey, onGuide }) {
+function Navbar({ phase, host, archive, onLive, pulse, theme, onTheme, onConfig, onKey, onGuide }) {
+  const playing = phase === "archive";
+  const ended = phase === "ended";
   const live = phase === "live";
   const down = phase === "down";
-  // When live, the dot and the node name already say it. Only speak up otherwise.
-  const state = down ? "no signal" : live ? null : "linking";
+  // Marked, always, and in the place the link state is read from.
+  //
+  // This instrument will tell you how far away the nearest strike is and count
+  // down to its thunder, and an archive answers both of those about an
+  // afternoon that is over. Everything else on the tube is identical to a live
+  // map by construction — that is the point of playing the strikes rather than
+  // the picture — so the only thing standing between a replayed storm and being
+  // read as the weather outside is this label. It does not get to be subtle.
+  const state = down
+    ? "no signal"
+    : playing
+      ? "archive"
+      : ended
+        ? "archive ended"
+        : live
+          ? null
+          : "linking";
 
   return (
     <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-line px-3 sm:px-4">
@@ -48,15 +65,18 @@ function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey, onGuide }
           {/* The indicator is itself a strike counter: it flashes on arrival. */}
           <span
             key={pulse}
-            className={`h-1.5 w-1.5 rounded-full bg-dim ${live ? "alive" : "seek"}`}
+            className={`h-1.5 w-1.5 rounded-full bg-dim ${live || playing ? "alive" : "seek"}`}
           />
           {state && (
             <span className="text-2xs uppercase tracking-label text-text glow">
               [ {state} ]
             </span>
           )}
+          {/* Which afternoon, where the node name goes: an archive has no node
+              and the reader has no other way to find out what they are watching
+              without opening the panel it was loaded from. */}
           <span className="hidden text-2xs uppercase tracking-label text-dim sm:inline">
-            {host ? `node ${host}` : "no node"}
+            {archive || (host ? `node ${host}` : "no node")}
           </span>
         </span>
 
@@ -85,6 +105,17 @@ function Navbar({ phase, host, pulse, theme, onTheme, onConfig, onKey, onGuide }
           <Rule />
           {/* First of the three, and the only one that walks: it is what the
               other two are for once you already know what you are looking at. */}
+          {/* The way back, beside the controls rather than in the panel the
+              archive was loaded from. Present only while there is something to
+              come back from. */}
+          {archive && (
+            <>
+              <button type="button" onClick={onLive} className={`${item} text-text glow`}>
+                live
+              </button>
+              <Rule />
+            </>
+          )}
           <button type="button" onClick={onGuide} className={item}>
             guide
           </button>
