@@ -282,6 +282,12 @@ export default function Settings({
           value={settings.coverage}
           onChange={(v) => set("coverage", v)}
         />
+        <Toggle
+          label="Aurora"
+          hint="The auroral oval, where the solar wind is being steered into the atmosphere. The other thing the sky does with electricity, and the only layer here that has not happened yet: it is NOAA's OVATION model running about an hour ahead of the wind that drives it. Brightest on the globe, which shows a whole polar cap at once."
+          value={settings.aurora}
+          onChange={(v) => set("aurora", v)}
+        />
         <Choice
           label="Persistence"
           hint="How long a strike stays lit before it fades."

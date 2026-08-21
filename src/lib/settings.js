@@ -69,6 +69,18 @@ export const DEFAULTS = {
   // behind the dots it is there to be compared with, which is a thing a reader
   // has to have asked for before it can be explained to them.
   coverage: false,
+  // The other electricity. OVATION's auroral oval, off NOAA's space weather
+  // service: one value per degree of the planet for the probability of visible
+  // aurora, fetched whole rather than in tiles because at a degree the whole
+  // world is 148 KB.
+  //
+  // Opt-in, and for a plainer reason than the two above: it is not weather. A
+  // reader who came here for lightning should not have the sky over the poles
+  // lit up until they ask for it. It is also the one layer here that has not
+  // happened yet — the model runs about an hour ahead of the solar wind that
+  // drives it — so it is named as a forecast wherever it appears, and the panel
+  // prints how far ahead it is looking.
+  aurora: false,
   persistence: "normal",
   // Which of the panel's larger groups are folded shut, by name. A map rather
   // than a setting each, because it is one kind of fact about a list that will

@@ -136,6 +136,25 @@ const coverage = (
   </svg>
 );
 
+// The oval, as the map draws it: a soft band with no edge anywhere on it. In
+// the reading token, because it is light rather than terrain — the same
+// argument the stars are drawn on.
+const aurora = (
+  <svg viewBox="0 0 24 16" className="h-4 w-6">
+    <defs>
+      <radialGradient id="oval-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stopColor="currentColor" stopOpacity="0.85" />
+        <stop offset="55%" stopColor="currentColor" stopOpacity="0.3" />
+        <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+      </radialGradient>
+    </defs>
+    <g className="text-text">
+      <ellipse cx="12" cy="6" rx="10" ry="4.5" fill="url(#oval-glow)" />
+      <ellipse cx="12" cy="6" rx="5.5" ry="2.2" className="fill-void" opacity="0.55" />
+    </g>
+  </svg>
+);
+
 const station = (
   <svg viewBox="0 0 24 16" className="h-4 w-6">
     {[[3, 3], [2, 9], [6, 14], [21, 5], [22, 11]].map(([x, y]) => (
@@ -314,6 +333,31 @@ export default function Legend({ onClose }) {
           as a picture, so the counts are read back off the published legend, which{" "}
           <span className="text-text">npm run check:flash</span> holds against live pixels. From
           EUMETSAT.
+        </Entry>
+        <Entry mark={aurora} term="Aurora">
+          Off by default. The auroral oval: where the solar wind is being funnelled down the
+          earth&rsquo;s own field lines into the top of the atmosphere, brightest in a ring a few
+          degrees wide around each magnetic pole. Drawn as light rather than as terrain &mdash; in
+          the reading token, added to the glass the way the stars are &mdash; and it shimmers,
+          slowly, on a wave that runs round the oval rather than pulsing all at once. The shimmer is
+          texture and nothing more: it moves a third of the weight, and where the curtain sits and
+          how strong it is are the model&rsquo;s to say.
+          <br />
+          <br />
+          It is the other thing the sky does with electricity, and it is the one layer here that can
+          be on beside everything else without arguing with it: the oval lives at the latitudes
+          lightning does not, so it cannot cover a reading. Worth the globe &mdash; a sphere shows a
+          whole polar cap at once, where a Mercator sheet cuts the same ring into two unrecognisable
+          arcs along its top and bottom edges.
+          <br />
+          <br />
+          The one thing on this instrument that has not happened yet. Everything else here was
+          measured; this is NOAA&rsquo;s OVATION model, driven by the solar wind as it is read at L1
+          about an hour upstream of us, which is exactly what buys it the lead time. It is published
+          as a probability of visible aurora, one value per whole degree of the planet, and anything
+          under five percent is dropped as the model&rsquo;s own noise &mdash; a floor on the
+          probability rather than on the latitude, so a severe storm pushing the oval down over
+          places that never see it still draws. From NOAA SWPC, refreshed about every five minutes.
         </Entry>
         <Entry mark={daylight} term="Daylight">
           The terminator, and the hemisphere it divides: in dark mode light is added to the glass,
