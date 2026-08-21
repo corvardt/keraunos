@@ -1986,14 +1986,26 @@ const WorldMap = ({
 
   const irAt = momentFor(kind, replay ? replay.at : null, Date.now());
 
-  // Which projection the pyramid is asked about. The globe's, when there is
-  // one — but not the live one: the level it works at and the tiles it wants
-  // are the whole world at one scale, and neither is a function of where the
-  // planet happens to be pointed. Held still so that turning it does not
-  // re-queue the same request sixty times a second.
+  // Which projection the pyramid is asked about. The globe's, when there is one,
+  // and pointed at [0, 0] rather than where the reader has it: which tiles are
+  // wanted is the whole world either way, so a rotation would re-queue the same
+  // request sixty times a second for an answer that cannot change.
+  //
+  // The zoom is a different matter and has to be carried. It is the one term in
+  // the globe's scale, so it is the one term in the level the pyramid picks —
+  // and `drawWarp` measures its own level off the live projection, which has it.
+  // Left at k = 1 here the two disagreed below about k = 0.63, where the drawn
+  // level is one shallower than the fetched one: `want` seeds the detail level,
+  // a floor three below it, and level 0, so the level actually being drawn was
+  // the one gap in that set and `drawTile` only walks up. It fell past the floor
+  // to level 0 — one tile for the planet — which is the smudge the comment in
+  // the effect below warns about, arrived at by the other road.
   const skyProjection = useMemo(
-    () => (spinning && width && height ? globeProjection(width, height, [0, 0]) : layerProjection),
-    [spinning, width, height, layerProjection]
+    () =>
+      spinning && width && height
+        ? globeProjection(width, height, [0, 0], globeK)
+        : layerProjection,
+    [spinning, width, height, globeK, layerProjection]
   );
 
   // The tokens the field is painted in. A palette change repaints the tiles
