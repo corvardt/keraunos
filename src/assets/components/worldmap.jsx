@@ -2226,10 +2226,10 @@ const WorldMap = ({
     // walks up — so it would fall back to the one tile that covers the planet
     // and the sky would be a smudge.
     const id = setTimeout(() => {
-      sky.current.want(skyProjection, width, height, irAt);
+      sky.current.want(skyProjection, width, height, irAt, spinning);
     }, IR_SETTLE_MS);
     return () => clearTimeout(id);
-  }, [kind, skyProjection, width, height, irAt, irTick]);
+  }, [kind, skyProjection, spinning, width, height, irAt, irTick]);
 
   // ── The coverage layer ───────────────────────────────────────────────────
   //
@@ -2279,13 +2279,13 @@ const WorldMap = ({
     if (!covering || !skyProjection || !width || !height) return;
     if (document.hidden) return;
     const id = setTimeout(() => {
-      flash.current.want(skyProjection, width, height, flashAt);
+      flash.current.want(skyProjection, width, height, flashAt, spinning);
     }, IR_SETTLE_MS);
     return () => clearTimeout(id);
     // `irTick` as well as this layer's own: it is what the visibility handler
     // above bumps, and a tab coming back to the front wants both layers asked
     // for again rather than only the weather.
-  }, [covering, skyProjection, width, height, flashAt, flashTick, irTick]);
+  }, [covering, skyProjection, spinning, width, height, flashAt, flashTick, irTick]);
 
   // Cumulative density: redrawn twice a second, so the backing canvas is
   // allocated once per resize and cleared rather than reallocated.

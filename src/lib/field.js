@@ -745,8 +745,20 @@ export function createField(source) {
      * on the reader's behalf, and one that has already arrived costs a map
      * lookup to skip. Requests already in the air are left alone — they are
      * paid for, and the pyramid keeps whatever they bring.
+     *
+     * `whole` is for the views `drawWarp` paints. The screen rectangle is read
+     * as Mercator, which is the right question for the flat map and a wrong one
+     * for a sphere: the canvas corners of a globe are not the corners of a
+     * Mercator box, and taken as though they were they name a strip of about
+     * ±100° of longitude and ±50° of latitude. `drawWarp` draws every tile of
+     * the world regardless — half of it is one drag away and the whole of it is
+     * on the glass through the unfold — so everything outside that strip was
+     * being drawn from whatever ancestor existed, which is level 0, one tile for
+     * the planet. It showed as the Pacific and the poles arriving as a smudge
+     * while the rest of the sky was sharp, and it showed worst on a cold start,
+     * where level 0 is all there is.
      */
-    want(projection, width, height, at) {
+    want(projection, width, height, at, whole = false) {
       if (!projection || !width || !height) return;
       const moment = String(at);
       if (moment === shown) {
@@ -764,7 +776,7 @@ export function createField(source) {
         fadeFrom = 0;
       }
 
-      const frame = mercatorFrame(projection, width, height);
+      const frame = whole ? WHOLE_WORLD : mercatorFrame(projection, width, height);
       const z = level(projection);
       const target = incoming ?? shown;
       const targetAt = target === incoming ? incomingAt : at;
