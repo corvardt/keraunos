@@ -226,6 +226,23 @@ const GLOBE_HOME = [-40, 32];
 // the average of the drift over the stop — the rate falls evenly to nothing.
 const GLOBE_COAST = (GLOBE_DRIFT_PER_S * (GLOBE_STOP_MS / 1000)) / 2;
 const GLOBE_FROM = GLOBE_HOME[0] - GLOBE_SWEEP - GLOBE_COAST;
+
+// How long the planet takes to turn to a region asked for by name.
+//
+// Paced by how far it has to go rather than fixed, because the presets are not
+// all the same distance apart: europe to africa is a nudge and oceania to
+// n.america is most of a hemisphere, and one duration for both makes the short
+// hop sluggish or the long one a blur. The rate is what is held constant, which
+// is what the eye reads as one planet turning at one speed.
+//
+// Bounded at both ends. The floor keeps a nudge from being an instant jump with
+// a name; the ceiling keeps the far side of the world from taking so long that
+// the reader wonders whether the button worked. The throw the globe arrives on
+// covers 110° in 1520ms, and this is deliberately brisker than that: an arrival
+// may be an event, but a control being answered should feel like a response.
+const GLOBE_TURN_PER_S = 150; // degrees a second
+const GLOBE_TURN_MIN_MS = 320;
+const GLOBE_TURN_MAX_MS = 1100;
 // Where the globe stops shading night onto the dots, easing out so that the
 // flat map's wash arrives onto an evenly lit world rather than trading places
 // with a second treatment mid-frame.
@@ -1062,6 +1079,21 @@ const WorldMap = ({
   const globeKRef = useRef(globeK);
   globeKRef.current = globeK;
 
+  // The turn a region preset asks for, while it is being made.
+  //
+  // A rotation the reader did not perform themselves, so unlike the drag it has
+  // a beginning and an end and something has to hold them. Null whenever the
+  // planet is where it was put, which is nearly always.
+  //
+  // Abandoned rather than finished the moment a hand touches the globe: a turn
+  // that went on completing under a drag would be two things rotating the same
+  // planet, and the reader would lose. `stopTurn` is called from everywhere that
+  // can mean that — see `flush` for the drag, and the mode swap below.
+  const turnRef = useRef(null);
+  const stopTurn = useCallback(() => {
+    turnRef.current = null;
+  }, []);
+
   const globe = useMemo(
     () => (spinning && width && height ? globeProjection(width, height, spin, globeK) : null),
     [spinning, width, height, spin, globeK]
@@ -1144,6 +1176,9 @@ const WorldMap = ({
   useEffect(() => {
     if (spinning === wasSpinning.current) return;
     wasSpinning.current = spinning;
+    // The mode is changing under it and the swap sets the rotation itself; a
+    // turn still running would be writing to the same state from the other side.
+    stopTurn();
 
     let target = spinRef.current;
     if (spinning && layerProjection?.invert && width && height) {
@@ -1175,7 +1210,7 @@ const WorldMap = ({
     // `t` is the unfold's own number: 0 is the sphere, 1 is the map. Which way
     // it runs is the whole of the difference between the two directions.
     swapRef.current = { from: spinning ? 1 : 0, to: spinning ? 0 : 1, at: null, spin: target };
-  }, [spinning, layerProjection, reduceMotion, width, height]);
+  }, [spinning, layerProjection, reduceMotion, width, height, stopTurn]);
 
   // Whether the globe was already on when the page opened, which is the one
   // case the throw below belongs to. Read once: toggling the mode later is a
@@ -1606,6 +1641,11 @@ const WorldMap = ({
       const dy = q.spinY;
       q.spinX = 0;
       q.spinY = 0;
+      // A hand on the planet outranks a turn it was asked for by name. Dropped
+      // rather than queued behind: the reader is already pointing the globe
+      // themselves, and finishing the old turn afterwards would take it back off
+      // the place they had just chosen.
+      stopTurn();
       // The drawn radius, not the full one: a planet pushed away is a smaller
       // ball, and a drag that turns it at the rate of a larger one scrubs.
       setSpin((prev) => turned(prev, dx, dy, globeRadius(w, h) * globeKRef.current));
@@ -1650,7 +1690,7 @@ const WorldMap = ({
       setCursor(q.cursor);
       q.cursor = undefined;
     }
-  }, [cross]);
+  }, [cross, stopTurn]);
 
   const schedule = useCallback(() => {
     if (!pendingFrame.current) pendingFrame.current = requestAnimationFrame(flush);
@@ -1667,13 +1707,85 @@ const WorldMap = ({
     schedule();
   };
 
+  // Bumped to start a turn. The rotation itself lives in `turnRef`, which an
+  // effect cannot watch; this is the one thing it can be told about.
+  const [turning, setTurning] = useState(0);
+
+  /**
+   * The planet, turning to where it was asked to look.
+   *
+   * `setSpin` per frame, which is what the drag and the arrival throw both do —
+   * the projection is memoised on `spin`, so a rotation is a render whichever
+   * way it is caused, and there is no cheaper path here that the other two are
+   * not already not taking.
+   *
+   * Eased rather than linear, on the same `glide` the unfold and the swap use,
+   * so a planet answering a button accelerates and settles the way a planet
+   * coming apart into the map does. A turn that started at a constant rate would
+   * read as a slide rather than as a mass being moved.
+   */
+  useEffect(() => {
+    if (!turning || !turnRef.current) return undefined;
+    let raf = 0;
+    const tick = (now) => {
+      const turn = turnRef.current;
+      // Called off under a drag, or by the mode changing out from under it.
+      if (!turn) return;
+      const t = glide((now - turn.at) / turn.ms);
+      setSpin([wrapLon(turn.from[0] + turn.delta * t), turn.from[1] + turn.rise * t]);
+      if (t >= 1) {
+        // Landed exactly on what was asked for rather than on the last step of
+        // the easing, so a preset pressed twice is a no-op the second time and
+        // the readout reads the round number the button promised.
+        setSpin(turn.to);
+        turnRef.current = null;
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [turning]);
+
   // On the flat map this frames a box. On the globe there is no framing to do —
   // one scale, and only a place to be pointed — so the same control turns the
   // planet until the middle of that box is under the eye. It is the same
   // request answered in the terms the mode has: show me this.
   const focusRegion = ([west, south, east, north]) => {
     if (spinning) {
-      setSpin(pointed([(west + east) / 2, (south + north) / 2], 0, 0));
+      // `pointed` for the clamp, which is the same limit a drag is held to: the
+      // poles are not somewhere this globe can be made to look straight at.
+      const to = pointed([(west + east) / 2, (south + north) / 2], 0, 0);
+      const from = spinRef.current;
+      // The short way round. Longitudes are kept in ±180, so a turn from 170 to
+      // -170 is twenty degrees over the antimeridian and not three hundred and
+      // forty back across Asia — which is the whole difference between the
+      // planet answering the question and the planet taking a tour.
+      const delta = wrapLon(to[0] - from[0]);
+      const rise = to[1] - from[1];
+      const sweep = Math.hypot(delta, rise);
+      // Already there, or as near as makes no difference: nothing to animate,
+      // and a zero-length turn would divide by zero below.
+      if (sweep < 0.01) {
+        setSpin(to);
+        return;
+      }
+      if (reduceMotion) {
+        setSpin(to);
+        return;
+      }
+      turnRef.current = {
+        from,
+        to,
+        delta,
+        rise,
+        at: performance.now(),
+        ms: Math.min(
+          GLOBE_TURN_MAX_MS,
+          Math.max(GLOBE_TURN_MIN_MS, (sweep / GLOBE_TURN_PER_S) * 1000)
+        ),
+      };
+      setTurning((n) => n + 1);
       return;
     }
     if (!base) return;
@@ -1770,10 +1882,20 @@ const WorldMap = ({
       // planet a press, which is the keyboard's version of the drag. There is
       // no zoom for them to have meant.
       if (spinningRef.current) {
-        if (event.key === "+" || event.key === "=") setSpin((at) => pointed(at, 30, 0));
-        else if (event.key === "-" || event.key === "_") setSpin((at) => pointed(at, -30, 0));
-        else if (event.key === "0") setSpin([...GLOBE_HOME]);
-        else return;
+        // Each of these is the reader pointing the planet themselves, so each
+        // of them ends a turn that was asked for by name, exactly as a drag
+        // does. They read the rotation they are turning *from*, so one left
+        // running would be stepping off a moving globe.
+        if (event.key === "+" || event.key === "=") {
+          stopTurn();
+          setSpin((at) => pointed(at, 30, 0));
+        } else if (event.key === "-" || event.key === "_") {
+          stopTurn();
+          setSpin((at) => pointed(at, -30, 0));
+        } else if (event.key === "0") {
+          stopTurn();
+          setSpin([...GLOBE_HOME]);
+        } else return;
         event.preventDefault();
         return;
       }
