@@ -222,7 +222,7 @@ it and the single-socket property becomes theirs to spend.
 
 No API keys anywhere.
 
-`node KeraunosSeeker.cjs` is a standalone Node client that prints the same
+`node scripts/KeraunosSeeker.cjs` is a standalone Node client that prints the same
 stream to the terminal. It connects to Blitzortung directly, so it is a tool for
 one person at a terminal rather than something to put behind a website.
 
