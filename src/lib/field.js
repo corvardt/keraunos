@@ -177,18 +177,36 @@ export const MIN_PATCH = 4;
  * colours, so whatever the stylesheet and the phosphor between them decided a
  * token is, is what gets drawn.
  */
+// One sheet, reused. Every source builds both its passes through here, so a
+// tile costs two of these and a pan over new ground costs a couple of hundred —
+// each of them a canvas and its backing store, allocated to be drawn once and
+// dropped. They are all the same size, and nothing reads one after the call it
+// was made in, so there is no reason for there to be more than one.
+//
+// Keyed on the size only because `samples` is a source's own business; in
+// practice all three ask for the same one and this is allocated once for the
+// life of the page.
+let sheet = null;
+let sheetCtx = null;
+
 export function fillThrough(ctx, alpha, colour, samples) {
-  const scratch = document.createElement("canvas");
-  scratch.width = samples;
-  scratch.height = samples;
-  const sctx = scratch.getContext("2d");
-  const image = sctx.createImageData(samples, samples);
+  if (!sheet) {
+    sheet = document.createElement("canvas");
+  }
+  if (sheet.width !== samples || sheet.height !== samples) {
+    sheet.width = samples;
+    sheet.height = samples;
+    sheetCtx = sheet.getContext("2d");
+  }
+  // `putImageData` replaces rather than composites, so the sheet needs no
+  // clearing between uses: every byte of it is written before it is read.
+  const image = sheetCtx.createImageData(samples, samples);
   image.data.set(alpha, 0);
-  sctx.putImageData(image, 0, 0);
-  sctx.globalCompositeOperation = "source-in";
-  sctx.fillStyle = colour;
-  sctx.fillRect(0, 0, samples, samples);
-  ctx.drawImage(scratch, 0, 0);
+  sheetCtx.putImageData(image, 0, 0);
+  sheetCtx.globalCompositeOperation = "source-in";
+  sheetCtx.fillStyle = colour;
+  sheetCtx.fillRect(0, 0, samples, samples);
+  ctx.drawImage(sheet, 0, 0);
 }
 
 // ── The store ───────────────────────────────────────────────────────────────
@@ -397,6 +415,14 @@ export function createField(source) {
   // to touch it.
   let buffer = null;
   let bufferCtx = null;
+  // What that buffer was last composed from. The flat map used to rebuild it on
+  // every frame, which is a clear and thirty scaled `drawImage`s for a picture
+  // that is usually identical to the one already on it: the field only changes
+  // when a tile lands, a handover moves, or the view does, and none of those is
+  // most frames. The globe's world picture has always been kept this way — see
+  // `worldAt` below — and the reason the flat one was not is simply that it was
+  // written first. It costs one string compare to find out.
+  let bufferAt = "";
 
   // The globe's flat picture of the whole world, and the pixels read back out
   // of it. Held across frames for the same reason the buffer is, and rebuilt on
@@ -707,6 +733,7 @@ export function createField(source) {
       incomingAt = null;
       incomingSince = 0;
       worldAt = "";
+      bufferAt = "";
     },
 
     /**
@@ -824,8 +851,8 @@ export function createField(source) {
       if (buffer.width !== bw || buffer.height !== bh) {
         buffer.width = bw;
         buffer.height = bh;
+        bufferAt = ""; // a resize clears it, so nothing is held over
       }
-      bufferCtx.clearRect(0, 0, bw, bh);
 
       // Metres to screen, both axes at once: EPSG:3857 and d3's Mercator are
       // the same pair of numbers a constant apart, so this is a multiply.
@@ -851,22 +878,41 @@ export function createField(source) {
 
       const fade = handover(wanted, now);
 
-      // The frame on the glass, on its way out, and the one arriving over it.
-      // Both are drawn only while they are worth something, so the ordinary
-      // case — one frame, no handover — is a single pass at full weight.
-      for (const tile of wanted) {
-        const box = place(tile);
-        if (box.w <= 0 || box.h <= 0) continue;
-        // Out as the other comes in, and the complement is the point: held at
-        // full weight the two frames sum to more field than either of them is,
-        // and the pair reads as one doubled rather than one replacing the
-        // other. Both are washes, so the two halves add back to a whole.
-        if (shown !== null && fade < 1) {
-          drawTile(bufferCtx, shown, tile.z, tile.x, tile.y, box, now, 1 - fade);
+      // Whether the buffer already holds this picture.
+      //
+      // The same question the globe asks of its world picture below, with the
+      // view added: that one is the whole planet in world coordinates and a
+      // rotation only moves the eye over it, while this one is in screen space,
+      // so where a tile sits on it is a function of the projection too. The rest
+      // is identical — which moments are up, how far between them, whether
+      // anything has landed since, and what colour they are painted in.
+      //
+      // `fading` is the term no signature can carry, because it is time passing:
+      // a tile that arrived within the last fifth of a second is still coming up
+      // and has to be redrawn on a frame where nothing else changed.
+      const signature = `${shown}|${incoming}|${fade}|${arrivals}|${tint}|${z}|${bw}|${bh}|${k}|${tx}|${ty}`;
+      if (signature !== bufferAt || fading) {
+        bufferCtx.clearRect(0, 0, bw, bh);
+        fading = false;
+
+        // The frame on the glass, on its way out, and the one arriving over it.
+        // Both are drawn only while they are worth something, so the ordinary
+        // case — one frame, no handover — is a single pass at full weight.
+        for (const tile of wanted) {
+          const box = place(tile);
+          if (box.w <= 0 || box.h <= 0) continue;
+          // Out as the other comes in, and the complement is the point: held at
+          // full weight the two frames sum to more field than either of them is,
+          // and the pair reads as one doubled rather than one replacing the
+          // other. Both are washes, so the two halves add back to a whole.
+          if (shown !== null && fade < 1) {
+            drawTile(bufferCtx, shown, tile.z, tile.x, tile.y, box, now, 1 - fade);
+          }
+          if (incoming && fade > 0) {
+            drawTile(bufferCtx, incoming, tile.z, tile.x, tile.y, box, now, fade);
+          }
         }
-        if (incoming && fade > 0) {
-          drawTile(bufferCtx, incoming, tile.z, tile.x, tile.y, box, now, fade);
-        }
+        bufferAt = signature;
       }
 
       // And onto the glass, one block to many pixels, unsmoothed. This is the
