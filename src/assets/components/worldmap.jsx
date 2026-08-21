@@ -399,6 +399,47 @@ function buildGrid(bounds, stepKm) {
   return land;
 }
 
+// Float noise in the fit, and nothing else. `visibleBounds` clamps to the limit
+// with `Math.min`, so a box that reaches it lands within 3e-14° of it and never
+// past it; a tenth of a millimetre of tolerance separates that from any view a
+// reader could actually be at.
+const AT_LIMIT = 1e-9;
+
+/**
+ * The same box, carried to the poles when it already reaches Mercator's limit.
+ *
+ * `LAT_LIMIT` is where the *flat* map stops, and `visibleBounds` clamps to it
+ * because past it Mercator runs to infinity. The globe has no such edge: it is
+ * a sphere, it draws the pole like any other point, and the land mask has had
+ * the ground all along. So the caps were missing for no better reason than that
+ * the matrix is built from a box the flat map defined — which cost the north of
+ * Greenland and Ellesmere, and cost most of Antarctica, whose rows carry more
+ * land than any row at the limit does.
+ *
+ * Conditioned on the box rather than on `spinning`, which is the version that
+ * was tried first and is wrong in both directions. Zoomed into a city the
+ * bounds are a degree across, and opening those to the poles would build the
+ * whole planet to draw a suburb — so it cannot be unconditional. But keyed on
+ * the mode, the caps appear and vanish on the first frame of every crossing:
+ * the swap and the boot unfold both draw a sphere while `spinning` still says
+ * otherwise, and the world would pop its poles on and off mid-move. The view
+ * reaching the limit is the state every crossing actually runs in, and it is
+ * the honest test either way — the pole is in frame, so build it.
+ *
+ * On the flat map at world zoom this does build dots that are then discarded:
+ * they project past the top and bottom of the tube and `mark` culls them, as it
+ * culls everything off-canvas. It is 4% more of the matrix by the cosine, and
+ * only the land part of that — the price of the seam not existing.
+ */
+function toThePoles([west, south, east, north]) {
+  return [
+    west,
+    south <= -LAT_LIMIT + AT_LIMIT ? -90 : south,
+    east,
+    north >= LAT_LIMIT - AT_LIMIT ? 90 : north,
+  ];
+}
+
 // Where the baked mask stops being the better answer.
 //
 // A mask cell is a quarter degree, 28 km at the equator. While the matrix is
@@ -1450,7 +1491,7 @@ const WorldMap = ({
     const across = spinning ? GLOBE_GRID * globeK : 1;
     const stepKm = (gridGap(width) / (base.scale() * across)) * EARTH_RADIUS_KM;
     return buildGrid(
-      visibleBounds(layerProjection, width, height),
+      toThePoles(visibleBounds(layerProjection, width, height)),
       stepKm / Math.pow(settled.k, GRID_FALLOFF)
     );
   }, [base, layerProjection, settled.k, spinning, globeK, width, height]);
