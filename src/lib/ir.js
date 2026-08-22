@@ -810,11 +810,31 @@ function paintTile({ field, lat }, body, tops) {
       const v = field[p];
       if (!v) continue;
       const t = v / 255;
-      // Squared, so the field falls away fast below its own top end. A cloud
-      // layer that renders every cloud honestly is a photograph of the planet,
-      // and this is not a photograph: it is a backdrop with one job, which is
-      // to be dark everywhere the weather is not.
-      warm[p * 4 + 3] = t * t * 38;
+      // Linear, and the ceiling raised to match. It was squared once, on the
+      // reasoning that this is a backdrop rather than a photograph and should
+      // be dark everywhere the weather is not — which is right about the
+      // intent and was wrong about the arithmetic. Squaring a value that has
+      // already been floored and rescaled crushes the whole middle of the
+      // scale: ordinary cloud at grey 87 came out at two parts in 255, which is
+      // not a faint backdrop but an invisible one. Measured over northern
+      // France on an afternoon of scattered cumulus, the mean opacity of the
+      // entire layer was 0.67% and nothing anywhere reached ten.
+      //
+      // What the curve has to separate is cloud from clear, and that job is
+      // already done twice over before this line: FLOOR cuts the warm ground
+      // away, and the second pass below draws the cold tops in their own token.
+      // This one only has to make the body of a cloud visible as terrain, so it
+      // is a straight ramp.
+      //
+      // The ceiling was set by looking rather than by arithmetic, which is the
+      // only way it could have been. Rendered against the real tube at 56, an
+      // overcast sky measured out at three grey levels of movement on the
+      // glass — the numbers said it was drawn and the eye said it was not, and
+      // the eye is the instrument this is for. At 150 an ordinary overcast
+      // lands near 14%, a deep top near 37%, and the coldest anything gets is
+      // 57%: a wash you can read the map through, rather than one you have to
+      // be told is there.
+      warm[p * 4 + 3] = t * 150;
       if (v > TOPS && lift > 0) {
         cold[p * 4 + 3] = Math.sqrt((v - TOPS) / (255 - TOPS)) * 135 * lift;
         anyCold = true;
