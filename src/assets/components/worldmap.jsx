@@ -347,6 +347,10 @@ const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
 // really stopped. It was more than twice this, which put two thirds of a second
 // between the map coming to rest and the request even leaving.
 const IR_SETTLE_MS = 160;
+// How often the tiled layers are asked how complete they are. Slow, because
+// nothing here is an animation: it feeds a line of text in the footer, and a
+// sky that is missing a dish stays missing for as long as the dish is down.
+const HEALTH_MS = 2000;
 
 // `?tiles` in the address puts the field's own state on the glass: the tile
 // grid, and what each tile is being drawn from. Read once, because it is a
@@ -1385,6 +1389,7 @@ const WorldMap = ({
   onHere,
   onSelect,
   onSetting,
+  onFieldHealth,
   unfolding,
 }) => {
   const containerRef = useRef(null);
@@ -2632,6 +2637,39 @@ const WorldMap = ({
     // above bumps, and a tab coming back to the front wants both layers asked
     // for again rather than only the weather.
   }, [covering, skyProjection, spinning, width, height, flashAt, flashTick, irTick]);
+
+  /**
+   * How much of each tiled layer is actually on the glass, reported upward.
+   *
+   * Polled rather than pushed, and that is the lazy answer to a real problem:
+   * tiles land whenever the network says so, four at a time, from inside a
+   * queue that has no idea a footer exists. Threading a callback out through
+   * the fetch path would put a React setState on the completion of every tile.
+   * A cheap read on a slow timer says the same thing, and only speaks when the
+   * answer has changed.
+   *
+   * The layers are asked together because the reader sees one footer: what is
+   * wanted is whether the weather behind the map can be trusted, not which of
+   * two pyramids is behind on it.
+   */
+  useEffect(() => {
+    if (!onFieldHealth) return;
+    let last = "";
+    const read = () => {
+      const of = (field) => {
+        const state = field?.health();
+        return state?.whole ? state : null;
+      };
+      const next = { cloud: of(sky.current), coverage: of(flash.current) };
+      const key = JSON.stringify(next);
+      if (key === last) return;
+      last = key;
+      onFieldHealth(next);
+    };
+    read();
+    const id = setInterval(read, HEALTH_MS);
+    return () => clearInterval(id);
+  }, [onFieldHealth, kind, covering]);
 
   // The one layer here that is neither derived from the strikes nor cut into
   // tiles: the whole planet arrives in a single request, so there is no pyramid,

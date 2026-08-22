@@ -411,6 +411,9 @@ export function createField(source) {
   const tiles = new Map(); // key -> { ...source tile, canvas, tinted, born, used }
   const inFlight = new Set();
   const missed = new Map(); // key -> { job, tries } for tiles that did not answer
+  // The detail tiles the last settle asked for, in the moment it asked them of.
+  // Read only by `health`.
+  let owed = [];
   let queue = [];
   let running = 0;
   let clock = 0;
@@ -831,8 +834,42 @@ export function createField(source) {
       // these can be in the air at once, so the queue's order is the order the
       // field fills in, and the tile under the reader's eye is worth more than
       // the one in the corner behind the feed.
-      for (const tile of tilesFor(frame, z, true)) add(tile);
+      const detail = tilesFor(frame, z, true);
+      for (const tile of detail) add(tile);
+      // What this view is owed, so `health` can say how much of it arrived.
+      // Recorded here rather than counted from the store, because the store
+      // holds the floor levels and other moments too, and neither of those is
+      // the question a reader is asking.
+      owed = detail.map((tile) => keyOf(target, tile.z, tile.x, tile.y));
       pump();
+    },
+
+    /**
+     * How much of the ground under the view actually answered.
+     *
+     * The failure this exists for is the quiet one. A dish that does not reply
+     * is dropped from its tile, the tile is kept without it, and the territory
+     * it covered draws as clear sky — which on a weather layer is not a blank,
+     * it is a reading, and a wrong one. The same is true of a tile that never
+     * arrived at all: the ancestor beneath it is stretched over the gap and the
+     * result is plausible, smooth, and older than it looks.
+     *
+     * So the count goes to the glass. `whole` is what the view asked for,
+     * `held` what is drawn from real tiles at this level, and `partial` those
+     * standing with a dish missing. Nothing here judges — the footer decides
+     * what is worth saying, because how much of a sky is missing before it is
+     * worth mentioning is a question about reading, not about tiles.
+     */
+    health() {
+      let held = 0;
+      let partial = 0;
+      for (const key of owed) {
+        const tile = tiles.get(key);
+        if (!tile) continue;
+        held++;
+        if (tile.partial) partial++;
+      }
+      return { whole: owed.length, held, partial, waiting: inFlight.size };
     },
 
     /**

@@ -20,7 +20,34 @@ import { fieldFor, momentFor } from "../../lib/sources.js";
  * than sixty so the figure is never more than half a minute behind its own
  * rounding — it is cheap, this is one span.
  */
-export default function FieldAge({ kind, replayAt }) {
+/**
+ * Whether the layer is whole, in the fewest words that are still true.
+ *
+ * Silence is the default and has to be: this footer is read past, not read, and
+ * a caveat that appears while a tile is in the air would be a warning about the
+ * network being a network. So nothing is said until enough of the view is
+ * missing that the picture itself is misleading.
+ *
+ * A fifth, because of what the gap looks like. A missing tile is not drawn as a
+ * hole — the ancestor beneath it is stretched over the ground instead — and a
+ * dish that failed leaves its territory drawn as clear sky. Both are plausible
+ * weather. One tile short of thirty is a corner nobody is reading; a fifth of
+ * the sky is a reading, and a reader deciding whether a cell is firing into
+ * clear air deserves to know the clear air might be missing data.
+ */
+const SHORT = 0.2;
+
+function shortfall(health) {
+  if (!health || !health.whole) return null;
+  const absent = health.whole - health.held;
+  // Counted together because they are the same failure to a reader: ground the
+  // layer is drawing something for without having been told what is there.
+  const unsure = absent + health.partial;
+  if (unsure / health.whole < SHORT) return null;
+  return absent >= health.partial ? "incomplete" : "dishes short";
+}
+
+export default function FieldAge({ kind, replayAt, health }) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -41,12 +68,23 @@ export default function FieldAge({ kind, replayAt }) {
   // lie the readout exists to prevent.
   const minutes = Math.max(0, Math.ceil((now - at) / 60_000));
 
+  const missing = shortfall(health);
+
   return (
     <span
       className="hidden shrink-0 sm:inline"
-      title={`${field.label} imagery for ${new Date(at).toISOString().slice(11, 16)} UTC, or the newest frame before it`}
+      title={
+        `${field.label} imagery for ${new Date(at).toISOString().slice(11, 16)} UTC, ` +
+        `or the newest frame before it` +
+        (missing && health
+          ? `. ${health.held} of ${health.whole} tiles under this view have answered` +
+            (health.partial ? `, ${health.partial} of them with a satellite missing` : "") +
+            ` — where they have not, the map is drawing coarser imagery or clear sky rather than what is actually there.`
+          : "")
+      }
     >
       {field.label} {minutes}m old
+      {missing && <span className="ml-1 text-text">· {missing}</span>}
     </span>
   );
 }

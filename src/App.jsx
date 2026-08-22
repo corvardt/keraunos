@@ -151,6 +151,9 @@ function App() {
   const [reach, setReach] = useState(null);
   const [stats, setStats] = useState(NO_STATS);
   const [status, setStatus] = useState({ phase: "idle", message: "idle", host: null });
+  // How much of each tiled layer actually arrived, reported up by the map on a
+  // slow timer and only when it changes. The footer is the only reader.
+  const [fieldHealth, setFieldHealth] = useState(null);
   const [booted, setBooted] = useState(false);
   const finishBoot = useCallback(() => setBooted(true), []);
   // Raised when the readout starts to fade rather than when it has finished, so
@@ -933,6 +936,7 @@ function App() {
             onHere={setHere}
             onSelect={select}
             onSetting={set}
+            onFieldHealth={setFieldHealth}
           />
         </div>
         {settings.sidebar && (
@@ -962,7 +966,7 @@ function App() {
           &gt; {status.message}
         </span>
         <span className="flex shrink-0 items-center gap-4">
-          <FieldAge kind={settings.field} replayAt={replayAt} />
+          <FieldAge kind={settings.field} replayAt={replayAt} health={fieldHealth?.cloud} />
           <a
             className="hidden shrink-0 transition-colors hover:text-text sm:inline"
             target="_blank"
