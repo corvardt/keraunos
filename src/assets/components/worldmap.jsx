@@ -85,6 +85,7 @@ function gridGap(width) {
 // coarsens as you approach and stays legible as an array.
 const GRID_FALLOFF = 0.75;
 const EARTH_RADIUS_KM = 6371;
+const RAD = Math.PI / 180;
 const RING_MS = 720; // the detection ping thrown on arrival
 const FLASH_MS = 180; // the initial overbright moment
 const GRATICULE_STEP = 30; // degrees between scope reference lines
@@ -350,7 +351,6 @@ const spun = (ms) =>
 
 /** Whether the sun is above the horizon at a point, for a given subsolar one. */
 function daylit(lon, lat, sun) {
-  const RAD = Math.PI / 180;
   return (
     Math.sin(sun.decl * RAD) * Math.sin(lat * RAD) +
       Math.cos(sun.decl * RAD) * Math.cos(lat * RAD) * Math.cos((lon - sun.lon) * RAD) >
@@ -502,7 +502,6 @@ function toThePoles([west, south, east, north]) {
 const MASK_MIN_DEG = LAND_RES;
 
 function buildMatrix([west, south, east, north], stepKm) {
-  const degToRad = Math.PI / 180;
   const kmToDeg = (stepKm / (2 * Math.PI * EARTH_RADIUS_KM)) * 360;
 
   // Latitude is the axis that steps at the stated gap; longitude only ever
@@ -513,7 +512,7 @@ function buildMatrix([west, south, east, north], stepKm) {
 
   const land = [];
   for (let lat = south; lat <= north; lat += kmToDeg) {
-    const cosLat = Math.abs(Math.cos(lat * degToRad));
+    const cosLat = Math.abs(Math.cos(lat * RAD));
     const step = cosLat > 1e-6 ? kmToDeg / cosLat : 360;
     for (let lon = west; lon <= east; lon += step) {
       // Ocean points were previously drawn black on black; only land is kept.

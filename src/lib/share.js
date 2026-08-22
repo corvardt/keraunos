@@ -67,15 +67,8 @@ export const WORLD_MARGIN = 5;
 /** Where the scale ends. Above the satellite's own figure, so the mark sits inside it. */
 export const SCALE_MAX = 55;
 
-/**
- * The live rate as the same kind of number the world's is published in.
- *
- * Takes strikes per minute, because that is what the panel above it counts, and
- * hands back per second, because that is the unit the figure it is being
- * compared against was measured in. The fraction itself is not returned: it is
- * the bar against the mark, which is what the paragraph above argues it should
- * have been all along rather than a percentage with a decimal point on it.
- */
-export function share(ratePerMinute) {
-  return { perSecond: ratePerMinute / 60 };
-}
+// The panel counts strikes per minute and the figures above are published per
+// second, so the one conversion is a division and it happens at the call site.
+// The fraction is never computed at all: it is the bar against the mark, which
+// is what the paragraph above argues it should have been rather than a
+// percentage with a decimal point on it.

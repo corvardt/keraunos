@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import { share, WORLD_RATE, WORLD_MARGIN, SCALE_MAX } from "../../lib/share.js";
+import { WORLD_RATE, WORLD_MARGIN, SCALE_MAX } from "../../lib/share.js";
 import { STEP_KM } from "../../lib/reach.js";
 
 const TRACE_W = 300;
@@ -522,7 +522,7 @@ function Sidebar({
   const busiest = Math.max(1, ...regions.map((region) => region.count));
   // The same rate the group at the top is showing, in the unit the figure it is
   // about to be compared against was published in.
-  const heard = share(stats.rate);
+  const perSecond = stats.rate / 60;
 
   // The panel fills the column and lets the feed take up the slack, which works
   // while there is slack. Turned sideways a phone has none: the fixed readouts
@@ -657,7 +657,7 @@ function Sidebar({
             world, which was the whole of the question. */}
         {!shut.coverage && (
           <div className="mt-2">
-            <Gauge perSecond={heard.perSecond} />
+            <Gauge perSecond={perSecond} />
           </div>
         )}
       </section>

@@ -40,10 +40,6 @@ const SKEW_MS = 1000;
 // comparison per tick when there is nothing due.
 const TICK_MS = 100;
 
-function pad(n) {
-  return String(n).padStart(2, "0");
-}
-
 /**
  * One row, in the shape the socket hands upward.
  *
@@ -60,11 +56,9 @@ function pad(n) {
  * number rather than counting it as zero.
  */
 function frame(strike) {
-  const flash = new Date(strike.at);
   return {
-    formattedTime: [flash.getUTCHours(), flash.getUTCMinutes(), flash.getUTCSeconds()]
-      .map(pad)
-      .join(":"),
+    // `Date.parse` guarded the range at the door, so this cannot throw.
+    formattedTime: new Date(strike.at).toISOString().slice(11, 19),
     // Seconds, as the feed reports it: the gap between the strike happening and
     // this browser hearing about it. It is the one figure in the panel that
     // survives the round trip through the file intact, because it is the gap

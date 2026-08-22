@@ -66,14 +66,6 @@ export function fixSpreadKm(gap) {
   return NEAR_KM + (FAR_KM - NEAR_KM) * (1 - quality);
 }
 
-/** The same reading in words, for a panel that has room to say it. */
-export function fixLabel(gap) {
-  if (!Number.isFinite(gap)) return null;
-  if (gap <= SURROUNDED) return "surrounded";
-  if (gap <= 180) return "partial";
-  return "one-sided";
-}
-
 /**
  * Ids of the stations that contributed to the solution, not merely those that
  * heard it. Ids rather than positions: the network registry already knows where
