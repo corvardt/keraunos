@@ -371,6 +371,17 @@ const MESH_LAT = 84;
 // failure than one that is coarse.
 const MAX_WORLD = 2048;
 
+/**
+ * The deepest level the globe will ask the whole world for.
+ *
+ * 256 tiles, which is what a planet drawn twice the size of the glass already
+ * asks for and gets. One level further is a thousand, and the queue runs four at
+ * a time: the difference between a field that fills in a few seconds and one
+ * that never finishes. See its use below for why the globe cannot simply ask
+ * for the part on screen the way the flat map does.
+ */
+const GLOBE_LEVEL = 4;
+
 // The globe holds one view of the world: all of it. There is no screen
 // rectangle to work out, because the answer is always the same rectangle.
 const WHOLE_WORLD = {
@@ -1056,10 +1067,20 @@ export function createField(source) {
       // holds tiles nobody draws and draws tiles nobody fetched — `drawTile`
       // only ever walks up, so a mismatch falls all the way back to the one
       // tile that covers the planet.
-      const z = clamp(Math.round(Math.log2(worldPx / tilePx)), 0, maxLevel);
+      //
+      // Held to GLOBE_LEVEL as well, and that stop is the whole difference
+      // between this and the flat map. The flat map asks for the tiles under the
+      // viewport, so zooming in asks for a deeper level and no more of them. The
+      // globe asks for the *world*, every time, so a deeper level is four times
+      // as many tiles of it — and the count is what runs away: level 3 is 64
+      // tiles, level 5 is 1,024. Measured on a zoomed globe, 1,024 tiles took
+      // over a minute to arrive four at a time and the layer simply never
+      // finished, which reads as the cloud having disappeared. Stopping the
+      // level instead costs a field softer than the planet it is drawn on,
+      // which is a wash behind a map and can afford to be.
+      const z = clamp(Math.round(Math.log2(worldPx / tilePx)), 0, Math.min(maxLevel, GLOBE_LEVEL));
       // Every tile of it. On a sphere half the planet is on screen and the rest
-      // is one drag away; through the unfold it is all arriving at once. A
-      // level this shallow is a few dozen tiles for the whole earth.
+      // is one drag away; through the unfold it is all arriving at once.
       const wanted = tilesFor(WHOLE_WORLD, z);
       const fade = handover(wanted, now);
 

@@ -82,6 +82,20 @@ export function unfoldProjection(t, width, height, rotate) {
  * they swing round the limb.
  */
 export function facing(lon, lat, rotate) {
+  return cosCentre(lon, lat, rotate) > 0;
+}
+
+/**
+ * The cosine of the angular distance from the point the sphere is pointed at.
+ *
+ * What `facing` tests, handed out as the number rather than the verdict. One is
+ * the middle of the disk, zero is the limb, and negative is round the back — so
+ * a caller that knows how much of the planet its canvas can hold can cull at
+ * that angle instead of at the horizon. On a globe drawn larger than the glass
+ * most of the near side is off the edge, and asking each of those dots whether
+ * it is also in daylight is a turn's frame rate spent on ground nobody can see.
+ */
+export function cosCentre(lon, lat, rotate) {
   const RAD = Math.PI / 180;
   // Rotation is applied as [-centreLon, -centreLat], so the centre is its
   // negative. The cosine of the angular distance from there is the test.
@@ -89,7 +103,6 @@ export function facing(lon, lat, rotate) {
   const centreLat = -rotate[1];
   return (
     Math.sin(centreLat * RAD) * Math.sin(lat * RAD) +
-      Math.cos(centreLat * RAD) * Math.cos(lat * RAD) * Math.cos((lon - centreLon) * RAD) >
-    0
+    Math.cos(centreLat * RAD) * Math.cos(lat * RAD) * Math.cos((lon - centreLon) * RAD)
   );
 }

@@ -16,7 +16,7 @@ import {
   zoomed,
 } from "../../lib/view.js";
 import { terminator, subsolar } from "../../lib/sun.js";
-import { unfoldProjection, facing } from "../../lib/unfold.js";
+import { unfoldProjection, facing, cosCentre } from "../../lib/unfold.js";
 import { globeProjection, globeRadius, pointed, rotationFor, turned } from "../../lib/globe.js";
 import { paintStars, STAR_STEP } from "../../lib/stars.js";
 import capitals from "../../lib/capitals.js";
@@ -187,76 +187,38 @@ const HASH_RE = /^#(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/;
 
 const WHEEL_K = 0.0016; // wheel delta to zoom exponent
 
-// ── Crossing between the two modes ─────────────────────────────────────────
+// ── The globe's own zoom ───────────────────────────────────────────────────
 //
-// The map stops at the whole world and the globe has no zoom at all, so at
-// either of those rails there is zoom the reader asked for and the view cannot
-// give. That refused effort is what crosses the modes: push further out than
-// the flat map goes and it rolls up into the planet, push further in than the
-// globe has and it unrolls back into the map. The gesture that would have kept
-// zooming is the one that means "the other shape", which is the only thing
-// left for it to mean.
+// Which shape the world is drawn as is the `view` dial and nothing else. Zoom
+// used to decide it too: the map stopped at the whole world, the globe had no
+// zoom at all, and the effort refused at either rail was spent on crossing to
+// the other mode — with the first fifth of the fold drawn under the gesture as
+// an offer. It read well and it meant the reader could not zoom out on the map,
+// or in on the globe, without changing shape underneath themselves. A dial that
+// says which world you are in should be the only thing that changes it.
 //
-// Counted in log units. `zoomAbout` multiplies by a factor, so a wheel notch
-// and a pinch ratio are the same currency once logged, and one threshold is
-// honest for both.
-const SWAP_PUSH = 0.8; // a little over one doubling of zoom that could not happen
-// How small the planet may be pushed. Far enough back to see the whole of it
-// with sky around it, and no further: past this the world is a marble in a
-// black tube and the readings on it stop being readable.
+// So both modes now simply zoom. On the globe that is the planet's size on the
+// glass, which is the only thing zoom can honestly mean on a sphere: there is no
+// pan and no k, only how close you are standing to it.
+//
+// How small it may be pushed. Far enough back to see the whole of it with sky
+// around it, and no further: past this the world is a marble in a black tube and
+// the readings on it stop being readable.
 const GLOBE_MIN_K = 0.55;
-// Effort is spent, not stored. A rail leant on and let go should not fire the
-// next time it is touched, half a minute later.
-const SWAP_DECAY_MS = 320;
-
-// How far into the crossing leaning on the rail is allowed to show.
+// And how large. The ceiling is the land matrix rather than taste: the globe is
+// drawn from a matrix built for the whole flat world, so its cost goes with the
+// square of this while the flat map only ever builds the box on screen. At three
+// the matrix holds 83,000 dots against the world view's 9,000. See the `grid`
+// memo, where `globeK` sets the spacing.
 //
-// The threshold above was invisible until it fired: a reader zooming out at the
-// whole world got nothing, nothing, nothing, and then the planet. Whether the
-// gesture was doing anything at all was unknowable until it had already done
-// everything, which is the one question a control has to answer continuously.
-//
-// So the push drives the crossing directly, and what it buys is the first fifth
-// of it — the map lifting at its edges, plainly the beginning of the move that
-// fires at the end. A fifth is enough to read as the world starting to come
-// apart and far too little to be mistaken for having arrived, which is what
-// keeps it an offer rather than a commitment.
-const PEEK_MAX = 0.2;
-// How quickly the drawn fraction chases the pushed one, as the share of the gap
-// closed per frame at 60Hz. Fast out and slow back, which is the asymmetry every
-// rubber band has: going out is the reader's own hand and has to keep up with
-// it, coming back is the band and wants to be seen.
-//
-// The attack cannot be gentle here. A mouse notch is 0.16 log units against a
-// threshold of 0.8, so a fast wheel spends the whole gesture in five frames; an
-// ease that closed a fifth of the gap each time would have shown a twelfth of
-// the fold by the time it fired, which is an offer nobody can see in time to
-// decline. Half the gap a frame still smooths a notch into a movement rather
-// than a step, and arrives with most of the lean drawn.
-const PEEK_ATTACK = 0.5;
-const PEEK_RELEASE = 0.16;
-// Below this the peek is over and the rail is drawn as itself. Not zero: an
-// exponential approach never arrives, and every frame of the tail it never
-// arrives through is a full repaint of the world for a difference nobody can
-// see. At a fiftieth of the lean, itself a fifth of the crossing, this cuts the
-// spring off at four parts in a thousand of the fold.
-const PEEK_MIN = 0.02;
-
-/**
- * Add refused zoom to `store`, and say whether that is enough to cross.
- *
- * Firing empties it: the swap that follows takes UNFOLD_MS, and a wheel still
- * turning through the end of it must not arrive with the threshold already met
- * and flip straight back.
- */
-function spend(store, amount, now) {
-  if (now - store.at > SWAP_DECAY_MS) store.amount = 0;
-  store.at = now;
-  store.amount += amount;
-  if (store.amount < SWAP_PUSH) return false;
-  store.amount = 0;
-  return true;
-}
+// Set where the turn still reads as one. Measured, turning, on a 1400×828 tube:
+// 60fps to about two, 50 at three, 41 at four — against 31 and 26 for those last
+// two before the near-side cull and the two precomputed arrays that feed it (see
+// `gridVectors`, `gridDaylit`, and `minCos` in `paintLand`). What remains at the
+// stop is d3 projecting the dots that survive the cull, which is a real cost for
+// a real number of dots rather than work being wasted; going further would mean
+// doing the orthographic transform here instead of asking d3 for it.
+const GLOBE_MAX_K = 3;
 // Frontiers are an orientation aid, not geography, and they are held to the
 // band where they are one. Below, the map is a planet and a political overlay
 // is noise on it. Above, the boundary data gives out: it runs 62 km between
@@ -666,7 +628,7 @@ function Cycle({ label, value, options, onChange, title }) {
  */
 function paintLand(
   ctx,
-  { projection, grid, palette, graticule, daylight, borders, theme, sunAt, width, height, frontierK, sphere }
+  { projection, grid, vectors, lit: litFlags, palette, graticule, daylight, borders, theme, sunAt, width, height, frontierK, sphere }
 ) {
   // Which side of the terminator gets shaded is a property of the medium,
   // not a colour choice. On a tube the lit hemisphere is lit: light is
@@ -835,17 +797,44 @@ function paintLand(
     // The unfold is the caller that does want them, and it says so with a
     // `back` above zero.
     const hidden = sphere.back <= 0;
+    // And how much of that near side the glass can actually hold.
+    //
+    // A dot at angular distance θ from the middle of the disk lands `r·sinθ`
+    // from its centre, so nothing further out than the furthest corner of the
+    // canvas can be seen. While the planet is smaller than the tube that is the
+    // whole hemisphere and this is the horizon, exactly as before; zoomed in it
+    // closes down, and at the far stop it throws away most of the world before
+    // asking any of it about daylight. The cull has to be the same shape as the
+    // one the projection makes, or dots go missing at the limb.
+    const corner = Math.max(
+      Math.hypot(sphere.x, sphere.y),
+      Math.hypot(width - sphere.x, sphere.y),
+      Math.hypot(sphere.x, height - sphere.y),
+      Math.hypot(width - sphere.x, height - sphere.y)
+    );
+    const minCos = hidden && sphere.r > corner ? Math.sqrt(1 - (corner / sphere.r) ** 2) : 0;
     // A dot on the near side has already been asked which side it is on, and
     // the globe's own projection asks again before it will answer — it is what
     // culls the far side. Where the answer is known, the cull can be skipped
     // and the sphere addressed directly.
     const put = hidden && projection.plain ? projection.plain : projection;
     const passes = [[], [], [], []]; // near/far × day/night
-    for (const point of grid) {
-      const near = facing(point[0], point[1], sphere.rotate) ? 0 : 2;
-      if (near && hidden) continue;
-      const night = daylit(point[0], point[1], sun) ? 0 : 1;
-      passes[near + night].push(point);
+    // Where the planet is pointed, as the unit vector the dots are held as.
+    // Rotation is applied as [-centreLon, -centreLat], so the centre is its
+    // negative.
+    const cLon = -sphere.rotate[0] * RAD;
+    const cLat = -sphere.rotate[1] * RAD;
+    const cx = Math.cos(cLat) * Math.cos(cLon);
+    const cy = Math.cos(cLat) * Math.sin(cLon);
+    const cz = Math.sin(cLat);
+    for (let i = 0; i < grid.length; i++) {
+      const cos = vectors
+        ? vectors[i * 3] * cx + vectors[i * 3 + 1] * cy + vectors[i * 3 + 2] * cz
+        : cosCentre(grid[i][0], grid[i][1], sphere.rotate);
+      if (hidden && cos <= minCos) continue;
+      const point = grid[i];
+      const night = (litFlags ? litFlags[i] : daylit(point[0], point[1], sun)) ? 0 : 1;
+      passes[(cos > 0 ? 0 : 2) + night].push(point);
     }
     // A dot can only be taken away from, never added to — it is already the
     // full weight of its token — so which half of the world gets faded is a
@@ -1460,20 +1449,16 @@ const WorldMap = ({
   // cannot close over this: they have to ask.
   const spinningRef = useRef(spinning);
   spinningRef.current = spinning;
-  // Asked for the same reason, from the same places: the frame coalescer below
-  // is built once and outlives any particular render's props.
-  const onSettingRef = useRef(onSetting);
-  onSettingRef.current = onSetting;
 
   // How much of the tube the planet takes.
   //
   // One is as large as the glass will hold, which is the size the unfold hands
   // over at and the size the mode always opens at. Below it the reader has
-  // pushed the world away to stand further off it — the one thing zoom can
-  // still honestly mean here. There is deliberately nothing above one: the
-  // globe is drawn from a matrix built for the whole flat world at k = 1, and
-  // a planet drawn larger than that is a planet asking the matrix for detail
-  // nobody put in it.
+  // pushed the world away to stand further off it; above it they have leaned in,
+  // and the matrix is rebuilt finer to meet them — `globeK` is a term in the
+  // spacing, so a planet drawn twice the size is drawn from twice the dots
+  // rather than from the same ones spread further apart. `GLOBE_MAX_K` is where
+  // that stops paying for itself.
   const [globeK, setGlobeK] = useState(1);
   const globeKRef = useRef(globeK);
   globeKRef.current = globeK;
@@ -1598,41 +1583,23 @@ const WorldMap = ({
       setView({ k: MIN_K, x: 0, y: 0 });
       setSettled({ k: MIN_K, x: 0, y: 0 });
     }
-    // Whichever way it is going, the swap is drawn from `unfoldProjection`,
-    // whose sphere at t = 0 is the full-sized one. A planet left pushed away
-    // from a previous visit would be that size on the last frame before the
-    // move and the full size on its first, which is a jump on the one move
-    // that exists to not have any. Crossing in past the stop already leaves it
-    // here, so this is for the mode being turned on some other way.
+    // The swap is drawn from `unfoldProjection`, whose sphere at t = 0 is the
+    // full-sized one. A planet left pushed away or pulled in from a previous
+    // visit would be that size on the last frame before the move and the full
+    // size on its first, which is a jump on the one move that exists to not
+    // have any.
     setGlobeK(1);
-    if (reduceMotion || !width || !height) {
-      peekRef.current.f = 0;
-      peekRef.current.spin = null;
-      return;
-    }
-    // Taken over from the offer rather than started beside it. A lean that
-    // reached the threshold has the world already part way across, and a swap
-    // beginning at the rail would snap it back to flat for one frame before
-    // running the same move again — the one visible seam this whole mechanism
-    // exists to remove. The peek's own rotation comes with it for the same
-    // reason: it is the world the reader has been looking at.
-    const peek = peekRef.current;
-    const from = peek.f > 0 ? (spinning ? 1 - peek.f * PEEK_MAX : peek.f * PEEK_MAX) : spinning ? 1 : 0;
-    const spin = peek.spin ?? target;
-    peek.f = 0;
-    peek.spin = null;
+    if (reduceMotion || !width || !height) return;
     // `t` is the unfold's own number: 0 is the sphere, 1 is the map. Which way
-    // it runs is the whole of the difference between the two directions.
-    const to = spinning ? 0 : 1;
+    // it runs is the whole of the difference between the two directions, and
+    // the whole of it is run now: the dial is the only thing that starts this,
+    // so there is never a part of the fold already crossed to take over from.
     swapRef.current = {
-      from,
-      to,
+      from: spinning ? 1 : 0,
+      to: spinning ? 0 : 1,
       at: null,
-      spin,
-      // Paced rather than fixed, so the part already crossed is not run again in
-      // the time the whole of it would have taken. The rate is what the unfold
-      // has always had; only the distance left is different.
-      ms: Math.max(1, UNFOLD_MS * Math.abs(to - from)),
+      spin: target,
+      ms: UNFOLD_MS,
     };
   }, [spinning, layerProjection, reduceMotion, width, height, stopTurn]);
 
@@ -1821,6 +1788,35 @@ const WorldMap = ({
     );
   }, [base, layerProjection, settled.k, spinning, globeK, width, height]);
 
+  /**
+   * The same dots as unit vectors on the sphere, three floats each.
+   *
+   * Which dots are on screen is the cosine of their angular distance from where
+   * the planet is pointed, and that is a dot product between two unit vectors —
+   * but only if the vectors already exist. Computed from lon/lat inside the
+   * frame it costs five trigonometric calls per dot per frame, which at the far
+   * zoom is three quarters of a million of them at sixty hertz, for an answer
+   * that is thrown away for most of the array.
+   *
+   * The dots do not move between settles and the viewer does, so this is built
+   * once with the matrix and read every frame. Only the globe wants it; the flat
+   * map has no such question and does not pay for it.
+   */
+  const gridVectors = useMemo(() => {
+    if (!spinning) return null;
+    const out = new Float64Array(grid.length * 3);
+    for (let i = 0; i < grid.length; i++) {
+      const lon = grid[i][0] * RAD;
+      const lat = grid[i][1] * RAD;
+      const cosLat = Math.cos(lat);
+      out[i * 3] = cosLat * Math.cos(lon);
+      out[i * 3 + 1] = cosLat * Math.sin(lon);
+      out[i * 3 + 2] = Math.sin(lat);
+    }
+    return out;
+  }, [grid, spinning]);
+
+
   // Its own slow clock, like the one the footer keeps: the sun moving is not a
   // reason to re-render anything but the layer it shades.
   const [sunAt, setSunAt] = useState(() => Date.now());
@@ -1837,7 +1833,28 @@ const WorldMap = ({
   // Read by the render loop the same way the live projection is, rather than
   // closed over: the loop must not be torn down and rebuilt to learn that the
   // sun moved a minute.
+  /**
+   * Which of those dots are in daylight, one byte each.
+   *
+   * The same argument as the vectors above, against a slower clock. Neither the
+   * dots nor the sun move between frames — the terminator is on `sunAt`, which
+   * ticks once a minute — so asking each dot where the sun is, sixty times a
+   * second, is the same answer recomputed four thousand times over. It was a
+   * sixth of a turn's frame time at the far zoom.
+   */
+  const gridDaylit = useMemo(() => {
+    if (!spinning) return null;
+    const sun = subsolar(new Date(sunAt));
+    const out = new Uint8Array(grid.length);
+    for (let i = 0; i < grid.length; i++) {
+      out[i] = daylit(grid[i][0], grid[i][1], sun) ? 1 : 0;
+    }
+    return out;
+  }, [grid, spinning, sunAt]);
+
   const gridRef = useRef(grid);
+  const gridVectorsRef = useRef(gridVectors);
+  const gridDaylitRef = useRef(gridDaylit);
   const sunRef = useRef(sunAt);
   const settingsRef = useRef(settings);
   const themeRef = useRef(theme);
@@ -1848,6 +1865,8 @@ const WorldMap = ({
   const binsRef = useRef(bins);
   const burnFullRef = useRef(burnFull);
   gridRef.current = grid;
+  gridVectorsRef.current = gridVectors;
+  gridDaylitRef.current = gridDaylit;
   sunRef.current = sunAt;
   settingsRef.current = settings;
   themeRef.current = theme;
@@ -1984,57 +2003,26 @@ const WorldMap = ({
    */
   const holding = useCallback(() => heldStill.current || swapRef.current !== null, []);
 
-  // Zoom asked for at a rail and refused. See `spend`.
-  const swapPush = useRef({ amount: 0, at: 0 });
-  // How much of that refusal is currently on the glass.
-  //
-  // `f` is the eased fraction actually being drawn, 0 at the rail and 1 at the
-  // threshold; `spin` is where the planet has to be pointed for the half-folded
-  // world to be the same world, captured once when the lean begins so it cannot
-  // wander mid-gesture. Everything else about the peek is derived from the push
-  // store above each frame, which is what keeps the two from disagreeing about
-  // how hard the reader is pushing.
-  const peekRef = useRef({ f: 0, spin: null });
   /**
-   * Offer refused zoom towards a crossing, and cross if it is enough.
+   * Zoom on the globe: how close the reader is standing to the planet.
    *
-   * Everything this reads it reads through a ref, which is what lets it be
-   * built once: the frame coalescer below is also built once, and a version of
-   * this captured from the first render would otherwise be asking that render's
-   * questions for the rest of the session.
+   * A sphere has no pan and no k, so this is the only thing zoom can mean here.
+   * Out, the world shrinks to `GLOBE_MIN_K` and stops, because a globe is
+   * already the whole planet and further off is not a view of anything more. In,
+   * it grows to `GLOBE_MAX_K`, where the land matrix runs out of dots to give.
    *
-   * Refused while a swap is already running — it owns the projection for its
-   * whole length — and before the world has arrived, which is the gate every
-   * other control here waits on.
-   */
-  const cross = useCallback((amount) => {
-    if (amount <= 0 || holding()) return;
-    if (spend(swapPush.current, amount, performance.now())) {
-      onSettingRef.current("globe", !spinningRef.current);
-    }
-  }, [holding]);
-
-  /**
-   * Zoom on the globe: the planet pushed away, and the map above it.
-   *
-   * The same shape as the flat map's rail, read from the other end. Out, the
-   * world shrinks until `GLOBE_MIN_K` and then stops, and there is nothing
-   * past the stop for the effort to mean — a globe is already the whole of the
-   * planet, so being further from it is not a view of anything more. In, it
-   * grows back to the size the two shapes agree on, and the part of the
-   * gesture that lands past *that* is the part that means the map, measured
-   * the same way and spent on the same crossing.
+   * Both ends are stops and neither is a door: zooming does not change which
+   * shape the world is drawn as, and the `view` dial is the only thing that
+   * does.
    */
   const zoomGlobe = useCallback(
     (factor) => {
       if (holding()) return;
       const was = globeKRef.current;
-      const asked = was * factor;
-      const given = Math.min(1, Math.max(GLOBE_MIN_K, asked));
-      if (factor > 1 && given < asked) cross(Math.log(asked / given));
+      const given = Math.min(GLOBE_MAX_K, Math.max(GLOBE_MIN_K, was * factor));
       if (given !== was) setGlobeK(given);
     },
-    [cross, holding]
+    [holding]
   );
 
   /**
@@ -2089,25 +2077,17 @@ const WorldMap = ({
     if (q.zoom) {
       const { x, y, factor } = q.zoom;
       q.zoom = null;
-      // Zoom out the view could not absorb goes to the crossing.
-      //
-      // Not simply "already at the rail and pushed again": a gesture that
-      // starts zoomed in and runs all the way out arrives at the rail and
-      // through it in one movement, and the part that lands past the stop is
-      // exactly the part that means the globe. Measured rather than counted,
-      // so it does not matter whether that arrives as one long wheel or twenty
-      // notches — what is spent is the difference between the zoom asked for
-      // and the zoom the world has left to give.
+      // Zoom the view cannot absorb is simply refused. It used to be spent on
+      // crossing to the globe, which meant the flat map could not be zoomed out
+      // to the world and left there.
       //
       // Read from the ref rather than from `prev` below, because the answer is
-      // needed before deciding whether there is an update to make at all.
+      // needed before deciding whether there is an update to make at all: at the
+      // stop with nothing left to move, `clampView` would hand back a view
+      // identical in all but identity, and every wheel notch against the rail
+      // would still be a render of the largest component in the app.
       const was = viewRef.current.k;
-      const asked = was * factor;
-      const given = Math.min(MAX_K, Math.max(MIN_K, asked));
-      if (factor < 1 && given > asked) cross(Math.log(given / asked));
-      // At the stop with nothing left to move, `clampView` would hand back a
-      // view identical in all but identity, and every wheel notch against the
-      // rail would still be a render of the largest component in the app.
+      const given = Math.min(MAX_K, Math.max(MIN_K, was * factor));
       if (given !== was) {
         setView((prev) => clampView(zoomAbout(prev, x, y, factor), fitted, w, h));
       }
@@ -2123,7 +2103,7 @@ const WorldMap = ({
       setCursor(q.cursor);
       q.cursor = undefined;
     }
-  }, [cross, stopTurn]);
+  }, [stopTurn]);
 
   const schedule = useCallback(() => {
     if (!pendingFrame.current) pendingFrame.current = requestAnimationFrame(flush);
@@ -3031,6 +3011,8 @@ const WorldMap = ({
       paintLand(ctx, {
         projection: unfoldProjection(t, width, height, rotate),
         grid: gridRef.current,
+        vectors: gridVectorsRef.current,
+        lit: gridDaylitRef.current,
         palette,
         graticule: settingsRef.current.graticule,
         daylight: settingsRef.current.daylight,
@@ -3215,6 +3197,8 @@ const WorldMap = ({
           paintLand(context, {
             projection: live,
             grid: gridRef.current,
+            vectors: gridVectorsRef.current,
+            lit: gridDaylitRef.current,
             palette,
             graticule: config.graticule,
             daylight: config.daylight,
@@ -3310,6 +3294,8 @@ const WorldMap = ({
       paintLand(ctx, {
         projection: morph,
         grid: gridRef.current,
+        vectors: gridVectorsRef.current,
+        lit: gridDaylitRef.current,
         palette,
         graticule: settingsRef.current.graticule,
         daylight: settingsRef.current.daylight,
@@ -3353,60 +3339,6 @@ const WorldMap = ({
         return false;
       }
       drawMorph(swap.from + (swap.to - swap.from) * glide(p), swap.spin, now);
-      return true;
-    };
-
-    /**
-     * The crossing, held part way open by a reader still leaning on the rail.
-     *
-     * The same move `drawSwap` runs, at a fraction the gesture is choosing
-     * rather than one a clock is. Nothing here advances: let go and the fraction
-     * falls back to the rail, push on and it goes to the threshold and fires.
-     * That is the whole of what makes it an offer — the reader can see what the
-     * gesture means before it means it, and can decline by stopping.
-     *
-     * Derived from the push store every frame rather than kept in step with it.
-     * The store is the one record of how hard the rail is being leant on, and a
-     * second copy of that, updated from the wheel handler, is a second thing to
-     * be wrong: the two would disagree on exactly the frames that matter, which
-     * are the ones where the gesture ends.
-     */
-    const drawPeek = (now) => {
-      const peek = peekRef.current;
-      const push = swapPush.current;
-      // Effort decays where it is spent. A rail leant on and let go springs
-      // back on the same clock that stops it firing.
-      const stale = now - push.at > SWAP_DECAY_MS;
-      const target = stale ? 0 : Math.min(1, push.amount / SWAP_PUSH);
-      peek.f += (target - peek.f) * (target > peek.f ? PEEK_ATTACK : PEEK_RELEASE);
-
-      if (peek.f < PEEK_MIN && target === 0) {
-        peek.f = 0;
-        peek.spin = null;
-        return false;
-      }
-
-      // Where the planet has to be pointed for this to be the same world, taken
-      // once at the start of the lean. The flat map's answer is whatever is
-      // under the middle of the tube — the same question the swap asks when it
-      // arms, and it has to be the same answer or the world would jump at the
-      // moment the offer became a crossing.
-      if (!peek.spin) {
-        let spin = spinRef.current;
-        const live = projectionRef.current;
-        if (!spinningRef.current && live?.invert) {
-          const centre = live.invert([width / 2, height / 2]);
-          if (centre && isFinite(centre[0]) && isFinite(centre[1])) {
-            spin = [centre[0], Math.max(-70, Math.min(70, centre[1]))];
-          }
-        }
-        peek.spin = spin;
-      }
-
-      // `t = 1` is the flat map and `t = 0` is the sphere, so which way the lean
-      // runs is which rail it is being made at.
-      const t = spinningRef.current ? peek.f * PEEK_MAX : 1 - peek.f * PEEK_MAX;
-      drawMorph(t, peek.spin, now);
       return true;
     };
 
@@ -3525,10 +3457,6 @@ const WorldMap = ({
       if (particles.current.length) return null;
       if (replayRef.current) return null;
       if (swapRef.current) return null;
-      // A world held part way into the crossing is a world moving on the
-      // reader's own clock, and springing back is motion nothing else here can
-      // see. Both are frames that have to be painted.
-      if (peekRef.current.f > 0) return null;
       if (!unfoldRef.current.done) return null;
       // The sky comes up over the better part of a second once the world has
       // finished flattening, and a ramp is time, not state.
@@ -3622,7 +3550,7 @@ const WorldMap = ({
       ctx.fillStyle = palette.void;
       ctx.fillRect(0, 0, width, height);
 
-      if (drawSwap(now) || drawPeek(now) || drawUnfold(now)) {
+      if (drawSwap(now) || drawUnfold(now)) {
         frame = requestAnimationFrame(render);
         return;
       }
