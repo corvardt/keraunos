@@ -34,3 +34,5 @@ dist-ssr
 # Working notes. docs/shots is kept: the README embeds it.
 /docs/*.md
 /tests.md
+
+/scripts
