@@ -26,6 +26,7 @@ import { createReach } from "./lib/reach.js";
 import { saveStrikes, saveFrame } from "./lib/save.js";
 import { parseArchive, createPlayer, MAX_BYTES as ARCHIVE_MAX_BYTES } from "./lib/archive.js";
 import { roll, hush, MAX_KM as THUNDER_MAX_KM } from "./lib/thunder.js";
+import { fixSpreadKm } from "./lib/fix.js";
 import geoData from "./lib/world.json";
 
 const FEED_LENGTH = 60; // strikes listed in the recent feed
@@ -352,7 +353,10 @@ function App() {
     // above all) the difference is the whole measurement.
     const arrived = Date.now();
     const flash = arrived - (Number(data.delay) || 0) * 1000;
-    history.current.push({ lon: data.lon, lat: data.lat, t: arrived, at: flash });
+    // `gap` rides along because the countdown needs it: it is the only thing in
+    // the frame that says how far out the position may be, and therefore how
+    // wide the band on the arrival has to be.
+    history.current.push({ lon: data.lon, lat: data.lat, t: arrived, at: flash, gap: data.gap });
     // How far this one was heard, filed under what the sky was doing over the
     // path. Taken here because the station list is only ever a list of ids by
     // this point and the registry is already holding the positions; nothing is
@@ -547,9 +551,22 @@ function App() {
         // it arrives; the only thing that matters is whether that moment is
         // still ahead of us. Beyond THUNDER_MAX_KM there is nothing to hear.
         if (km > THUNDER_MAX_KM) continue;
-        const heardAt = (strike.at ?? strike.t) + (km / SPEED_OF_SOUND_KMS) * 1000;
+        const flash = strike.at ?? strike.t;
+        const heardAt = flash + (km / SPEED_OF_SOUND_KMS) * 1000;
         if (heardAt <= now) continue;
-        if (!pending || heardAt < pending.at) pending = { at: heardAt, km };
+        if (!pending || heardAt < pending.at) {
+          // The same arrival worked from each end of where the strike might
+          // actually have been. Ordered on the middle figure rather than on
+          // either edge, so which strike is "next" does not change with how
+          // well it happened to be fixed.
+          const spread = fixSpreadKm(strike.gap);
+          pending = {
+            at: heardAt,
+            km,
+            early: spread === null ? null : flash + (Math.max(0, km - spread) / SPEED_OF_SOUND_KMS) * 1000,
+            late: spread === null ? null : flash + ((km + spread) / SPEED_OF_SOUND_KMS) * 1000,
+          };
+        }
       }
       setWatch({ nearest: nearest <= WATCH_MAX_KM ? nearest : null, thunder: pending });
     }, STORM_EVERY_MS);

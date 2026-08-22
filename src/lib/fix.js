@@ -38,6 +38,34 @@ export function fixQuality(gap) {
   return 1 - (gap - SURROUNDED) / (ONE_SIDED - SURROUNDED);
 }
 
+// How far out the position may be, at each end of that ramp.
+//
+// Stated rather than measured, and the distinction matters: `fixQuality` above
+// is calibrated — the gap was reproduced from the raw frames and checked at
+// r = 1.000 — whereas these two are a reading of what this network is generally
+// held to manage, a kilometre or two when a strike is ringed and something far
+// worse when it is seen from one side. Nothing here has been checked against
+// ground truth, because we have none.
+//
+// They are worth stating anyway. The countdown is the one number on this
+// instrument where the position error is bigger than the thing being measured:
+// a strike eight kilometres off is twenty-three seconds of sound, and being
+// four kilometres wrong about where it fell is twelve of them. A countdown
+// printed to the second implies a precision the network cannot supply, and a
+// band with honest ends is a better answer than a point with none.
+const NEAR_KM = 2;
+const FAR_KM = 10;
+
+/**
+ * The plus-or-minus on a strike's position, in kilometres, or null where the
+ * network said nothing about how it was fixed.
+ */
+export function fixSpreadKm(gap) {
+  const quality = fixQuality(gap);
+  if (quality === null) return null;
+  return NEAR_KM + (FAR_KM - NEAR_KM) * (1 - quality);
+}
+
 /** The same reading in words, for a panel that has room to say it. */
 export function fixLabel(gap) {
   if (!Number.isFinite(gap)) return null;

@@ -406,6 +406,18 @@ function ReachTrace({ reach }) {
  * two seconds, and a countdown that moved in two-second steps would be a worse
  * lie than no countdown at all. Ticks four times a second and rounds, so the
  * figure falls one second at a time.
+ *
+ * A band rather than a figure, where the network said enough about the fix to
+ * draw one. Sound covers 343 metres a second and this network places a strike
+ * to somewhere between a kilometre and ten, so the position error is worth more
+ * seconds than the countdown has: a single number here would be precise to the
+ * second and wrong by twenty. The ends are what the arithmetic actually
+ * supports, and they close as the sound gets nearer.
+ *
+ * The middle figure is kept when the frame carried no gap — an archive, mostly,
+ * where the strikes were saved before the fix was recorded. Nothing is known
+ * about the spread there, and inventing one would be the same fault the band
+ * exists to fix.
  */
 const Thunder = memo(function Thunder({ thunder }) {
   const [, tick] = useState(0);
@@ -416,17 +428,31 @@ const Thunder = memo(function Thunder({ thunder }) {
   }, [thunder]);
 
   if (!thunder) return null;
-  const left = (thunder.at - Date.now()) / 1000;
+  const now = Date.now();
+  const left = (thunder.at - now) / 1000;
   // It has arrived. Held for a beat rather than vanishing, so the count is seen
   // to finish rather than appearing to have been cancelled.
   if (left <= -2) return null;
 
+  // The near end of the band can be behind us while the far end is still ahead:
+  // the sound may already have passed, or may have another twenty seconds to
+  // run, and that is genuinely the state of the knowledge. Said as a ceiling
+  // rather than as a range starting in the past, which reads as a fault.
+  const early = thunder.early === null ? null : (thunder.early - now) / 1000;
+  const late = thunder.late === null ? null : (thunder.late - now) / 1000;
+  const band =
+    late === null || late <= 0
+      ? null
+      : early > 0
+        ? `${Math.ceil(early)}–${Math.ceil(late)}`
+        : `≤${Math.ceil(late)}`;
+
   return (
     <Readout
       label="Thunder"
-      value={left <= 0 ? "now" : Math.ceil(left)}
-      unit={left <= 0 ? "" : `s · ${Math.round(thunder.km)}km`}
-      hint="The sound of a strike already seen, still travelling, at 343 m/s."
+      value={band ?? (left <= 0 ? "now" : Math.ceil(left))}
+      unit={band === null && left <= 0 ? "" : `s · ${Math.round(thunder.km)}km`}
+      hint="The sound of a strike already seen, still travelling, at 343 m/s. The range is the network's own uncertainty about where the strike fell, carried through at the speed of sound."
     />
   );
 });
