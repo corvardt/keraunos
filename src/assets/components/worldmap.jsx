@@ -787,8 +787,32 @@ function paintLand(
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
+  // Where a dot stops being on the map. The canvas is the answer on the globe:
+  // a sphere has no edge, and the poles are drawn like any other point. The
+  // flat map does have one — Mercator stops at `LAT_LIMIT` — and the matrix is
+  // built past it, to the poles, so that the globe has its caps. Culled against
+  // the canvas alone those rows land in the band between the edge of the world
+  // and the edge of the tube: a couple of pixels of the fit's padding on a
+  // desktop, where the world nearly fills the height, and most of the screen on
+  // a phone, where a tall viewport fits the world by its width and leaves deep
+  // empty bands above and below it. That is where the dots were escaping to.
+  let left = -dot;
+  let top = -dot;
+  let right = deviceW + dot;
+  let bottom = deviceH + dot;
+  if (!sphere) {
+    const [westX] = projection([-180, 0]);
+    const [eastX] = projection([180, 0]);
+    const [, northY] = projection([0, LAT_LIMIT]);
+    const [, southY] = projection([0, -LAT_LIMIT]);
+    left = Math.max(left, westX * dpr);
+    right = Math.min(right, eastX * dpr);
+    top = Math.max(top, northY * dpr);
+    bottom = Math.min(bottom, southY * dpr);
+  }
+
   const mark = (x, y) => {
-    if (x < -dot || y < -dot || x > deviceW + dot || y > deviceH + dot) return;
+    if (x < left || y < top || x > right || y > bottom) return;
     ctx.fillRect(Math.round(x - dot / 2), Math.round(y - dot / 2), dot, dot);
   };
 
@@ -1360,7 +1384,6 @@ const WorldMap = ({
   theme,
   settings,
   summary,
-  lost,
   paletteKey,
   onConfig,
   replay,
@@ -4171,21 +4194,6 @@ const WorldMap = ({
       >
         <Transport span={span} behind={replay ? Date.now() - replay.at : 0} onSeek={onSeek} />
       </div>
-
-      {/* Nothing is arriving. Said on the glass, because everything else the
-          tube can do in this state (an empty map, a burn-in fading out on
-          schedule) is indistinguishable from a quiet planet, and the planet is
-          never quiet. What is still drawn is the last of what was received,
-          which is why the mark decays rather than freezing. */}
-      {lost && (
-        <div
-          className="pointer-events-none absolute right-3 top-3 flex items-center gap-2 text-2xs uppercase tracking-label unselectable"
-          role="status"
-        >
-          <span className="lost-pulse h-1.5 w-1.5 rounded-full bg-text" aria-hidden="true" />
-          <span className="text-text glow">no signal</span>
-        </div>
-      )}
 
       {/* A held mark on the filtered place, and a soft one on the feed row
           under the pointer. Both are DOM so the canvas loop stays untouched. */}

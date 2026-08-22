@@ -61,13 +61,6 @@ const REGION_MIN = 3; // strikes a cell needs before it is worth geocoding
 // while the socket keeps delivering, and the backlog would otherwise grow for
 // as long as the tab is left alone and then land in one frame on return.
 const MAX_QUEUE = 800;
-// Somewhere on earth is always having weather: the feed runs at several strikes
-// a second at its quietest. Silence this long is therefore a fault and not a
-// lull, and it has to be said out loud, because a map that has stopped being
-// fed looks exactly like a map of calm weather, right down to the burn-in
-// draining away on schedule.
-const SILENCE_MS = 25000;
-
 // Thunder. Sound covers about a third of a kilometre a second, which is the one
 // piece of physics a lightning map can hand back to the person reading it: the
 // flash is already here, the sound is still coming, and the gap is a distance
@@ -157,8 +150,6 @@ function App() {
   const [reach, setReach] = useState(null);
   const [stats, setStats] = useState(NO_STATS);
   const [status, setStatus] = useState({ phase: "idle", message: "idle", host: null });
-  // Nothing has arrived for a while, whatever the socket believes about itself.
-  const [silent, setSilent] = useState(false);
   const [booted, setBooted] = useState(false);
   const finishBoot = useCallback(() => setBooted(true), []);
   // Raised when the readout starts to fade rather than when it has finished, so
@@ -272,9 +263,6 @@ function App() {
   // Strikes buffer here and drain on a timer. Writing state per message would
   // re-render the whole tree several times a second.
   const pending = useRef([]);
-  // Seeded at mount rather than at zero, so the first seconds of a session are
-  // read as connecting rather than as a network that has fallen over.
-  const lastArrival = useRef(Date.now());
   const binCounts = useRef(new Map());
   const total = useRef(0);
   const nextId = useRef(0);
@@ -350,7 +338,6 @@ function App() {
   );
 
   const handleDataReceived = useCallback((data) => {
-    lastArrival.current = Date.now();
     pending.current.push(data);
     strikeQueue.current.push(data);
     // Trimmed with slack rather than on every message: a copy per strike would
@@ -445,10 +432,6 @@ function App() {
       // Burn-in releases: cells untouched for the burn window are dropped, and
       // the rest carry how much life they have left. Runs even in a lull, so
       // the map empties itself when the storms move on.
-      // An archive with a quiet quarter of an hour in it is not a feed that has
-      // stopped, and neither is one that has run out. Both look identical from
-      // here — strikes stop arriving — so the source has to be asked.
-      setSilent(!archiving.current && now - lastArrival.current > SILENCE_MS);
       const active = [];
       const places = new Map();
       for (const [key, cell] of binCounts.current) {
@@ -690,7 +673,6 @@ function App() {
     strikeQueue.current = [];
     binCounts.current.clear();
     total.current = 0;
-    lastArrival.current = Date.now();
     rates.current = createRate();
     day.current = createDay();
     reachRef.current = createReach();
@@ -707,7 +689,6 @@ function App() {
     setSelection(null);
     setFocus(null);
     setWatch(null);
-    setSilent(false);
   }, []);
 
   const loadArchive = useCallback(
@@ -924,9 +905,6 @@ function App() {
             theme={theme}
             settings={settings}
             summary={`World lightning map. ${stats.rate} strikes per minute, ${stats.storms} storm cells tracked, ${stats.total} detected this session.`}
-            // The tube says so itself, rather than leaving it to a status line
-            // in the footer that nobody watching the weather is reading.
-            lost={silent || status.phase === "down"}
             paletteKey={paletteKey}
             // With the header hidden the map carries the way back to it, so
             // turning the chrome off is never a door that locks behind you.
