@@ -81,7 +81,21 @@ import {
 // works through their caches, and this is an instrument about a storm that is
 // happening. RealEarth publishes the same scans within fifteen, in Mercator
 // tiles that land exactly on the grid below, and will say what it has.
-const REALEARTH = "https://realearth.ssec.wisc.edu/api/image";
+//
+// Asked over WMS rather than through the tile API it used to use, and the
+// reason is the meter rather than the bytes. RealEarth's tile endpoint returns
+// 256 square whatever it is asked for — `&size=64` is a no-op, measured
+// identical to the byte at every level — so each tile arrived at sixteen times
+// the samples this file has anywhere to put, and the extra fifteen sixteenths
+// were thrown away on the next line. `mapserv` honours WIDTH and HEIGHT, so the
+// same tile is 4.5 KB instead of 40.
+//
+// The bytes are the smaller half of it. RealEarth meters anonymous use by pixel
+// volume — 500 megapixels in a rolling day — and past it the imagery comes back
+// watermarked rather than refused, which is the caption `refused` below exists
+// to catch. At 256 a single tab left at world zoom spent about 264 MP a day,
+// over half the allowance, before anybody panned. At SAMPLES it spends 17.
+const REALEARTH = "https://realearth.ssec.wisc.edu/cgi-bin/mapserv";
 
 // EUMETSAT's GeoServer, reached by way of our own origin rather than directly.
 //
@@ -433,38 +447,13 @@ const convective = (lat) => ramp(Math.abs(lat), 62, 35);
  * so a moment between scans, or one a dish has not reached yet, is answered
  * with the last real picture rather than an error or a gap.
  */
-export function url(disc, tile, frame, at) {
-  if (disc.service === REALEARTH) {
-    // RealEarth cuts the world on the same grid this file does, so there is no
-    // box to describe: the tile's own address is the request. Asked at the far
-    // end of the step rather than its start, because the scan stamped 13:20 is
-    // published at 13:20:21 and a request for 13:20:00 exactly resolves to the
-    // step before it — a free ten minutes lost to a rounding.
-    //
-    // And asked at SAMPLES across, which is the same thing the WMS call below
-    // asks for and the only resolution this file has anywhere to put. Left off,
-    // the tile arrives at 256 and half of it is thrown away on the next line —
-    // but worse, asking for detail finer than the dish measured is a thing
-    // RealEarth refuses in the rudest possible way. It serves the tile with
-    // "Size limit exceeded" printed across it, and a caption rendered into the
-    // imagery is read by the calibration below as a cloud: pure white is the
-    // coldest top there is, so the layer draws the words as a storm. It only
-    // bites where a Mercator tile covers least ground, which is to say away
-    // from the equator and at the deepest zoom, and the map is at its most
-    // convincing exactly there.
-    const t = new Date(at + STEP_MS - 1000).toISOString(); // 2026-08-16T13:59:59.000Z
-    const stamp = `${t.slice(0, 4)}${t.slice(5, 7)}${t.slice(8, 10)}.${t.slice(11, 13)}${t.slice(14, 16)}${t.slice(17, 19)}`;
-    return (
-      `${disc.service}?products=${disc.layer}` +
-      `&time=${stamp}&x=${tile.x}&y=${tile.y}&z=${tile.z}&size=${SAMPLES}`
-    );
-  }
-
+export function url(disc, frame, at) {
+  // One WMS call for both services now, because both of them are one. They
+  // differ only in how the moment is named, which is the block below.
   const params = new URLSearchParams({
     SERVICE: "WMS",
     VERSION: "1.3.0",
     REQUEST: "GetMap",
-    LAYERS: disc.layer,
     STYLES: "",
     CRS: "EPSG:3857",
     BBOX: [frame.minX, frame.minY, frame.maxX, frame.maxY].join(","),
@@ -472,8 +461,33 @@ export function url(disc, tile, frame, at) {
     HEIGHT: String(SAMPLES),
     FORMAT: "image/png",
     TRANSPARENT: "TRUE",
-    TIME: new Date(at).toISOString().replace(/\.\d+Z$/, "Z"),
   });
+
+  if (disc.service === REALEARTH) {
+    // RealEarth has no TIME dimension. It publishes every scan it holds as a
+    // layer of its own, named for the moment it was taken, inside a mapfile of
+    // the product's own name — so the moment is chosen by asking for a
+    // different layer rather than by a parameter.
+    //
+    // Asked at the far end of the step rather than its start, exactly as the
+    // tile API was: the scan stamped 13:20 is published at 13:20:20, so a
+    // request naming 13:10:00 resolves to the step before it and loses a free
+    // ten minutes to a rounding. Measured: `..._131959` and `..._131020` are
+    // the same image to the byte, and `..._131000` is the previous scan.
+    const t = new Date(at + STEP_MS - 1000).toISOString(); // 2026-08-16T13:59:59.000Z
+    const stamp = `${t.slice(0, 4)}${t.slice(5, 7)}${t.slice(8, 10)}_${t.slice(11, 13)}${t.slice(14, 16)}${t.slice(17, 19)}`;
+    params.set("map", `${disc.layer}.map`);
+    params.set("LAYERS", `${disc.layer}_${stamp}`);
+    // ponytail: a layer name RealEarth does not recognise is answered with the
+    // current scan, 200 OK and no complaint — so a change to their naming would
+    // show up as a map that quietly stopped rewinding rather than as an error.
+    // `scripts/check-ir.cjs` holds the resolution to account; if that is ever
+    // not enough, the fix is to read the stamp back out of GetCapabilities.
+    return `${disc.service}?${params}`;
+  }
+
+  params.set("LAYERS", disc.layer);
+  params.set("TIME", new Date(at).toISOString().replace(/\.\d+Z$/, "Z"));
   return `${disc.service}?${params}`;
 }
 
@@ -487,10 +501,20 @@ export function url(disc, tile, frame, at) {
  * storm — the one failure on this map that invents a reading rather than
  * omitting one.
  *
- * It is not a threshold anything here can stay under. It moves: the same tile,
- * at the same moment and the same size, is refused one minute and served the
- * next, and asking more slowly does not help. Asking at SAMPLES rather than at
- * the native 256 makes it rare, and this catches the rest.
+ * It looked for a long time like a threshold nothing could stay under, because
+ * the same tile at the same moment and the same size was refused one minute and
+ * served the next. It is documented, and the reason it moved is that both of
+ * its triggers are cumulative over a rolling day rather than per request: 1,024
+ * pixels in either dimension, with geographically adjacent requests counting
+ * together, and 500 megapixels of volume. A tile pyramid is nothing but
+ * adjacent requests, so the tube walked into both.
+ *
+ * Asking over WMS at SAMPLES rather than taking the tile API's fixed 256 is
+ * what buys the room — sixteen times less of the thing being counted, from
+ * about half the daily allowance for one tab down to a thirtieth — and this
+ * still catches the rest. The service says so in an `RE-Watermark` header too,
+ * which would be a better test than reading the pixels back; it is out of reach
+ * behind `new Image()`, and would cost a fetch and a decode to get at.
  *
  * The test is exact because the caption is the only thing in this data that is
  * drawn rather than measured. Infrared arrives as a stretch well inside the
@@ -653,8 +677,7 @@ async function fetchTile(z, x, y, at) {
     return { field: new Uint8Array(SAMPLES * SAMPLES), lat, any: false };
   }
 
-  const tile = { z, x, y };
-  const images = await Promise.all(discs.map((disc) => load(url(disc, tile, frame, at), disc)));
+  const images = await Promise.all(discs.map((disc) => load(url(disc, frame, at), disc)));
   if (!images.some(Boolean)) return null;
 
   // Each disc is decoded on its own sheet rather than after they are stacked.

@@ -30,7 +30,7 @@ const near = (actual, expected, tolerance, what) =>
     `${actual.toFixed(4).padStart(10)}  (expected ${expected}±${tolerance})`
   );
 
-import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) => {
+import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then(async (ir) => {
   const {
     DISCS,
     SAMPLES,
@@ -47,6 +47,8 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) =
     scalarFor,
     flat,
     MIN_PATCH,
+    STEP_MS,
+    LAG_MS,
   } = ir;
 
   // ── The grid ──────────────────────────────────────────────────────────────
@@ -378,20 +380,28 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) =
     const frame = tileFrame(tile.z, tile.x, tile.y);
     const byId = Object.fromEntries(DISCS.map((d) => [d.id, d]));
 
-    const re = url(byId["goes-east"], tile, frame, at);
-    pass(/[?&]x=9(&|$)/.test(re) && /[?&]y=17(&|$)/.test(re) && /[?&]z=5(&|$)/.test(re),
-      "RealEarth is asked for the tile's own address");
+    const re = url(byId["goes-east"], frame, at);
+    // RealEarth has no TIME dimension: every scan it holds is a layer of its
+    // own inside a mapfile named for the product, so the moment is chosen by
+    // asking for a different layer.
+    pass(/[?&]map=G19-ABI-FD-BAND13\.map(&|$)/.test(re),
+      "RealEarth is asked in the product's own mapfile");
     // The far end of the step, not its start: a scan stamped 13:20 is published
-    // at 13:20:21, and a request for 13:20:00 resolves to the step before it.
-    pass(/[?&]time=20260816\.132959(&|$)/.test(re),
-      "RealEarth is asked at the end of the moment's step", re.match(/time=([^&]*)/)[1]);
-    // Asking for more detail than the dish measured gets the tile back with
-    // "Size limit exceeded" printed across it, and white text reads as the
-    // coldest cloud top on the scale — the caption is drawn as a storm.
-    pass(new RegExp(`[?&]size=${SAMPLES}(&|$)`).test(re),
-      "RealEarth is asked at the resolution we store", re.match(/size=([^&]*)/)?.[1]);
+    // at 13:20:20, and a request for 13:20:00 resolves to the step before it.
+    pass(/[?&]LAYERS=G19-ABI-FD-BAND13_20260816_132959(&|$)/.test(re),
+      "RealEarth is asked at the end of the moment's step",
+      re.match(/LAYERS=([^&]*)/)[1]);
+    const reBox = decodeURIComponent(re.match(/BBOX=([^&]*)/)[1]).split(",").map(Number);
+    pass(Math.abs(reBox[0] - frame.minX) < 1e-6 && Math.abs(reBox[3] - frame.maxY) < 1e-6,
+      "RealEarth is asked for the tile's own box");
+    // The whole point of the WMS port: mapserv honours WIDTH and HEIGHT, where
+    // the tile API returned 256 square whatever it was asked for. Sixteen times
+    // the pixels, against a service that meters anonymous use by pixel volume.
+    pass(new RegExp(`[?&]WIDTH=${SAMPLES}(&|$)`).test(re) &&
+      new RegExp(`[?&]HEIGHT=${SAMPLES}(&|$)`).test(re),
+      "RealEarth is asked at the resolution we store", `${SAMPLES}x${SAMPLES}`);
 
-    const wms = url(byId["msg-0deg"], tile, frame, at);
+    const wms = url(byId["msg-0deg"], frame, at);
     pass(wms.includes("TIME=2026-08-16T13%3A20%3A00Z"), "EUMETSAT is asked at the moment itself",
       decodeURIComponent(wms.match(/TIME=([^&]*)/)[1]));
     const bbox = decodeURIComponent(wms.match(/BBOX=([^&]*)/)[1]).split(",").map(Number);
@@ -404,8 +414,9 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) =
     let stepped = true;
     for (let m = 0; m < 24 * 60; m += 10) {
       const t = Date.UTC(2026, 7, 16, 0, m, 0);
-      const stamp = url(byId["goes-east"], tile, frame, t).match(/time=([^&]*)/)[1];
-      if (!/^\d{8}\.\d{6}$/.test(stamp)) stepped = false;
+      const layer = url(byId["goes-east"], frame, t).match(/LAYERS=([^&]*)/)[1];
+      const stamp = layer.replace("G19-ABI-FD-BAND13_", "");
+      if (!/^\d{8}_\d{6}$/.test(stamp)) stepped = false;
       const back = Date.UTC(
         +stamp.slice(0, 4), +stamp.slice(4, 6) - 1, +stamp.slice(6, 8),
         +stamp.slice(9, 11), +stamp.slice(11, 13), +stamp.slice(13, 15)
@@ -519,6 +530,66 @@ import(pathToFileURL(path.join(__dirname, "../src/lib/ir.js")).href).then((ir) =
       );
       // Nothing of this disc reaches the tile at all.
       pass(!flat(sheet(() => null), stretch), "an empty sheet is left alone", host);
+    }
+  }
+
+  // ── Against the service ───────────────────────────────────────────────────
+  //
+  // The two things the WMS port rests on, neither of which can be seen by
+  // looking at the map. RealEarth's tile API returned 256 square whatever it
+  // was asked for, and the whole reason for moving was that `mapserv` does not:
+  // if it ever starts ignoring WIDTH again, the layer keeps drawing perfectly
+  // while quietly spending sixteen times the pixel volume it is metered on.
+  //
+  // And the moment. RealEarth has no TIME dimension — a scan is addressed by
+  // asking for a layer named after it — and a layer name it does not recognise
+  // is answered with the current scan, 200 OK and no complaint. So a change to
+  // their naming would not fail: it would pin every rewound frame to now, on a
+  // map where one wash of cloud looks much like another.
+  console.log("\nAgainst the service");
+  {
+    const at = Math.floor((Date.now() - LAG_MS) / STEP_MS) * STEP_MS;
+    const goes = DISCS.find((d) => d.id === "goes-east");
+    // A tile over the Atlantic, well inside GOES-East's own territory.
+    const frame = tileFrame(2, 1, 1);
+    const get = async (when) => {
+      const res = await fetch(url(goes, frame, when));
+      if (!res.ok) return { status: res.status };
+      const body = Buffer.from(await res.arrayBuffer());
+      if (body.slice(1, 4).toString() !== "PNG") return { status: "not an image" };
+      return {
+        status: 200,
+        width: body.readUInt32BE(16),
+        height: body.readUInt32BE(20),
+        bytes: body.length,
+        hash: require("crypto").createHash("md5").update(body).digest("hex"),
+      };
+    };
+
+    const now = await get(at);
+    pass(now.status === 200, "the service answers", `HTTP ${now.status}`);
+    if (now.status === 200) {
+      // The whole point of the port.
+      pass(
+        now.width === SAMPLES && now.height === SAMPLES,
+        "and honours the size we ask for",
+        `${now.width}x${now.height}, ${(now.bytes / 1024).toFixed(1)} KB`
+      );
+      // A step back is a different scan. If these match, the stamp is not being
+      // recognised and both are the current frame.
+      const before = await get(at - STEP_MS);
+      pass(
+        before.status === 200 && before.hash !== now.hash,
+        "and a step back is a different scan",
+        before.status === 200 ? "" : `HTTP ${before.status}`
+      );
+      // The far-end stamp and the scan's own stamp are the same picture: this
+      // is the newest-at-or-before resolution the moment naming relies on.
+      const early = await get(at - STEP_MS + 1000);
+      pass(
+        early.status === 200 && early.hash === before.hash,
+        "and a moment mid-step resolves to the scan before it"
+      );
     }
   }
 
