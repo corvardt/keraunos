@@ -91,10 +91,21 @@ export function viewForBounds(base, width, height, [west, south, east, north]) {
 /**
  * The lon/lat box on screen.
  *
- * The corners are clamped to the world before being inverted, never after:
- * Mercator's inverse wraps longitude, so a point off the left edge comes back
- * as a real coordinate on the far side of the globe. Inverting first and
- * clamping after quietly yields a box that is inside out.
+ * The corners are clamped to the world before being read back, never after:
+ * past the edge there is no world, and a point off it is not a coordinate this
+ * box should contain.
+ *
+ * Read back by arithmetic rather than through `invert`, for the reason
+ * `mercatorFrame` below gives at greater length: d3's Mercator is
+ *   x = k·λ + tx,  y = ty − k·ln(tan(π/4 + φ/2))
+ * and inverting it wraps longitude, so a right edge sitting exactly on the
+ * antimeridian comes back as −180 instead of +180. That is not a rounding to
+ * shrug at — it turns the whole world into a box a rounding error wide, and
+ * everything built from the box comes out empty. It is what the globe did on
+ * every flat → globe swap: the mode sets the view to the whole earth exactly,
+ * which lands precisely on the wrap, and the land matrix collapsed from 4,704
+ * dots to 5. The flat map sat one floating-point step the safe side of the
+ * same edge and had always got away with it.
  */
 export function visibleBounds(projection, width, height) {
   const [west] = projection([-180, 0]);
@@ -108,17 +119,19 @@ export function visibleBounds(projection, width, height) {
   const y1 = Math.min(height, bottom);
   if (!(x0 < x1) || !(y0 < y1)) return [-180, -LAT_LIMIT, 180, LAT_LIMIT];
 
-  const a = projection.invert([x0, y0]);
-  const b = projection.invert([x1, y1]);
-  if (!a || !b || !isFinite(a[0]) || !isFinite(b[0])) {
-    return [-180, -LAT_LIMIT, 180, LAT_LIMIT];
-  }
-  return [
-    Math.max(-180, Math.min(a[0], b[0])),
-    Math.max(-LAT_LIMIT, Math.min(a[1], b[1])),
-    Math.min(180, Math.max(a[0], b[0])),
-    Math.min(LAT_LIMIT, Math.max(a[1], b[1])),
+  const k = projection.scale();
+  const [tx, ty] = projection.translate();
+  const lonAt = (x) => (((x - tx) / k) * 180) / Math.PI;
+  // North is the smaller y, so the top of the screen is the top of the box.
+  const latAt = (y) => ((2 * Math.atan(Math.exp((ty - y) / k)) - Math.PI / 2) * 180) / Math.PI;
+
+  const box = [
+    Math.max(-180, lonAt(x0)),
+    Math.max(-LAT_LIMIT, latAt(y1)),
+    Math.min(180, lonAt(x1)),
+    Math.min(LAT_LIMIT, latAt(y0)),
   ];
+  return box.every(Number.isFinite) ? box : [-180, -LAT_LIMIT, 180, LAT_LIMIT];
 }
 
 // Web Mercator's own metre, which is what a WMS bbox is quoted in.
