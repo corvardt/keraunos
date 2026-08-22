@@ -24,9 +24,14 @@
  * and it is labelled as such wherever it is named. `ir.js` opens by saying that
  * nothing here is a forecast and that every pixel was measured; that stays true
  * of the weather. This is a different subject, carried in a different register,
- * and it is allowed in on the condition that it never pretends otherwise — the
- * panel reads out both times the service publishes, so the lead is on the glass
- * rather than in a comment.
+ * and it is allowed in on the condition that it never pretends otherwise — so a
+ * decoded frame carries both of the service's own times, and the lead between
+ * them is the reading's honesty rather than a comment's claim.
+ *
+ * The footer answers the other question, which was going unanswered entirely:
+ * whether the frame on the glass is still being kept current. A service that
+ * stops replying leaves the last oval drawn, and a layer nobody is updating
+ * looks exactly like a layer nothing is happening on.
  *
  * ── Why there is a floor ────────────────────────────────────────────────────
  *
@@ -116,7 +121,8 @@ export function decode(payload) {
     grid,
     // Both, because the gap between them is the reading's own honesty: the
     // solar wind was seen at one time and this is what it is expected to do at
-    // another. The panel prints the lead rather than the pair.
+    // another. Kept as the pair rather than the lead, so whoever reads them can
+    // decide which of the two questions they are asking.
     observedAt: Date.parse(payload["Observation Time"]),
     forecastAt: Date.parse(payload["Forecast Time"]),
   };
@@ -225,6 +231,17 @@ export function litCells(grid, spacing = 1) {
  * the same reason: a hidden page spending somebody else's bandwidth on a
  * picture nobody can see is a cost with no reader at the end of it.
  */
+/**
+ * How long a frame may sit on the glass before it stops being nearly true.
+ *
+ * The service publishes every five minutes and the oval itself moves over tens
+ * of minutes, so a frame that failed to refresh once is still a fair picture and
+ * saying anything about it would be noise. Four missed refreshes is twenty
+ * minutes, which is long enough that what is drawn is a different sky from the
+ * one outside — and long enough that the cause is an outage rather than a blip.
+ */
+const STALE_MS = 20 * 60 * 1000;
+
 export function useAurora(on) {
   const [state, setState] = useState(null);
 
@@ -238,6 +255,8 @@ export function useAurora(on) {
     }
 
     let live = true;
+    let fresh = 0;
+    let warned = false;
     const controller = new AbortController();
 
     const ask = async () => {
@@ -246,13 +265,29 @@ export function useAurora(on) {
         const response = await fetch(SOURCE, { signal: controller.signal });
         if (!response.ok) throw new Error(`aurora: HTTP ${response.status}`);
         const decoded = decode(await response.json());
-        if (live) setState(decoded);
+        if (!live) return;
+        fresh = Date.now();
+        warned = false;
+        // Stamped with when it was fetched, not with the moment it models —
+        // the panel already reads both of the service's own times out of the
+        // payload. This is the other question, and only this can answer it:
+        // whether what is on the glass is still being kept up.
+        setState({ ...decoded, fresh, stale: false });
       } catch (error) {
         // A frame that does not arrive leaves the last one on the glass, which
-        // is the honest state: the oval moves over tens of minutes, so the
-        // picture already drawn is still very nearly true. Only an abort is
-        // silent — that is this effect tearing itself down.
-        if (error.name !== "AbortError") console.warn(error);
+        // is the honest state for a while: the oval moves over tens of minutes,
+        // so the picture already drawn is still very nearly true. What was
+        // missing is the end of that sentence — it stops being true, and
+        // nothing said so. Only an abort is silent; that is this effect tearing
+        // itself down.
+        if (error.name === "AbortError" || !live) return;
+        if (!warned) {
+          warned = true;
+          console.warn(`[keraunos] aurora: ${error.message}`);
+        }
+        if (fresh && Date.now() - fresh > STALE_MS) {
+          setState((prev) => (prev && !prev.stale ? { ...prev, stale: true } : prev));
+        }
       }
     };
 

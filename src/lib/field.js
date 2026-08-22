@@ -369,6 +369,117 @@ const MESH_LAT = 84;
 // derived from a projection's scale, and a scale is something a caller could
 // hand in wrong. A picture that quietly tries to allocate a gigabyte is a worse
 // failure than one that is coarse.
+// ── Fetching one picture ────────────────────────────────────────────────────
+//
+// Three layers were doing this three times, and the copies had drifted: the
+// cloud field retried a failed tile once, the coverage layer retried once and
+// complained in different words, and the radar composite did not retry at all —
+// against a service that answers the same intermittent 500 as the other two.
+// None of that was a decision; it was the order the files were written in.
+//
+// Fetched rather than pointed at an `<img>`, and that is the part that matters
+// rather than the deduplication. An image tag has exactly one failure — it did
+// not load — and every one of this instrument's real failures is invisible
+// through it. A 500 from a WMS looks the same as a tile that has not arrived. A
+// GeoServer exception is an XML document that fails to decode and reads as a
+// network blip. And RealEarth says in a header when it is watermarking a
+// refusal, which `ir.js` has been inferring from the pixels because a header is
+// not a thing an image tag will show you.
+//
+// The response has to carry CORS either way: every one of these is read back
+// pixel by pixel, so a picture that cannot be inspected is no use even when it
+// arrives. The three services that answer `*` are asked directly and the one
+// that answers nothing goes through `functions/msg.js`, exactly as before.
+
+// Long enough that the second ask is not the same instant as the first, short
+// enough to stay inside the settle that wanted the tile. Not the queue's own
+// RETRY_MS above, which is the much slower business of asking again later.
+const PICTURE_RETRY_MS = 400;
+
+/** How the picture failed, in the words the console will use. */
+const WHY = {
+  status: (status) => `HTTP ${status}`,
+  type: (type) => `${type || "no content-type"} is not an image`,
+  refused: (mark) => `refused: ${mark}`,
+  decode: () => "the bytes are not a picture",
+  network: () => "no answer",
+};
+
+/**
+ * One picture, or the reason there is none.
+ *
+ * Resolves `{ image }` on success and `{ why, refused }` otherwise — never
+ * throws and never rejects, because every caller here treats a missing picture
+ * as a fact about the sky rather than as an error to handle. `refused` is the
+ * one failure worth telling apart: the service answered, and what it answered
+ * with was a notice rather than a measurement.
+ *
+ * Retried once, and once only. Two failures is the evidence that this is the
+ * outage rather than the blip; past that the honest thing is to draw the map
+ * without this piece and let the footer say so.
+ */
+export async function loadImage(src) {
+  const once = async () => {
+    let response;
+    try {
+      response = await fetch(src);
+    } catch {
+      return { why: WHY.network() };
+    }
+    if (!response.ok) return { why: WHY.status(response.status) };
+
+    // RealEarth watermarks rather than refuses: the tile arrives 200 OK with
+    // the reason printed across it, and says so in a header the pixels can only
+    // be guessed at. Believed over the picture, always.
+    //
+    // Both spellings, because their own documentation gives the name twice and
+    // disagrees with itself — the prose says `RE-Watemark` and the header they
+    // actually send is the one you would expect. Asking for both costs a map
+    // lookup and removes the chance of this quietly never firing.
+    const mark =
+      response.headers.get("re-watermark") ?? response.headers.get("re-watemark");
+    if (mark) return { why: WHY.refused(mark), refused: true };
+
+    // A WMS answers a bad request with a ServiceExceptionReport, at 200. Left
+    // to decode it is simply a picture that failed to arrive, which is the one
+    // reading it must not have: a tile that is never coming back should stop
+    // being asked for, and a blip should not.
+    const type = response.headers.get("content-type") ?? "";
+    if (!type.startsWith("image/")) return { why: WHY.type(type) };
+
+    try {
+      return { image: await createImageBitmap(await response.blob()) };
+    } catch {
+      return { why: WHY.decode() };
+    }
+  };
+
+  const first = await once();
+  if (first.image || first.refused) return first;
+  await new Promise((resolve) => setTimeout(resolve, PICTURE_RETRY_MS));
+  return once();
+}
+
+/**
+ * The same, with a complaint the first time a given source goes quiet.
+ *
+ * A layer that fails is now said out loud in the footer, which is where a
+ * reader needs it. This is the other half: which service, and what it actually
+ * answered, for whoever is looking at a console because the footer told them to
+ * look somewhere. Once per name, because a service that is down is down for
+ * every tile on the screen.
+ */
+const silent = new Set();
+
+export async function loadPicture(src, name, note) {
+  const got = await loadImage(src);
+  if (!got.image && name && !silent.has(name)) {
+    silent.add(name);
+    console.warn(`[keraunos] ${name}: ${got.why}\n           ${note ?? ""}\n           ${src}`);
+  }
+  return got;
+}
+
 const MAX_WORLD = 2048;
 
 /**

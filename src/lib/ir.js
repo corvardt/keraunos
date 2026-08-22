@@ -58,6 +58,7 @@ import {
   levelFor as baseLevelFor,
   ancestorPatch as basePatch,
   MIN_PATCH,
+  loadPicture,
 } from "./field.js";
 
 // The map wants three things from this file: `createSky`, and the two cadences.
@@ -491,48 +492,23 @@ export function url(disc, frame, at) {
   return `${disc.service}?${params}`;
 }
 
-/**
- * Did the service refuse this one?
- *
- * RealEarth answers a request it will not serve with a picture rather than a
- * status: the tile arrives 200 OK with "Size limit exceeded" printed across it,
- * and a caption rendered into the imagery is read by the calibration above as
- * weather. White is the coldest top there is, so the layer draws the words as a
- * storm — the one failure on this map that invents a reading rather than
- * omitting one.
- *
- * It looked for a long time like a threshold nothing could stay under, because
- * the same tile at the same moment and the same size was refused one minute and
- * served the next. It is documented, and the reason it moved is that both of
- * its triggers are cumulative over a rolling day rather than per request: 1,024
- * pixels in either dimension, with geographically adjacent requests counting
- * together, and 500 megapixels of volume. A tile pyramid is nothing but
- * adjacent requests, so the tube walked into both.
- *
- * Asking over WMS at SAMPLES rather than taking the tile API's fixed 256 is
- * what buys the room — sixteen times less of the thing being counted, from
- * about half the daily allowance for one tab down to a thirtieth — and this
- * still catches the rest. The service says so in an `RE-Watermark` header too,
- * which would be a better test than reading the pixels back; it is out of reach
- * behind `new Image()`, and would cost a fetch and a decode to get at.
- *
- * The test is exact because the caption is the only thing in this data that is
- * drawn rather than measured. Infrared arrives as a stretch well inside the
- * byte — a live tile runs from about 70 to about 200, and even the saturated
- * disc edge bottoms out near 72 — so pure black and pure white in one tile is
- * text, every time.
- */
-function refused(data) {
-  let dark = false;
-  let bright = false;
-  for (let j = 0; j < data.length; j += 4) {
-    if (!data[j + 3]) continue;
-    if (data[j] === 0) dark = true;
-    if (data[j] === 255) bright = true;
-    if (dark && bright) return true;
-  }
-  return false;
-}
+// Whether the service refused a tile is a header now, read in `loadImage` and
+// handed back as `refused`. It used to be a guess made from the pixels: the
+// refusal arrives as a picture with "Size limit exceeded" printed across it,
+// and white text reads as the coldest cloud top on the scale, so the caption
+// drew as a storm — the one failure on this map that invented a reading rather
+// than omitting one. The test looked for pure black and pure white in one tile,
+// which real infrared never contains, and it worked; it was still a heuristic
+// standing in for a service that had been saying so out loud all along.
+//
+// Worth keeping the reason written down, because it explains the quota this
+// layer lives inside. Both of RealEarth's triggers are cumulative over a rolling
+// day rather than per request — 1,024 pixels in either dimension with adjacent
+// requests counting together, and 500 megapixels of volume — and a tile pyramid
+// is nothing but adjacent requests. That is why it seemed to be a threshold
+// nothing could stay under, refusing one minute and serving the next, and why
+// asking over WMS at SAMPLES rather than the tile API's fixed 256 is what buys
+// the room.
 
 /**
  * The other thing that arrives 200 OK with no weather in it: a sheet that is
@@ -572,84 +548,19 @@ export function flat(data, stretch) {
   return scalarFor(stretch, seen) > FLOOR;
 }
 
-function attempt(src) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    // The pixels are read back below, so the canvas they land on must not be
-    // tainted. RealEarth answers with `access-control-allow-origin: *`;
-    // EUMETSAT answers with nothing at all, which is why it is not asked
-    // directly — see `EUMETVIEW` above.
-    img.crossOrigin = "anonymous";
-    // A disc that fails is a disc that is missing from the tile, not an error:
-    // the ring is five independent services and the map is still a map with
-    // four of them.
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = src;
-  });
-}
-
-// Long enough that the second ask is not the same instant as the first, short
-// enough to stay inside the settle that wanted the tile.
-const RETRY_MS = 400;
-
 /**
- * A disc, asked twice before it is given up on.
+ * A disc, asked for one tile.
  *
- * A WMS backend under load and a service that is genuinely down look identical
- * at the first attempt and are not remotely the same thing. EUMETSAT's GeoServer
- * answers the occasional 500 to a request that succeeds when repeated a second
- * later, and without this that costs more than the request: a tile spanning two
- * territories keeps whatever the other dishes gave it, so the tile is held —
- * with a hole where this disc should have been — until the frame rolls over ten
- * minutes later. The refusal path a few lines down already draws exactly this
- * distinction, and treats a temporary no as no answer at all rather than as an
- * answer worth keeping.
- *
- * One retry and no more. Two failures is the evidence that this is the outage
- * rather than the blip, and past that the old behaviour is the right one: take
- * the tile without this disc, because a ring of five is still a map with four
- * and a service that is down would otherwise be asked forever.
+ * The retry, the CORS, the exception bodies and the watermark header all live
+ * in `loadImage` now — see `field.js`, which explains why an `<img>` could not
+ * see any of them. What is left here is what is particular to the ring: a disc
+ * that does not answer is a disc missing from the tile rather than an error,
+ * because five independent services are five, and a map with four of them is
+ * still a map.
  */
-// Which dishes have already been complained about, so a service that is down
-// says so once rather than sixty times a screen.
-const silent = new Set();
+const load = (src, disc) =>
+  loadPicture(src, disc.id, "its territory will draw as clear sky.");
 
-async function load(src, disc) {
-  const first = await attempt(src);
-  if (first) return first;
-  await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
-  const second = await attempt(src);
-
-  // A dish that will not answer is the one failure here that is completely
-  // invisible: the composite drops it, the tile is kept without it, and its
-  // whole territory draws as clear sky over an ocean, which is a shape nobody
-  // can tell from weather. It has to be said out loud somewhere, and the
-  // console is the only place that costs nothing when nothing is wrong.
-  if (!second && !silent.has(disc.id)) {
-    silent.add(disc.id);
-    console.warn(
-      `[keraunos] ${disc.id} is not answering — its territory will draw as clear sky.\n` +
-        `           ${src}\n` +
-        `           If this is a browser shield or extension, the map cannot tell.`
-    );
-  }
-  return second;
-}
-
-/**
- * One tile, from however many dishes can see it, as a field of bytes.
- *
- * Usually one dish, which is the case worth being fast at: a tile is at most
- * 90° wide at the shallowest level anyone will see and a good deal narrower
- * everywhere else, so most of them fall wholly inside one territory and cost a
- * single request. Two only near a seam.
- *
- * Returns null when nothing answered, which is the same thing as the layer
- * being off. There is no error state to draw: a cloud layer that failed and a
- * sky with no cloud in it should not look different from each other on an
- * instrument whose subject is the lightning.
- */
 async function fetchTile(z, x, y, at) {
   const frame = tileFrame(z, x, y);
   const discs = discsFor(frame);
@@ -717,19 +628,22 @@ async function fetchTile(z, x, y, at) {
     // might, the columns say otherwise.
     if (!cols.some((w) => w > 0)) return;
 
-    const image = images[i];
-    if (!image) {
+    // The header said the service was refusing this one. Kept apart from a
+    // dish that simply did not answer: a refusal is temporary and the tile has
+    // to be asked again, where a silent dish is drawn around.
+    const got = images[i];
+    if (got.refused) {
+      turnedAway = true;
+      return;
+    }
+    if (!got.image) {
       short = true;
       return;
     }
 
     ctx.clearRect(0, 0, SAMPLES, SAMPLES);
-    ctx.drawImage(image, 0, 0, SAMPLES, SAMPLES);
+    ctx.drawImage(got.image, 0, 0, SAMPLES, SAMPLES);
     const { data } = ctx.getImageData(0, 0, SAMPLES, SAMPLES);
-    if (refused(data)) {
-      turnedAway = true;
-      return;
-    }
     const stretch = STRETCH[disc.service];
     // Counted as a dish that did not arrive rather than as a refusal, which is
     // the difference between asking this tile again and throwing away the four

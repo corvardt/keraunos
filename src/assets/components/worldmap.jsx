@@ -2638,6 +2638,15 @@ const WorldMap = ({
     // for again rather than only the weather.
   }, [covering, skyProjection, spinning, width, height, flashAt, flashTick, irTick]);
 
+  // The one layer here that is neither derived from the strikes nor cut into
+  // tiles: the whole planet arrives in a single request, so there is no pyramid,
+  // no queue and no eviction to hold — see `aurora.js`. Null whenever the layer
+  // is off, which is what empties the bitmap below.
+  const aurora = useAurora(settings.aurora);
+  // Read by the health poll below, which runs on a timer rather than a render.
+  const auroraStateRef = useRef(aurora);
+  auroraStateRef.current = aurora;
+
   /**
    * How much of each tiled layer is actually on the glass, reported upward.
    *
@@ -2660,7 +2669,16 @@ const WorldMap = ({
         const state = field?.health();
         return state?.whole ? state : null;
       };
-      const next = { cloud: of(sky.current), coverage: of(flash.current) };
+      // Aurora is not a pyramid — one request for the whole planet — so it has
+      // no tiles to count. What it has instead is a frame that stops being
+      // refreshed while staying on the glass, which is the same failure wearing
+      // different clothes: something plausible drawn from data nobody is
+      // keeping current. `useAurora` stamps it; this carries it to the footer.
+      const next = {
+        cloud: of(sky.current),
+        coverage: of(flash.current),
+        aurora: auroraStateRef.current ? { stale: Boolean(auroraStateRef.current.stale) } : null,
+      };
       const key = JSON.stringify(next);
       if (key === last) return;
       last = key;
@@ -2671,11 +2689,6 @@ const WorldMap = ({
     return () => clearInterval(id);
   }, [onFieldHealth, kind, covering]);
 
-  // The one layer here that is neither derived from the strikes nor cut into
-  // tiles: the whole planet arrives in a single request, so there is no pyramid,
-  // no queue and no eviction to hold — see `aurora.js`. Null whenever the layer
-  // is off, which is what empties the bitmap below.
-  const aurora = useAurora(settings.aurora);
 
   // The shimmer's clock, for the flat map's bitmap.
   //

@@ -72,6 +72,7 @@ import {
   tilesFor,
   levelFor as baseLevelFor,
   ancestorPatch as basePatch,
+  loadPicture,
 } from "./field.js";
 
 // The same origin the Meteosat dishes are reached through, and for the same
@@ -280,21 +281,6 @@ export function withinReach(frame) {
   return latAt(frame.maxY) > -REACH && latAt(frame.minY) < REACH;
 }
 
-function attempt(src) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    // Read back pixel by pixel below, so the canvas must not be tainted — which
-    // is the whole reason this goes through our own origin rather than to
-    // EUMETSAT directly.
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = src;
-  });
-}
-
-const RETRY_MS = 400;
-
 // The tile arrives at FETCH_PX and is stored at SAMPLES, so each stored sample
 // is a square of this many pixels.
 const REDUCE = FETCH_PX / SAMPLES;
@@ -302,26 +288,10 @@ const REDUCE = FETCH_PX / SAMPLES;
 // Said once rather than once per tile. There is one source here, so a failure is
 // not a seam in the picture the way it is on the ring: it is the whole layer,
 // and an empty coverage layer looks exactly like a satellite that saw no
-// lightning. That is the one misreading this layer must not produce silently.
-let complained = false;
-
-async function load(src) {
-  const first = await attempt(src);
-  if (first) return first;
-  // The same 500-then-fine this server hands the IR layer, and the same answer
-  // to it: one retry, because a backend under load and a service that is down
-  // are indistinguishable at the first attempt and are not the same thing.
-  await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
-  const second = await attempt(src);
-  if (!second && !complained) {
-    complained = true;
-    console.warn(
-      `[keraunos] the lightning imager is not answering — coverage will draw as though it saw nothing.\n` +
-        `           ${src}`
-    );
-  }
-  return second;
-}
+// lightning. That is the one misreading this layer must not produce silently —
+// and the footer says so now as well, which is where a reader will see it.
+const load = (src) =>
+  loadPicture(src, "lightning imager", "coverage will draw as though it saw nothing.");
 
 /**
  * One tile, as a field of bytes.
@@ -338,7 +308,7 @@ async function fetchTile(z, x, y, at) {
   // for again on every settle, forever, and the answer would not change.
   if (!withinReach(frame)) return { field: new Uint8Array(SAMPLES * SAMPLES), any: false };
 
-  const image = await load(url(frame, at));
+  const { image } = await load(url(frame, at));
   if (!image) return null;
 
   const sheet = document.createElement("canvas");

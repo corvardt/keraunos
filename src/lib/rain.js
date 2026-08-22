@@ -48,7 +48,7 @@
  * saturated and more saturated.
  */
 
-import { clamp, createField, fillThrough, tileFrame, tilesFor } from "./field.js";
+import { clamp, createField, fillThrough, tileFrame, tilesFor, loadPicture } from "./field.js";
 import { levelFor as baseLevelFor, ancestorPatch as basePatch } from "./field.js";
 
 const INDEX = "https://api.rainviewer.com/public/weather-maps.json";
@@ -232,17 +232,11 @@ export function url(host, path, z, x, y) {
   return `${host}${path}/256/${z}/${x}/${y}/2/0_0.png`;
 }
 
-function load(src) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    // The pixels are read back below, so the canvas they land on must not be
-    // tainted. The tile cache answers with `access-control-allow-origin: *`.
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => resolve(null);
-    img.src = src;
-  });
-}
+// Retried, CORS-checked and header-checked in `field.js` like the other two.
+// This layer used to be the odd one out: it had no retry at all, against a
+// cache that answers the same intermittent failure the others do.
+const load = (src) =>
+  loadPicture(src, "rainviewer", "the radar composite will draw as though it were dry.");
 
 // The tile arrives at 256 and is stored at SAMPLES, so each stored sample is a
 // square of this many pixels.
@@ -253,7 +247,7 @@ async function fetchTile(z, x, y, at) {
   const frame = host && frameFor(past, at);
   if (!frame) return null;
 
-  const image = await load(url(host, frame.path, z, x, y));
+  const { image } = await load(url(host, frame.path, z, x, y));
   if (!image) return null;
 
   const sheet = document.createElement("canvas");
