@@ -1,11 +1,5 @@
 import { memo } from "react";
 
-const Bolt = () => (
-  <svg viewBox="0 0 12 16" width="11" height="15" aria-hidden="true" className="fill-text">
-    <path d="M7.4 0 0 9.1h3.9L4.6 16 12 6.9H8.1L7.4 0Z" />
-  </svg>
-);
-
 // Every control on the right reads as the same kind of thing.
 //
 // The padding is the whole control on a phone. Drawn, these are four letters
@@ -44,9 +38,6 @@ function Navbar({ phase, host, archive, onLive, pulse, theme, onTheme, onConfig,
   return (
     <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-line px-3 sm:px-4">
       <div className="flex min-w-0 items-baseline gap-2.5">
-        <span className="translate-y-px">
-          <Bolt />
-        </span>
         {/* Gives way first. On a narrow screen with the link state showing,
             something has to, and the name of the instrument is the one thing
             on this row nobody needs to read twice. */}
