@@ -56,6 +56,16 @@ export const lonAt = (x) => (x * 180) / EARTH_HALF;
 export const latAt = (y) =>
   (Math.atan(Math.sinh((y * Math.PI) / EARTH_HALF)) * 180) / Math.PI;
 
+/** The other direction, for the one caller that has a place rather than a box:
+ *  the globe, saying where on the planet the reader is actually looking. Latitude
+ *  is clamped to the grid's own limit, past which Mercator runs to infinity. */
+export const metresAt = (lon, lat) => ({
+  x: (lon * EARTH_HALF) / 180,
+  y:
+    (EARTH_HALF * Math.log(Math.tan(Math.PI / 4 + (clamp(lat, -85.05, 85.05) * Math.PI) / 360))) /
+    Math.PI,
+});
+
 // ── The grid ────────────────────────────────────────────────────────────────
 
 /** The pyramid level whose tiles land closest to `tilePx` at this projection. */
@@ -86,8 +96,15 @@ export function tileFrame(z, x, y) {
  * are drawn in. Only the queue asks for it: the frame loop walks the same list
  * sixty times a second and would be paying for a sort whose result it throws
  * away.
+ *
+ * `focus` overrides the point that "nearest" is measured from, in metres. The
+ * globe needs it: its frame is the whole world every time, so the middle of the
+ * frame is the middle of the Mercator square — a spot in the Gulf of Guinea —
+ * whatever hemisphere is actually turned towards the reader. Left that way the
+ * ordering is real but aimed at nothing, and a globe pointed at the Pacific
+ * fills in from the far side of the planet backwards.
  */
-export function tilesFor(frame, z, ordered = false) {
+export function tilesFor(frame, z, ordered = false, focus = null) {
   const n = 2 ** z;
   const span = (2 * EARTH_HALF) / n;
   const at = (v) => clamp(Math.floor(v / span), 0, n - 1);
@@ -114,8 +131,10 @@ export function tilesFor(frame, z, ordered = false) {
   // Distance in tiles is distance on the glass here, whatever the level:
   // Mercator is uniform in scale, so a tile is a square of constant size on
   // screen and no aspect correction is wanted.
-  const cx = (frame.minX + frame.maxX) / 2 / span + n / 2;
-  const cy = n / 2 - (frame.minY + frame.maxY) / 2 / span;
+  const mx = focus ? focus.x : (frame.minX + frame.maxX) / 2;
+  const my = focus ? focus.y : (frame.minY + frame.maxY) / 2;
+  const cx = mx / span + n / 2;
+  const cy = n / 2 - my / span;
   const rank = (t) => (t.x + 0.5 - cx) ** 2 + (t.y + 0.5 - cy) ** 2;
   return out.sort((a, b) => rank(a) - rank(b));
 }
@@ -882,6 +901,12 @@ export function createField(source) {
      * the planet. It showed as the Pacific and the poles arriving as a smudge
      * while the rest of the sky was sharp, and it showed worst on a cold start,
      * where level 0 is all there is.
+     *
+     * It carries the globe's own `[lon, lat]` rather than a flag, because a view
+     * of the whole world still has somewhere it is pointed, and that is both the
+     * only thing that says which tiles matter first and something a rectangle
+     * cannot be asked for. Any truthy value means the whole world; the pair says
+     * where the eye is.
      */
     want(projection, width, height, at, whole = false) {
       if (!projection || !width || !height) return;
@@ -902,7 +927,13 @@ export function createField(source) {
       }
 
       const frame = whole ? WHOLE_WORLD : mercatorFrame(projection, width, height);
-      const z = level(projection);
+      // Stopped at GLOBE_LEVEL for the same reason `drawWarp` stops there, and
+      // it has to be the same stop: the two used to disagree, and a zoomed globe
+      // asked for 1,024 tiles of level 5 and then drew level 4, which nothing
+      // had fetched. So the field crawled in from a level-2 ancestor while the
+      // queue spent the whole allowance on tiles no painter would ever read.
+      const z = whole ? Math.min(level(projection), GLOBE_LEVEL) : level(projection);
+      const focus = Array.isArray(whole) ? metresAt(whole[0], whole[1]) : null;
       const target = incoming ?? shown;
       const targetAt = target === incoming ? incomingAt : at;
 
@@ -945,7 +976,7 @@ export function createField(source) {
       // these can be in the air at once, so the queue's order is the order the
       // field fills in, and the tile under the reader's eye is worth more than
       // the one in the corner behind the feed.
-      const detail = tilesFor(frame, z, true);
+      const detail = tilesFor(frame, z, true, focus);
       for (const tile of detail) add(tile);
       // What this view is owed, so `health` can say how much of it arrived.
       // Recorded here rather than counted from the store, because the store

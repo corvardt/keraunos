@@ -2577,7 +2577,12 @@ const WorldMap = ({
     // walks up — so it would fall back to the one tile that covers the planet
     // and the sky would be a smudge.
     const id = setTimeout(() => {
-      sky.current.want(skyProjection, width, height, irAt, spinning);
+      // Where the globe is pointed, read when the settle fires rather than
+      // watched: it is the fetch order, not the fetch, so it wants the latest
+      // value and must not be a dependency. A turning planet changes `spin`
+      // every frame, and as a dependency it would reset this timer every frame
+      // and the layer would never ask for anything at all.
+      sky.current.want(skyProjection, width, height, irAt, spinning && spinRef.current);
     }, IR_SETTLE_MS);
     return () => clearTimeout(id);
   }, [kind, skyProjection, spinning, width, height, irAt, irTick]);
@@ -2630,7 +2635,7 @@ const WorldMap = ({
     if (!covering || !skyProjection || !width || !height) return;
     if (document.hidden) return;
     const id = setTimeout(() => {
-      flash.current.want(skyProjection, width, height, flashAt, spinning);
+      flash.current.want(skyProjection, width, height, flashAt, spinning && spinRef.current);
     }, IR_SETTLE_MS);
     return () => clearTimeout(id);
     // `irTick` as well as this layer's own: it is what the visibility handler

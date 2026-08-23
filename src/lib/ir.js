@@ -58,6 +58,7 @@ import {
   levelFor as baseLevelFor,
   ancestorPatch as basePatch,
   MIN_PATCH,
+  metresAt,
   loadPicture,
 } from "./field.js";
 
@@ -201,7 +202,7 @@ export const MAX_LEVEL = 7;
 // it asks this file for them.
 export const levelFor = (projection) => baseLevelFor(projection, TILE_PX, MAX_LEVEL);
 export const ancestorPatch = (z, x, y, level) => basePatch(z, x, y, level, SAMPLES);
-export { tileFrame, tilesFor, MIN_PATCH };
+export { tileFrame, tilesFor, metresAt, MIN_PATCH };
 
 // ── Territory ───────────────────────────────────────────────────────────────
 
