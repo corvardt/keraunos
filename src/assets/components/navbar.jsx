@@ -85,13 +85,17 @@ function Navbar({ phase, host, archive, onLive, pulse, theme, onTheme, onConfig,
               A control has one job, and a reader scanning a strip of controls
               for the brightness switch should not have to work out that the
               tube is the dark one. */}
+          {/* A button is named for what it does, not for where it already is,
+              so it carries the mode it would hand you. The word on it has to
+              sit inside the accessible name or voice control cannot reach it,
+              which is why both are drawn from the same one. */}
           <button
             type="button"
             onClick={() => onTheme(theme === "dark" ? "light" : "dark")}
             aria-label={`switch to ${theme === "dark" ? "light" : "dark"} mode`}
             className={item}
           >
-            {theme === "dark" ? "dark" : "light"}
+            {theme === "dark" ? "light" : "dark"}
           </button>
           <Rule />
           {/* First of the three, and the only one that walks: it is what the
