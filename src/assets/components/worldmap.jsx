@@ -285,6 +285,10 @@ const GLOBE_FROM = GLOBE_HOME[0] - GLOBE_SWEEP - GLOBE_COAST;
 const GLOBE_TURN_PER_S = 150; // degrees a second
 const GLOBE_TURN_MIN_MS = 320;
 const GLOBE_TURN_MAX_MS = 1100;
+// The flat map's equivalent, for the same controls. One duration rather than a
+// rate: a frame is a zoom and a pan at once, and there is no single distance to
+// scale it by that means the same thing at both ends of the zoom range.
+const VIEW_EASE_MS = 640;
 // Where the globe stops shading night onto the dots, easing out so that the
 // flat map's wash arrives onto an evenly lit world rather than trading places
 // with a second treatment mid-frame.
@@ -2091,6 +2095,7 @@ const WorldMap = ({
       // stop with nothing left to move, `clampView` would hand back a view
       // identical in all but identity, and every wheel notch against the rail
       // would still be a render of the largest component in the app.
+      stopTurn();
       const was = viewRef.current.k;
       const given = Math.min(MAX_K, Math.max(MIN_K, was * factor));
       if (given !== was) {
@@ -2102,6 +2107,7 @@ const WorldMap = ({
       const dy = q.panY;
       q.panX = 0;
       q.panY = 0;
+      stopTurn();
       setView((prev) => clampView({ k: prev.k, x: prev.x + dx, y: prev.y + dy }, fitted, w, h));
     }
     if (q.cursor !== undefined) {
@@ -2150,6 +2156,21 @@ const WorldMap = ({
       // Called off under a drag, or by the mode changing out from under it.
       if (!turn) return;
       const t = glide((now - turn.at) / turn.ms);
+      if (turn.view) {
+        // Zoom moves geometrically and the middle moves in world coordinates, so
+        // the ground under the centre travels at an even rate instead of rushing
+        // while the map is wide and crawling once it is close.
+        const k = turn.from.k * (turn.to.k / turn.from.k) ** t;
+        const cx = turn.from.cx + (turn.to.cx - turn.from.cx) * t;
+        const cy = turn.from.cy + (turn.to.cy - turn.from.cy) * t;
+        setView(t >= 1 ? turn.to.view : { k, x: width / 2 - k * cx, y: height / 2 - k * cy });
+        if (t >= 1) {
+          turnRef.current = null;
+          return;
+        }
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       setSpin([wrapLon(turn.from[0] + turn.delta * t), turn.from[1] + turn.rise * t]);
       if (t >= 1) {
         // Landed exactly on what was asked for rather than on the last step of
@@ -2163,7 +2184,7 @@ const WorldMap = ({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [turning]);
+  }, [turning, width, height]);
 
   // On the flat map this frames a box. On the globe there is no framing to do —
   // one scale, and only a place to be pointed — so the same control turns the
@@ -2207,7 +2228,29 @@ const WorldMap = ({
       return;
     }
     if (!base) return;
-    setView(viewForBounds(base, width, height, [west, south, east, north]));
+    const to = viewForBounds(base, width, height, [west, south, east, north]);
+    const from = viewRef.current;
+    const middle = (v) => ({ k: v.k, cx: (width / 2 - v.x) / v.k, cy: (height / 2 - v.y) / v.k });
+    if (reduceMotion) {
+      setView(to);
+      return;
+    }
+    // The layers are viewport-sized bitmaps stretched through the delta from the
+    // view they were built for, which is fine for a drag and ruinous for a
+    // flight: a matrix built for europe is a patch in the middle of the glass
+    // on the way to africa, and the dots are simply gone until the settle. Sent
+    // back to the world for the length of the turn, the bitmap contains every
+    // view the flight passes through, so the matrix is stretched and coarse in
+    // the air rather than absent. The settle above sharpens it on arrival.
+    setSettled((prev) => (prev.k === MIN_K && !prev.x && !prev.y ? prev : { k: MIN_K, x: 0, y: 0 }));
+    turnRef.current = {
+      view: true,
+      from: middle(from),
+      to: { ...middle(to), view: to },
+      at: performance.now(),
+      ms: VIEW_EASE_MS,
+    };
+    setTurning((n) => n + 1);
   };
 
   // Asked for, never volunteered: nothing here touches the geolocation API

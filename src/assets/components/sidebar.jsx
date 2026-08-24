@@ -1,5 +1,4 @@
 import { memo, useEffect, useState } from "react";
-import { WORLD_RATE, WORLD_MARGIN, SCALE_MAX } from "../../lib/share.js";
 import { STEP_KM } from "../../lib/reach.js";
 
 const TRACE_W = 300;
@@ -7,9 +6,6 @@ const TRACE_H = 34;
 // Taller than the 60s trace above it. That one is a heartbeat and is read as a
 // level; this one is a shape, and a day of weather has more in it to resolve.
 const DAY_H = 44;
-// Short, because it is a scale rather than a curve: there is nothing to resolve
-// vertically, and height here would only make it look like a reading over time.
-const GAUGE_H = 11;
 // Two distributions sharing an axis, so it needs the height the day trace needs
 // and not the height the gauge needs.
 const REACH_H = 40;
@@ -283,62 +279,6 @@ function DayTrace({ day }) {
 }
 
 /**
- * The live rate against the world's, on one scale.
- *
- * A dial was the obvious drawing and the wrong one: nothing else in this
- * instrument is round, and a needle sweeping an arc would be the only thing on
- * the screen pretending to be a physical object. This is the same comparison
- * laid flat — the bar is what is being heard, the tick is what the planet is
- * known to produce, and the distance between them is the whole reading.
- *
- * That distance is not a shortfall to be closed. The tick counts every flash,
- * most of which never leave the cloud and are not this network's to hear, so a
- * bar arriving at it would mean something had gone wrong with the counting.
- * The reading is how much of the world's weather is audible from here, and the
- * answer being "a fraction" is the answer, not a fault. Said in the hint,
- * because a bright mark on a scale otherwise reads as a target.
- *
- * The satellite's ±5 is drawn as a band rather than dropped. It is the one
- * number on this panel that arrived with its own uncertainty attached, and
- * hiding that would make a measured figure look like a constant.
- */
-function Gauge({ perSecond }) {
-  const x = (rate) => Math.min(1, rate / SCALE_MAX) * TRACE_W;
-  const live = x(perSecond);
-  const lo = x(WORLD_RATE - WORLD_MARGIN);
-  const hi = x(WORLD_RATE + WORLD_MARGIN);
-
-  return (
-    <svg
-      viewBox={`0 0 ${TRACE_W} ${GAUGE_H}`}
-      preserveAspectRatio="none"
-      className="h-[11px] w-full"
-      role="img"
-      aria-label={`Hearing ${perSecond.toFixed(1)} strikes per second, against ${WORLD_RATE} flashes per second of lightning of every kind worldwide`}
-    >
-      {/* The scale it is all measured on, and the satellite's margin sitting on
-          it: a band, not a line, because that is what the figure is. */}
-      <rect x="0" y={GAUGE_H - 1} width={TRACE_W} height="1" className="fill-line" />
-      <rect x={lo} y="0" width={hi - lo} height={GAUGE_H} className="fill-line" />
-      {/* What is actually arriving. Solid to the left edge, because a share is
-          read from zero and not from wherever the eye happens to land. */}
-      <rect x="0" y="2" width={live} height={GAUGE_H - 3} className="fill-text" opacity="0.5" />
-      {/* The mark. The brightest thing here: it is the fixed point, and every
-          other mark on it is only interesting by comparison with this one. */}
-      <line
-        x1={x(WORLD_RATE)}
-        y1="0"
-        x2={x(WORLD_RATE)}
-        y2={GAUGE_H}
-        className="stroke-text"
-        strokeWidth="1"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
-  );
-}
-
-/**
  * The two reach distributions, drawn over each other.
  *
  * Over each other rather than side by side, because the reading is not either
@@ -522,7 +462,6 @@ function Sidebar({
   const busiest = Math.max(1, ...regions.map((region) => region.count));
   // The same rate the group at the top is showing, in the unit the figure it is
   // about to be compared against was published in.
-  const perSecond = stats.rate / 60;
 
   // The panel fills the column and lets the feed take up the slack, which works
   // while there is slack. Turned sideways a phone has none: the fixed readouts
@@ -635,36 +574,8 @@ function Sidebar({
             be the middle of the last few. */}
       </section>
 
-      {/* Still the instrument reporting on itself, and unlit for the same
-          reason as the group above it — but a different question. That one is
-          how well it is hearing what it hears; this is how much of what there
-          is to hear it is getting at all, which is the question every reader
-          arrives with and nothing on the screen used to answer. */}
-      <section className="border-b border-line px-4 pb-4 pt-4">
-        <Label
-          trailing={`${WORLD_RATE} / s all kinds`}
-          hint="The mark is 44 ± 5 flashes a second, every flash the planet makes: the global mean the Optical Transient Detector measured from orbit over five years, counting from above the weather, cloud flashes and all. The band around it is its uncertainty. It is not a target and the bar is not meant to reach it — what arrives here is the strokes a VLF network hears, which is cloud-to-ground and little else, and the ground is where about a quarter of the world's lightning goes. Heard perfectly, every stroke of it, this would still stand a quarter short of the mark."
-          shut={shut.coverage}
-          onToggle={fold("coverage")}
-        >
-          Coverage
-        </Label>
-        {/* The bar alone. The two figures that stood under it were this same
-            rate done twice more in arithmetic — over sixty, then over
-            forty-four — and a number restated underneath the picture of itself
-            reads as three readings to reconcile where there is only one. The
-            mark and the band around it say where this stands against the
-            world, which was the whole of the question. */}
-        {!shut.coverage && (
-          <div className="mt-2">
-            <Gauge perSecond={perSecond} />
-          </div>
-        )}
-      </section>
-
-      {/* The other half of the same subject. Above is how much of the world's
-          lightning is arriving; this is how far it is coming from, and why that
-          changes between noon and midnight. Absent until there is a shape
+      {/* How far the lightning is coming from, and why that changes between
+          noon and midnight. Absent until there is a shape
           rather than drawn empty: a session opens with nothing in either bin,
           and an empty pair of curves teaches the eye to stop looking. */}
       {settings.reach && reach && (
