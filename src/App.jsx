@@ -66,7 +66,7 @@ const MAX_QUEUE = 800;
 // piece of physics a lightning map can hand back to the person reading it: the
 // flash is already here, the sound is still coming, and the gap is a distance
 // you can check against your own window. Past 25km it is rarely audible at all,
-// so the count is not offered — the range comes from the synthesiser that plays
+// so the count is not offered. The range comes from the synthesiser that plays
 // it, so the figure the panel counts down to and the one the ear waits for are
 // the same figure.
 const SPEED_OF_SOUND_KMS = 0.343;
@@ -308,9 +308,9 @@ function App() {
   const strikeQueue = useRef([]);
 
   // What the thunder needs to know, held where the socket callback can reach
-  // it. That callback is deliberately stable — it is what holds the socket open
-  // across a render — so it cannot close over the setting or the position, and
-  // both of them change.
+  // it. That callback is deliberately stable, because it is what holds the
+  // socket open across a render, so it cannot close over the setting or the
+  // position, and both of them change.
   const audible = useRef({ on: false, at: null, replaying: false });
   useEffect(() => {
     audible.current = { on: settings.thunder, at: here, replaying: replayAt !== null };
@@ -368,7 +368,7 @@ function App() {
 
     // Thunder, where the reader is near enough to hear it. Scheduled from here
     // rather than from the watch pass because that pass runs every two seconds
-    // and only ever reports the soonest arrival — a panel wants the next bang
+    // and only ever reports the soonest arrival: a panel wants the next bang
     // and an ear wants all of them, each at its own moment.
     const { on, at: here, replaying } = audible.current;
     // A latitude box first: almost every strike on earth is nowhere near
@@ -639,8 +639,8 @@ function App() {
     [replayInstant, replayBins]
   );
 
-  // How far back there is anything to see. The window fills as the session runs,
-  // so the track grows for the first twelve minutes and then holds.
+  // How far back there is anything to see. The window fills as the session
+  // runs, so the track grows for the first twelve minutes and then holds.
   const [span, setSpan] = useState(0);
   useEffect(() => {
     const id = setInterval(() => {
@@ -672,7 +672,7 @@ function App() {
   // silence is a fault, and that question is asked twice a second.
   const archiving = useRef(false);
   // The field is fetched for the present, and an archive is not the present, so
-  // an hour from last Tuesday would be drawn under today's clouds — a cell
+  // an hour from last Tuesday would be drawn under today's clouds, a cell
   // firing into a clear sky that was overcast at the time, which is the one
   // kind of quiet lie this map is otherwise careful about. Held rather than
   // dropped, and put back on the way out.
@@ -737,7 +737,7 @@ function App() {
         onEnd: () =>
           setStatus({
             phase: "ended",
-            message: `${file.name} has run out — the map empties from here`,
+            message: `${file.name} has run out, and the map empties from here`,
             host: null,
           }),
       });
@@ -967,7 +967,7 @@ function App() {
         </span>
         <span className="flex shrink-0 items-center gap-4">
           <FieldAge kind={settings.field} replayAt={replayAt} health={fieldHealth?.cloud} />
-          {/* The aurora has no age of its own to print — it is a forecast, and
+          {/* The aurora has no age of its own to print. It is a forecast, and
               the times it carries are the service's, not ours. This is the
               other question: whether anybody is still keeping it current. */}
           {settings.aurora && fieldHealth?.aurora?.stale && (

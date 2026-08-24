@@ -42,7 +42,7 @@ function useCoarse() {
  * about to read it, which is the one thing an instrument must not do.
  *
  * A finger has no hover, and for as long as this was hover alone the sentence
- * simply did not exist on a phone — the terse panel with no way to the gloss,
+ * simply did not exist on a phone: the terse panel with no way to the gloss,
  * which is the reading of the two that needs it most. So under a coarse pointer
  * the row becomes a button and the hint is held open by a tap until it is
  * tapped away. Held, not pressed: reading it is the whole point, and a hint
@@ -64,9 +64,9 @@ function Hint({ children, open }) {
 /**
  * The tap route in, and nothing at all where there is a pointer that hovers.
  *
- * Returns the element the row should be — a real button when it has become one,
+ * Returns the element the row should be, a real button when it has become one,
  * so it is reachable by tab and answers Enter without any of that being
- * reimplemented here — along with whether the hint is currently held open.
+ * reimplemented here, along with whether the hint is currently held open.
  */
 function useTapHint(hint) {
   const coarse = useCoarse();
@@ -93,7 +93,7 @@ function Label({ children, trailing, hint, shut, onToggle }) {
   //
   // Kept as a separate shape rather than folded into the one below, because the
   // row can only have one job on a touch screen. Where a hint is tapped open,
-  // the plain heading *is* that button — and a fold control inside it would be
+  // the plain heading *is* that button, and a fold control inside it would be
   // a button inside a button, which is neither valid nor reliably tappable. So
   // here the heading carries the fold, and the hint gives up the whole row for
   // a mark of its own at the end. Hover is untouched either way: it is the
@@ -153,7 +153,7 @@ function Label({ children, trailing, hint, shut, onToggle }) {
  * `quiet` drops the glow. It is the whole of the difference between the two
  * kinds of number in this panel: what the weather is doing is lit, and what the
  * instrument is doing while it watches is not. Same size, same column, same
- * type — a status figure that had been shrunk as well would read as unimportant
+ * type. A status figure that had been shrunk as well would read as unimportant
  * rather than as a different subject, and how well this is hearing is not
  * unimportant.
  */
@@ -211,8 +211,8 @@ function RateTrace({ samples }) {
 
 // One side of the reach reading, as a figure and a trailing gloss: the middle
 // of the distribution, and the tenth of it that carried furthest. Absent as a
-// dash rather than as a zero — a half that has not filled yet has no median,
-// and a zero would be a claim that nothing was heard.
+// dash rather than as a zero, because a half that has not filled yet has no
+// median, and a zero would be a claim that nothing was heard.
 const far = (side) => (side.median === null ? "—" : Math.round(side.median).toLocaleString("en-US"));
 const unit = (side) =>
   side.tail === null ? "" : `km · ${(Math.round(side.tail / 100) / 10).toFixed(1)}k far`;
@@ -237,8 +237,8 @@ function span(ms) {
  *
  * The one mark on it is midnight UTC, and only once there is a midnight inside
  * the window. The whole reason to watch a day of this is that the planet fires
- * on a schedule — Africa, then the Americas, then Asia, each in their own
- * afternoon — and a curve with three humps in it says nothing at all unless you
+ * on a schedule, Africa then the Americas then Asia, each in their own
+ * afternoon, and a curve with three humps in it says nothing at all unless you
  * can see where the day begins.
  */
 function DayTrace({ day }) {
@@ -284,7 +284,7 @@ function DayTrace({ day }) {
  * Over each other rather than side by side, because the reading is not either
  * shape: it is whether one of them is further right than the other, and two
  * charts with their own axes is the one arrangement that makes that comparison
- * hard. Each is scaled to its own peak for the same reason — the question is
+ * hard. Each is scaled to its own peak for the same reason: the question is
  * where the mass sits, and the two bins fill at whatever rate the weather
  * offers, so the taller of them is only a fact about the hour.
  *
@@ -354,10 +354,10 @@ function ReachTrace({ reach }) {
  * second and wrong by twenty. The ends are what the arithmetic actually
  * supports, and they close as the sound gets nearer.
  *
- * The middle figure is kept when the frame carried no gap — an archive, mostly,
- * where the strikes were saved before the fix was recorded. Nothing is known
- * about the spread there, and inventing one would be the same fault the band
- * exists to fix.
+ * The middle figure is kept when the frame carried no gap, which means an
+ * archive, mostly, where the strikes were saved before the fix was recorded.
+ * Nothing is known about the spread there, and inventing one would be the same
+ * fault the band exists to fix.
  */
 const Thunder = memo(function Thunder({ thunder }) {
   const [, tick] = useState(0);
@@ -384,7 +384,7 @@ const Thunder = memo(function Thunder({ thunder }) {
     late === null || late <= 0
       ? null
       : early > 0
-        ? `${Math.ceil(early)}–${Math.ceil(late)}`
+        ? `${Math.ceil(early)}-${Math.ceil(late)}`
         : `≤${Math.ceil(late)}`;
 
   return (
@@ -472,7 +472,7 @@ function Sidebar({
   // A desktop can run out of slack too, and used to do it silently. Side by
   // side the shell holds the row at the window's height and clips what leaves
   // it, so the groups above the feed growing past the window took the feed with
-  // them — flexed to nothing rather than pushed out of sight, which is why it
+  // them, flexed to nothing rather than pushed out of sight, which is why it
   // did not look like something that had gone somewhere. The column scrolls
   // here as well now. It only ever has cause to when the readouts have already
   // filled the window, so a tall screen sees exactly what it saw before.
@@ -508,8 +508,8 @@ function Sidebar({
       </section>
 
       {/* Since the tab was opened. The trace is absent rather than empty until
-          there is a curve to draw — two minutes is the least it can be and
-          still be a line — but the total is always here, so the group never
+          there is a curve to draw, since two minutes is the least it can be
+          and still be a line, but the total is always here, so the group never
           disappears out from under a figure somebody was watching. */}
       <section className="border-b border-line px-4 pb-1 pt-4">
         <Label
@@ -528,7 +528,7 @@ function Sidebar({
             {/* The peak is the one figure the curve cannot be read off
                 precisely, and the one worth knowing: how hard the world was
                 firing at its hardest, and when. UTC, like the footer clock and
-                for the same reason — the peak is somebody's afternoon, and
+                for the same reason: the peak is somebody's afternoon, and
                 whose it was is the reading. */}
             <div className="mt-1 flex items-baseline justify-between text-2xs uppercase tracking-label text-dim">
               <span>Peak</span>
@@ -581,7 +581,7 @@ function Sidebar({
       {settings.reach && reach && (
         <section className="border-b border-line px-4 pb-1 pt-4">
           <Label
-            trailing={reach.span > 2 ? `0–${Math.round((reach.span * STEP_KM) / 1000)}k km` : null}
+            trailing={reach.span > 2 ? `0-${Math.round((reach.span * STEP_KM) / 1000)}k km` : null}
             hint="How far each strike was heard, counted to the most distant station that helped place it. Filled is paths under daylight, the line is paths under darkness."
             shut={shut.reach}
             onToggle={fold("reach")}
@@ -597,14 +597,14 @@ function Sidebar({
               each distribution, and its far end.
               Both, rather than the median alone, because they are not the same
               reading and the second is the one this exists for. The middle is
-              mostly a fact about where the volunteers live — half the network
-              is in Europe, and that sets how far a typical strike has to carry
+              mostly a fact about where the volunteers live, since half the
+              network is in Europe, and that sets how far a typical strike has to carry
               before somebody hears it, day or night. The far end is where the
               waveguide shows: it is the ninth strike in ten rather than the
               farthest of all, because the farthest of all is one strike and one
               strike is not a propagation condition.
               Each half appears when it has enough in it. The two fill on the
-              weather's schedule and not on the clock's — at an hour when the
+              weather's schedule and not on the clock's: at an hour when the
               world's lightning is all over the Americas, the sunlit side is
               ready long before the dark one. */}
           <Readout quiet label="Day" value={far(reach.day)} unit={unit(reach.day)} />
@@ -613,7 +613,7 @@ function Sidebar({
             label="Night"
             value={far(reach.night)}
             unit={unit(reach.night)}
-            hint="Sunlight makes a lossy layer at 60–70 km that the sferic has to bounce off; after sunset it decays and the reflection moves up to 85–90 km, where less is lost at every hop. The far figure is where that shows, and it should be the longer one at night. Both are floors — the most distant station that heard a strike is not as far as it went."
+            hint="Sunlight makes a lossy layer at 60 to 70 km that the sferic has to bounce off; after sunset it decays and the reflection moves up to 85 to 90 km, where less is lost at every hop. The far figure is where that shows, and it should be the longer one at night. Both are floors, since the most distant station that heard a strike is not as far as it went."
           />
             </>
           )}
@@ -696,7 +696,7 @@ function Sidebar({
           a column which does not fit by taking the difference out of this one
           section, and the difference can be everything it has. Side by side the
           shell clips what leaves the window, so the feed did not go below the
-          fold, it went to nothing — and a column whose parts have all agreed to
+          fold, it went to nothing, and a column whose parts have all agreed to
           shrink is a column that fits, with no reason to offer a scrollbar.
           A definite floor refuses that bargain, and the arithmetic has to fail
           upward instead: the panel overflows, and what overflows can be reached.

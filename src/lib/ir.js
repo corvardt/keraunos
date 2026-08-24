@@ -16,7 +16,7 @@
  * and honest: that is where one satellite's horizon ends and the next begins.
  *
  * Nothing here is a forecast. Every pixel was measured, between twenty and
- * forty minutes ago depending on whose satellite it came from — one moment
+ * forty minutes ago depending on whose satellite it came from: one moment
  * named across the whole ring, and each service's newest scan at or before it.
  * See LAG_MS.
  *
@@ -28,7 +28,7 @@
  *
  * The first version of this layer was keyed to the viewport instead. It asked
  * each dish for one image the size and shape of the canvas, which sounds
- * cheaper — five requests instead of thirty — and is the reason the layer felt
+ * cheaper, five requests instead of thirty, and is the reason the layer felt
  * like a photograph laid over the map rather than part of it. A rectangle of
  * screen is not a thing that can be cached: pan by one pixel and the key is
  * different, so every settle threw away a finished composite and asked five
@@ -40,7 +40,7 @@
  * Tiles fix all three at once, and they fix them by being in world coordinates,
  * which is where this data always lived. A pan reuses everything it has already
  * seen. A zoom draws the level above it, stretched, and refines tile by tile as
- * the finer ones land — the map is never empty and never wrong, only
+ * the finer ones land, so the map is never empty and never wrong, only
  * temporarily coarse, which is the honest state to be in while the picture is
  * still arriving. And the calibration, the territory seams and the latitude
  * weighting below all stop being functions of the view, which they never should
@@ -63,9 +63,9 @@ import {
 } from "./field.js";
 
 // The map wants three things from this file: `createSky`, and the two cadences.
-// Everything else exported below is the pure half — the grid, the territory and
-// the calibration — which is exported because `scripts/check-ir.cjs` is the
-// only thing that can tell whether any of it is right. None of it can be checked
+// Everything else exported below is the pure half, the grid, the territory and
+// the calibration, exported because `scripts/check-ir.cjs` is the only thing
+// that can tell whether any of it is right. None of it can be checked
 // by looking: a tile grid that is subtly misaligned, a territory with a gap at
 // the antimeridian, and a calibration that disagrees with itself across a seam
 // all produce a plausible wash over a plausible map.
@@ -86,14 +86,14 @@ import {
 //
 // Asked over WMS rather than through the tile API it used to use, and the
 // reason is the meter rather than the bytes. RealEarth's tile endpoint returns
-// 256 square whatever it is asked for — `&size=64` is a no-op, measured
-// identical to the byte at every level — so each tile arrived at sixteen times
+// 256 square whatever it is asked for, and `&size=64` is a no-op, measured
+// identical to the byte at every level, so each tile arrived at sixteen times
 // the samples this file has anywhere to put, and the extra fifteen sixteenths
 // were thrown away on the next line. `mapserv` honours WIDTH and HEIGHT, so the
 // same tile is 4.5 KB instead of 40.
 //
 // The bytes are the smaller half of it. RealEarth meters anonymous use by pixel
-// volume — 500 megapixels in a rolling day — and past it the imagery comes back
+// volume, 500 megapixels in a rolling day, and past it the imagery comes back
 // watermarked rather than refused, which is the caption `refused` below exists
 // to catch. At 256 a single tab left at world zoom spent about 264 MP a day,
 // over half the allowance, before anybody panned. At SAMPLES it spends 17.
@@ -102,7 +102,7 @@ const REALEARTH = "https://realearth.ssec.wisc.edu/cgi-bin/mapserv";
 // EUMETSAT's GeoServer, reached by way of our own origin rather than directly.
 //
 // It serves the picture and sends no `access-control-allow-origin` with it, and
-// every tile on this layer is read back pixel by pixel — so the browser is
+// every tile on this layer is read back pixel by pixel, so the browser is
 // allowed to fetch the image and then not allowed to look at it, which is the
 // same as not having it. `functions/msg.js` makes the request from somewhere
 // that is not a tab and says who may read the answer; `vite.config.js` does the
@@ -127,7 +127,7 @@ export const DISCS = [
 export const REFRESH_MS = 10 * 60 * 1000;
 
 // Replay quantises to this before it asks for anything, so scrubbing across an
-// hour costs six steps rather than one per tick — and each of those six is a
+// hour costs six steps rather than one per tick, and each of those six is a
 // moment the pyramid can hold, so scrubbing back over ground already covered
 // costs nothing at all.
 export const STEP_MS = 10 * 60 * 1000;
@@ -138,7 +138,7 @@ export const STEP_MS = 10 * 60 * 1000;
  * A scan is not published the moment it is taken: the dish has to finish the
  * disc, and the agency has to process it and put it on a server. Both services
  * answer a time they do not have yet by handing back the newest frame they do
- * have — except EUMETSAT, which answers 502 for a moment past its own last
+ * have, except EUMETSAT, which answers 502 for a moment past its own last
  * one. So this only has to clear EUMETSAT's publication, and theirs is the
  * quickest of the five at about fifteen minutes.
  *
@@ -165,7 +165,7 @@ export const LAG_MS = 20 * 60 * 1000;
  * wash behind a map rather than as an image.
  *
  * Matched to the block, which is what actually reaches the glass. A tile lands
- * near TILE_PX and a block is BLOCK_PX, so a tile covers about sixty blocks —
+ * near TILE_PX and a block is BLOCK_PX, so a tile covers about sixty blocks,
  * and a sample finer than the block it will be averaged into is a sample nobody
  * ever sees. This was 128 when the field went to the canvas unquantised; half
  * of that was being thrown away at the last step, and being a square, dropping
@@ -175,7 +175,8 @@ export const LAG_MS = 20 * 60 * 1000;
 export const SAMPLES = 64;
 
 /**
- * How large a tile is meant to land on the glass, which is what picks the level.
+ * How large a tile is meant to land on the glass, which is what picks the
+ * level.
  *
  * Bigger than SAMPLES on purpose: the ratio between them is the stretch, and at
  * about two and a half times it is invisible on a wash while cutting the tile
@@ -293,16 +294,16 @@ const latitudeWeight = (lat) => ramp(Math.abs(lat), LAT_LIMB, LAT_CORE);
  *
  * The tiles that wide are the shallow ones, and the failure was silent in the
  * worst way. A dish that is not asked is indistinguishable further down from a
- * dish that answered nothing — `fetchTile` treats a missing image as a disc
- * missing from the tile rather than as an error, deliberately, because a ring of
- * five is still a map with four — so the tile came back with a band of the
+ * dish that answered nothing. `fetchTile` treats a missing image as a disc
+ * missing from the tile rather than as an error, deliberately, because a ring
+ * of five is still a map with four, so the tile came back with a band of the
  * planet blank in it and was stored as a good answer. Nothing retried it,
  * because nothing had failed. At level 0, three of the five dishes were being
  * left out: everything from the eastern Pacific to the Indian Ocean was simply
  * not on the map, for as long as that tile was held.
  *
  * `scripts/check-ir.cjs` now holds every level to this, since it is not a thing
- * that can be seen by looking — a blank band over an ocean looks like an ocean.
+ * that can be seen by looking: a blank band over an ocean looks like an ocean.
  */
 export function discsFor(frame) {
   const west = lonAt(frame.minX);
@@ -337,9 +338,9 @@ export function discsFor(frame) {
  * alone, a storm cools as it drifts west out of Meteosat's ground and into
  * GOES-East's, and the coldest tops RealEarth can draw would never reach a
  * threshold set on EUMETSAT's white. So each service is described by the three
- * points on its own ramp that matter — where it leaves the warm floor, where
- * -30°C lands, and where it tops out — and read onto the common scale through
- * them.
+ * points on its own ramp that matter, which are where it leaves the warm floor,
+ * where -30°C lands, and where it tops out, and read onto the common scale
+ * through them.
  *
  * The numbers were measured rather than looked up, by the only method that can
  * settle it: over the Atlantic and the Indian Ocean two dishes on different
@@ -378,7 +379,7 @@ export function scalarFor(stretch, l) {
  * what is colder than this is drawn at all.
  *
  * It does two things at once, which is worth knowing before moving it. It is a
- * cut, and it is also the bottom of the stretch below — everything kept is
+ * cut, and it is also the bottom of the stretch below: everything kept is
  * rescaled across what is left, so lowering it both admits fainter cloud and
  * makes the cloud already drawn more solid. It was 0.47, then 0.34, and each
  * move has been the second effect more than the first: the extra ground let in
@@ -391,8 +392,8 @@ export function scalarFor(stretch, l) {
  * of full weight, which is the shape this cut is meant to have: the sky filling
  * in rather than the ground fogging up. It is the fogging that sets the limit
  * on going further, and the limit is a thing to be looked at rather than
- * derived — warm sea is most of the planet, and it does not announce which side
- * of the line it sits on.
+ * derived, because warm sea is most of the planet and it does not announce
+ * which side of the line it sits on.
  *
  * What it does not touch is the storm tops. TOPS below is defined as a fraction
  * of what is left above this line, so `v > TOPS` is `t > 0.8` at any floor, and
@@ -445,8 +446,8 @@ const convective = (lat) => ramp(Math.abs(lat), 62, 35);
  * map about a degree sideways. Named, parent and children agree to the sample
  * at every level, on both services.
  *
- * Both then resolve that name the same way — the newest frame at or before it —
- * so a moment between scans, or one a dish has not reached yet, is answered
+ * Both then resolve that name the same way, with the newest frame at or before
+ * it, so a moment between scans, or one a dish has not reached yet, is answered
  * with the last real picture rather than an error or a gap.
  */
 export function url(disc, frame, at) {
@@ -468,7 +469,7 @@ export function url(disc, frame, at) {
   if (disc.service === REALEARTH) {
     // RealEarth has no TIME dimension. It publishes every scan it holds as a
     // layer of its own, named for the moment it was taken, inside a mapfile of
-    // the product's own name — so the moment is chosen by asking for a
+    // the product's own name, so the moment is chosen by asking for a
     // different layer rather than by a parameter.
     //
     // Asked at the far end of the step rather than its start, exactly as the
@@ -481,7 +482,7 @@ export function url(disc, frame, at) {
     params.set("map", `${disc.layer}.map`);
     params.set("LAYERS", `${disc.layer}_${stamp}`);
     // ponytail: a layer name RealEarth does not recognise is answered with the
-    // current scan, 200 OK and no complaint — so a change to their naming would
+    // current scan, 200 OK and no complaint, so a change to their naming would
     // show up as a map that quietly stopped rewinding rather than as an error.
     // `scripts/check-ir.cjs` holds the resolution to account; if that is ever
     // not enough, the fix is to read the stamp back out of GetCapabilities.
@@ -497,19 +498,19 @@ export function url(disc, frame, at) {
 // handed back as `refused`. It used to be a guess made from the pixels: the
 // refusal arrives as a picture with "Size limit exceeded" printed across it,
 // and white text reads as the coldest cloud top on the scale, so the caption
-// drew as a storm — the one failure on this map that invented a reading rather
+// drew as a storm, the one failure on this map that invented a reading rather
 // than omitting one. The test looked for pure black and pure white in one tile,
 // which real infrared never contains, and it worked; it was still a heuristic
 // standing in for a service that had been saying so out loud all along.
 //
 // Worth keeping the reason written down, because it explains the quota this
-// layer lives inside. Both of RealEarth's triggers are cumulative over a rolling
-// day rather than per request — 1,024 pixels in either dimension with adjacent
-// requests counting together, and 500 megapixels of volume — and a tile pyramid
-// is nothing but adjacent requests. That is why it seemed to be a threshold
-// nothing could stay under, refusing one minute and serving the next, and why
-// asking over WMS at SAMPLES rather than the tile API's fixed 256 is what buys
-// the room.
+// layer lives inside. Both of RealEarth's triggers are cumulative over a
+// rolling day rather than per request, 1,024 pixels in either dimension with
+// adjacent requests counting together, and 500 megapixels of volume, and a tile
+// pyramid is nothing but adjacent requests. That is why it seemed to be a
+// threshold nothing could stay under, refusing one minute and serving the next,
+// and why asking over WMS at SAMPLES rather than the tile API's fixed 256 is
+// what buys the room.
 
 /**
  * The other thing that arrives 200 OK with no weather in it: a sheet that is
@@ -523,15 +524,15 @@ export function url(disc, frame, at) {
  * measured infrared always has: the comment above puts a live tile between
  * about 70 and about 200, and the point is less where it sits than that it is a
  * spread. Sixty-four samples of a real sky do not land on one byte. So the test
- * is exact equality rather than a tolerance — a near-flat overcast tile is
+ * is exact equality rather than a tolerance: a near-flat overcast tile is
  * weather and is kept, and only a sheet with literally nothing in it is turned
  * away.
  *
  * Two guards on top, because a false positive here is worse than a miss. The
  * value has to be one that would actually be painted: below the floor it draws
  * nothing, so a tile of dead black off the limb is left alone rather than
- * refused forever. And there has to be enough of the sheet to be worth judging
- * — a dish reaching this tile with a sliver of its horizon can be uniform
+ * refused forever. And there has to be enough of the sheet to be worth judging:
+ * a dish reaching this tile with a sliver of its horizon can be uniform
  * honestly, where a quarter of a tile cannot.
  */
 const ENOUGH = (SAMPLES * SAMPLES) / 4;
@@ -553,8 +554,8 @@ export function flat(data, stretch) {
  * A disc, asked for one tile.
  *
  * The retry, the CORS, the exception bodies and the watermark header all live
- * in `loadImage` now — see `field.js`, which explains why an `<img>` could not
- * see any of them. What is left here is what is particular to the ring: a disc
+ * in `loadImage` now (see `field.js`, which explains why an `<img>` could not
+ * see any of them). What is left here is what is particular to the ring: a disc
  * that does not answer is a disc missing from the tile rather than an error,
  * because five independent services are five, and a map with four of them is
  * still a map.
@@ -579,7 +580,7 @@ async function fetchTile(z, x, y, at) {
   }
 
   // Weighed before it is fetched, not after. Mercator gives the polar rows an
-  // enormous share of the grid — at level 4 the top two rows of tiles are
+  // enormous share of the grid: at level 4 the top two rows of tiles are
   // entirely above the latitude the mask closes at, and every one of them used
   // to be a request paid for, decoded, and multiplied by nothing. Returned as
   // an empty tile rather than as a failure, because that is what it is: this
@@ -611,9 +612,9 @@ async function fetchTile(z, x, y, at) {
   let turnedAway = false;
 
   // Whether a dish that owns ground in this tile failed to hand any over. The
-  // tile is still worth keeping — four fifths of a sky is not nothing, and
+  // tile is still worth keeping, since four fifths of a sky is not nothing and
   // throwing it away would leave the ground blank rather than merely
-  // incomplete — but it must not be mistaken for a finished answer, because
+  // incomplete, but it must not be mistaken for a finished answer, because
   // what it looks like is clear weather over somebody's afternoon.
   let short = false;
 
@@ -625,7 +626,7 @@ async function fetchTile(z, x, y, at) {
       const xM = frame.minX + ((col + 0.5) / SAMPLES) * (frame.maxX - frame.minX);
       cols[col] = longitudeWeight(disc, lonAt(xM));
     }
-    // Nothing of this dish reaches this tile after all — the corners said it
+    // Nothing of this dish reaches this tile after all: the corners said it
     // might, the columns say otherwise.
     if (!cols.some((w) => w > 0)) return;
 
@@ -673,8 +674,8 @@ async function fetchTile(z, x, y, at) {
 
   // A refusal is not an answer, so it is not kept. Returning null leaves the
   // key out of the pyramid, which puts the tile back in the queue on the next
-  // settle — right, for a thing that is temporary by nature. Until then the
-  // ancestor covers the ground, as it does for any tile still in the air.
+  // settle, which is right for a thing that is temporary by nature. Until then
+  // the ancestor covers the ground, as it does for any tile still in the air.
   if (turnedAway) return null;
 
   const field = new Uint8Array(SAMPLES * SAMPLES);
@@ -727,7 +728,7 @@ function paintTile({ field, lat }, body, tops) {
       const t = v / 255;
       // Linear, and the ceiling raised to match. It was squared once, on the
       // reasoning that this is a backdrop rather than a photograph and should
-      // be dark everywhere the weather is not — which is right about the
+      // be dark everywhere the weather is not, which is right about the
       // intent and was wrong about the arithmetic. Squaring a value that has
       // already been floored and rescaled crushes the whole middle of the
       // scale: ordinary cloud at grey 87 came out at two parts in 255, which is
@@ -744,7 +745,7 @@ function paintTile({ field, lat }, body, tops) {
       // The ceiling was set by looking rather than by arithmetic, which is the
       // only way it could have been. Rendered against the real tube at 56, an
       // overcast sky measured out at three grey levels of movement on the
-      // glass — the numbers said it was drawn and the eye said it was not, and
+      // glass. The numbers said it was drawn and the eye said it was not, and
       // the eye is the instrument this is for. At 150 an ordinary overcast
       // lands near 14%, a deep top near 37%, and the coldest anything gets is
       // 57%: a wash you can read the map through, rather than one you have to

@@ -1,5 +1,6 @@
 /**
- * A tiled field over the map, and everything that is stateful about drawing one.
+ * A tiled field over the map, and everything that is stateful about drawing
+ * one.
  *
  * This is the machinery the cloud field was built as, with the satellites taken
  * out of it. What is left is source-agnostic and turned out to be most of the
@@ -23,7 +24,7 @@
  *
  * The first version of the cloud layer was keyed to the viewport instead. It
  * asked each dish for one image the size and shape of the canvas, which sounds
- * cheaper — five requests instead of thirty — and is the reason the layer felt
+ * cheaper, five requests instead of thirty, and is the reason the layer felt
  * like a photograph laid over the map rather than part of it. A rectangle of
  * screen is not a thing that can be cached: pan by one pixel and the key is
  * different, so every settle threw away a finished composite and asked five
@@ -35,7 +36,7 @@
  * Tiles fix all three at once, and they fix them by being in world coordinates,
  * which is where this data always lived. A pan reuses everything it has already
  * seen. A zoom draws the level above it, stretched, and refines tile by tile as
- * the finer ones land — the map is never empty and never wrong, only
+ * the finer ones land, so the map is never empty and never wrong, only
  * temporarily coarse, which is the honest state to be in while the picture is
  * still arriving. And a source's calibration stops being a function of the
  * view, which it never should have been: a tile carries the same numbers
@@ -99,7 +100,7 @@ export function tileFrame(z, x, y) {
  *
  * `focus` overrides the point that "nearest" is measured from, in metres. The
  * globe needs it: its frame is the whole world every time, so the middle of the
- * frame is the middle of the Mercator square — a spot in the Gulf of Guinea —
+ * frame is the middle of the Mercator square, a spot in the Gulf of Guinea,
  * whatever hemisphere is actually turned towards the reader. Left that way the
  * ordering is real but aimed at nothing, and a globe pointed at the Pacific
  * fills in from the far side of the planet backwards.
@@ -119,7 +120,7 @@ export function tilesFor(frame, z, ordered = false, focus = null) {
   }
   if (!ordered) return out;
 
-  // Where the reader is actually looking, in fractional tiles — not the middle
+  // Where the reader is actually looking, in fractional tiles, not the middle
   // of the block of tiles, which is a different point and sometimes a long way
   // off it. Tile indices are floored and then clamped to the world, so the
   // block runs to the tile boundary outside the screen on each side and stops
@@ -146,8 +147,9 @@ export function tilesFor(frame, z, ordered = false, focus = null) {
  * a hole: its parent covers four times the ground at half the detail and was
  * almost certainly fetched on the way in, so the quadrant of the parent that
  * belongs here is drawn instead. Two levels up it is a sixteenth, three a
- * sixty-fourth, and at worst it is level 0 — one tile for the planet, the
- * cheapest thing in the pyramid and the reason a cold start still shows a field.
+ * sixty-fourth, and at worst it is level 0, one tile for the planet, the
+ * cheapest thing in the pyramid and the reason a cold start still shows a
+ * field.
  *
  * `x >> shift` is the ancestor's index and the bits shifted out are the way
  * back down: they say which quadrant was taken at each step, which is exactly
@@ -169,7 +171,7 @@ export function ancestorPatch(z, x, y, level, samples) {
  * the rung below that is a quarter of a pixel: `drawImage` is being asked to
  * take one value and spread it across the whole tile. What lands on the glass
  * is a flat rectangle with the tile's own corners, at whatever weight that one
- * pixel happened to hold — and since neighbouring tiles take neighbouring
+ * pixel happened to hold, and since neighbouring tiles take neighbouring
  * pixels of the same ancestor row, a run of them reads as a bar lying across
  * the map.
  *
@@ -180,7 +182,7 @@ export function ancestorPatch(z, x, y, level, samples) {
  * turns away a caption for exactly this reason: of the ways this map can be
  * wrong, inventing a reading is the only unacceptable one.
  *
- * Four is the least that can carry a shape rather than a value — sixteen
+ * Four is the least that can carry a shape rather than a value: sixteen
  * pixels, coarse and obviously coarse. Below it the ground is left bare and the
  * tile that is already in flight is allowed to answer for itself.
  */
@@ -197,7 +199,7 @@ export const MIN_PATCH = 4;
  * token is, is what gets drawn.
  */
 // One sheet, reused. Every source builds both its passes through here, so a
-// tile costs two of these and a pan over new ground costs a couple of hundred —
+// tile costs two of these and a pan over new ground costs a couple of hundred,
 // each of them a canvas and its backing store, allocated to be drawn once and
 // dropped. They are all the same size, and nothing reads one after the call it
 // was made in, so there is no reason for there to be more than one.
@@ -238,7 +240,7 @@ const IN_FLIGHT = 4;
 
 // How many painted tiles are kept. A tile is its samples as a scalar and the
 // same again as a canvas, so this is a few tens of megabytes at the very worst
-// and far less in practice — and it is what makes panning back over ground you
+// and far less in practice, and it is what makes panning back over ground you
 // have already looked at cost nothing.
 const KEEP = 320;
 
@@ -252,8 +254,8 @@ const KEEP = 320;
  * else here is quantised, without turning it into a pattern of its own: it is
  * still a wash, drawn at the resolution the rest of the map is drawn at.
  *
- * Five, because that is where the land matrix's own dots start — they sit about
- * five pixels apart at world zoom, opening to thirteen as you close in — and a
+ * Five, because that is where the land matrix's own dots start. They sit about
+ * five pixels apart at world zoom, opening to thirteen as you close in, and a
  * field quantised finer than the marks over it reads as blur rather than as
  * structure.
  */
@@ -273,7 +275,7 @@ const MOMENT_FADE_MS = 550;
  * How long a tile that did not answer waits before it is asked for again, and
  * how many times.
  *
- * A tile that fails is deliberately not held — see `fetch` below — so that it
+ * A tile that fails is deliberately not held (see `fetch` below), so that it
  * is asked for again rather than remembered as empty. What it was asked for
  * again *by* was the next settle, and that is the gap this closes: a settle is
  * the reader panning, and a reader who is not panning is exactly the reader
@@ -285,12 +287,12 @@ const MOMENT_FADE_MS = 550;
  * planet, and worst of all on the first frame after the layer is switched on,
  * where there is no older moment underneath to cover for it.
  *
- * Bounded, because the two failures this retries are both transient by nature —
- * a GeoServer 500, and RealEarth's "size limit exceeded", which is the same tile
- * refused one minute and served the next. Three tries is enough for both. A
- * service that is genuinely down answers the fourth the same as the first, and
- * past that the ten-minute tick is the right cadence to keep hoping at rather
- * than a timer of our own hammering somebody else's server.
+ * Bounded, because the two failures this retries are both transient by nature:
+ * a GeoServer 500, and RealEarth's "size limit exceeded", which is the same
+ * tile refused one minute and served the next. Three tries is enough for both.
+ * A service that is genuinely down answers the fourth the same as the first,
+ * and past that the ten-minute tick is the right cadence to keep hoping at
+ * rather than a timer of our own hammering somebody else's server.
  */
 const RETRY_MS = 4000;
 const RETRIES = 3;
@@ -299,12 +301,12 @@ const RETRIES = 3;
  * The safety net under the visible level, so that a hole is never a hole.
  *
  * `drawTile` covers a missing tile with the best ancestor it can find, and used
- * to claim that at worst this is level 0 — one tile for the planet, and the
+ * to claim that at worst this is level 0, one tile for the planet, and the
  * reason a cold start still shows a field. That was not true. `want` queues the
  * visible level and nothing else, so ancestors exist only where the reader
- * happened to zoom through them, and a view opened straight at its final depth
- * — a shared link with a hash in it, which is the ordinary way this map is
- * arrived at — has an empty pyramid with nothing beneath the one level it is
+ * happened to zoom through them, and a view opened straight at its final depth,
+ * as a shared link with a hash in it does, which is the ordinary way this map
+ * is arrived at, has an empty pyramid with nothing beneath the one level it is
  * fetching. One request lost there is a void with no floor under it, and it
  * shows worst at exactly the moment a reader is first looking.
  *
@@ -313,7 +315,7 @@ const RETRIES = 3;
  * and the detail sharpens onto it.
  *
  * Two levels, not the whole chain. `DROP` below the visible one is the working
- * net — a quarter the linear resolution, and roughly one tile however deep the
+ * net, a quarter the linear resolution and roughly one tile however deep the
  * view is, because each level up divides the count by four. Level 0 is the
  * backstop under that, and it is one request for the whole planet, which is
  * cheap enough to take unconditionally and is what finally makes the sentence
@@ -344,13 +346,13 @@ const RAD = Math.PI / 180;
 // It buys accuracy against draw calls, and both scale as its square: four
 // degrees is 4,050 cells for the planet and puts the error between the quad the
 // projection wants and the parallelogram canvas can draw at about a quarter of
-// a pixel on a large tube — well under the block the layer is quantised to,
+// a pixel on a large tube, well under the block the layer is quantised to,
 // which is what matters. Halving it would quarter an error nobody can see and
 // cost sixteen thousand draws a frame.
 //
 // So it is the error that is held, and not the cell count. Stated as one number
 // the cells were sized to fit a desktop, a phone got the same four thousand
-// draws a frame for a planet a third of the width — where the same mesh is an
+// draws a frame for a planet a third of the width, where the same mesh is an
 // order of magnitude finer than it needs to be, because the error falls with
 // the size of the thing being drawn. The ladder below is every step that
 // divides both the 360 degrees of longitude and the mesh's own span of
@@ -367,8 +369,8 @@ const MESH_ERROR_PX = 0.5;
  *
  * A cell of θ radians on a globe of radius R departs from the straight-sided
  * patch canvas can draw by its sagitta, R·θ²/8, and the globe's radius is the
- * world's width over 2π. Everything else here — the unfold's half-flattened
- * shapes included — is less curved than a sphere at the same width, so the
+ * world's width over 2π. Everything else here, the unfold's half-flattened
+ * shapes included, is less curved than a sphere at the same width, so the
  * sphere is the case that decides it.
  */
 function meshFor(worldPx) {
@@ -384,21 +386,21 @@ function meshFor(worldPx) {
 // poles; this is the last parallel it can name.
 const MESH_LAT = 84;
 // A ceiling on the world picture. Nothing on this map asks for one anywhere
-// near it — a globe on a large tube wants about five hundred — but the size is
-// derived from a projection's scale, and a scale is something a caller could
+// near it, since a globe on a large tube wants about five hundred, but the size
+// is derived from a projection's scale, and a scale is something a caller could
 // hand in wrong. A picture that quietly tries to allocate a gigabyte is a worse
 // failure than one that is coarse.
 // ── Fetching one picture ────────────────────────────────────────────────────
 //
 // Three layers were doing this three times, and the copies had drifted: the
 // cloud field retried a failed tile once, the coverage layer retried once and
-// complained in different words, and the radar composite did not retry at all —
+// complained in different words, and the radar composite did not retry at all,
 // against a service that answers the same intermittent 500 as the other two.
 // None of that was a decision; it was the order the files were written in.
 //
 // Fetched rather than pointed at an `<img>`, and that is the part that matters
-// rather than the deduplication. An image tag has exactly one failure — it did
-// not load — and every one of this instrument's real failures is invisible
+// rather than the deduplication. An image tag has exactly one failure, that it
+// did not load, and every one of this instrument's real failures is invisible
 // through it. A 500 from a WMS looks the same as a tile that has not arrived. A
 // GeoServer exception is an XML document that fails to decode and reads as a
 // network blip. And RealEarth says in a header when it is watermarking a
@@ -427,7 +429,7 @@ const WHY = {
 /**
  * One picture, or the reason there is none.
  *
- * Resolves `{ image }` on success and `{ why, refused }` otherwise — never
+ * Resolves `{ image }` on success and `{ why, refused }` otherwise. It never
  * throws and never rejects, because every caller here treats a missing picture
  * as a fact about the sky rather than as an error to handle. `refused` is the
  * one failure worth telling apart: the service answered, and what it answered
@@ -452,7 +454,7 @@ export async function loadImage(src) {
     // be guessed at. Believed over the picture, always.
     //
     // Both spellings, because their own documentation gives the name twice and
-    // disagrees with itself — the prose says `RE-Watemark` and the header they
+    // disagrees with itself: the prose says `RE-Watemark` and the header they
     // actually send is the one you would expect. Asking for both costs a map
     // lookup and removes the chance of this quietly never firing.
     const mark =
@@ -505,8 +507,8 @@ const MAX_WORLD = 2048;
  * The deepest level the globe will ask the whole world for.
  *
  * 256 tiles, which is what a planet drawn twice the size of the glass already
- * asks for and gets. One level further is a thousand, and the queue runs four at
- * a time: the difference between a field that fills in a few seconds and one
+ * asks for and gets. One level further is a thousand, and the queue runs four
+ * at a time: the difference between a field that fills in a few seconds and one
  * that never finishes. See its use below for why the globe cannot simply ask
  * for the part on screen the way the flat map does.
  */
@@ -531,8 +533,8 @@ const WHOLE_WORLD = {
  * every time a tile landed would be re-rendering the whole map thirty times to
  * fill one screen.
  *
- * `source` is `{ samples, tilePx, maxLevel, fetch, paint }`. `fetch(z, x, y, at)`
- * resolves to whatever `paint(tile, body, tops)` wants, plus an `any` flag
+ * `source` is `{ samples, tilePx, maxLevel, fetch, paint }`. `fetch(z, x, y,
+ * at)` resolves to whatever `paint(tile, body, tops)` wants, plus an `any` flag
  * saying whether the tile has anything in it at all; null means the tile was
  * not answered and should be asked for again.
  */
@@ -563,8 +565,8 @@ export function createField(source) {
   // every frame, which is a clear and thirty scaled `drawImage`s for a picture
   // that is usually identical to the one already on it: the field only changes
   // when a tile lands, a handover moves, or the view does, and none of those is
-  // most frames. The globe's world picture has always been kept this way — see
-  // `worldAt` below — and the reason the flat one was not is simply that it was
+  // most frames. The globe's world picture has always been kept this way (see
+  // `worldAt` below), and the reason the flat one was not is simply that it was
   // written first. It costs one string compare to find out.
   let bufferAt = "";
 
@@ -572,7 +574,7 @@ export function createField(source) {
   // of it. Held across frames for the same reason the buffer is, and rebuilt on
   // rather less: rotation does not touch it. `worldAt` is what it was last
   // built from, `arrivals` counts tiles landing so that a signature can see
-  // one, and `fading` says a tile in it was still coming up when it was drawn —
+  // one, and `fading` says a tile in it was still coming up when it was drawn,
   // which is the one change a signature cannot see, because it is time passing.
   let world = null;
   let worldCtx = null;
@@ -624,7 +626,7 @@ export function createField(source) {
    * A tile that did not answer, put back for another go.
    *
    * Only while the tab is being looked at. A hidden page stops its render loop
-   * and stands its fetches down — see the map — so a timer that kept asking
+   * and stands its fetches down (see the map), so a timer that kept asking
    * would be spending somebody else's bandwidth on a picture nobody can see.
    * Coming back to the tab calls `want` again, which re-queues everything still
    * missing, so nothing is lost by dropping it here.
@@ -647,7 +649,7 @@ export function createField(source) {
       // Iterated over a copy, and the entries that survive are left in place
       // rather than removed and put back. Both halves of that matter: a Map
       // iterator is live, so deleting a key and re-inserting it during the walk
-      // appends it past the cursor and the loop meets it again — and again, and
+      // appends it past the cursor and the loop meets it again, and again, and
       // the tab locks. Leaving the entry alone also keeps its try count, which
       // is what makes the bound above bound anything.
       const target = incoming ?? shown;
@@ -719,23 +721,23 @@ export function createField(source) {
    *
    * Lifted out of `draw` when the globe arrived, unchanged. Both painters ask
    * the same question of the same pyramid and the answer is a property of what
-   * has landed, not of the projection it is going to be drawn through — and a
+   * has landed, not of the projection it is going to be drawn through, and a
    * handover that advanced differently depending on which view was up would put
    * the two a frame of weather apart every ten minutes.
    */
   const handover = (wanted, now) => {
     // The handover between one published frame and the next waits for the new
-    // one to be able to cover the screen. Not for every tile at full detail —
-    // an ancestor is a real answer — only for there to be nothing missing, so
-    // the field never thins out mid-fade.
+    // one to be able to cover the screen. Not for every tile at full detail,
+    // since an ancestor is a real answer, only for there to be nothing missing,
+    // so the field never thins out mid-fade.
     //
-    // At its own level, now that there is always a floor beneath it. Covered
-    // by an ancestor used to be the same test as arrived — only the visible
-    // level was ever fetched, so anything answering for a tile was that tile —
+    // At its own level, now that there is always a floor beneath it. Covered by
+    // an ancestor used to be the same test as arrived, because only the visible
+    // level was ever fetched, so anything answering for a tile was that tile,
     // and it stopped being the same test the moment the floor above started
-    // being fetched too. Left as it was, every handover would pass the
-    // instant the coarse net landed, and the whole field would soften and
-    // re-sharpen once every ten minutes.
+    // being fetched too. Left as it was, every handover would pass the instant
+    // the coarse net landed, and the whole field would soften and re-sharpen
+    // once every ten minutes.
     //
     // Unless it has waited too long, in which case coarse goes up rather than
     // the map sitting on a frame that is quietly ageing past what the footer
@@ -753,7 +755,7 @@ export function createField(source) {
       if (arrived || (now - incomingSince > PATIENCE_MS && covered())) fadeFrom = now;
     }
 
-    // Nothing at all until it can cover the screen — until then the frame
+    // Nothing at all until it can cover the screen. Until then the frame
     // already up is the whole of the field, which is the point of waiting: a
     // half-arrived replacement drawn over its predecessor is exactly the
     // thinning-out this is here to prevent. The one exception is a cold start,
@@ -887,7 +889,7 @@ export function createField(source) {
      * from scratch every time, which is the point. A tile that was wanted for
      * the last view and is not wanted for this one should not still be fetching
      * on the reader's behalf, and one that has already arrived costs a map
-     * lookup to skip. Requests already in the air are left alone — they are
+     * lookup to skip. Requests already in the air are left alone. They are
      * paid for, and the pyramid keeps whatever they bring.
      *
      * `whole` is for the views `drawWarp` paints. The screen rectangle is read
@@ -895,18 +897,18 @@ export function createField(source) {
      * for a sphere: the canvas corners of a globe are not the corners of a
      * Mercator box, and taken as though they were they name a strip of about
      * ±100° of longitude and ±50° of latitude. `drawWarp` draws every tile of
-     * the world regardless — half of it is one drag away and the whole of it is
-     * on the glass through the unfold — so everything outside that strip was
-     * being drawn from whatever ancestor existed, which is level 0, one tile for
-     * the planet. It showed as the Pacific and the poles arriving as a smudge
-     * while the rest of the sky was sharp, and it showed worst on a cold start,
-     * where level 0 is all there is.
+     * the world regardless, because half of it is one drag away and the whole
+     * of it is on the glass through the unfold, so everything outside that
+     * strip was being drawn from whatever ancestor existed, which is level 0,
+     * one tile for the planet. It showed as the Pacific and the poles arriving
+     * as a smudge while the rest of the sky was sharp, and it showed worst on a
+     * cold start, where level 0 is all there is.
      *
-     * It carries the globe's own `[lon, lat]` rather than a flag, because a view
-     * of the whole world still has somewhere it is pointed, and that is both the
-     * only thing that says which tiles matter first and something a rectangle
-     * cannot be asked for. Any truthy value means the whole world; the pair says
-     * where the eye is.
+     * It carries the globe's own `[lon, lat]` rather than a flag, because a
+     * view of the whole world still has somewhere it is pointed, and that is
+     * both the only thing that says which tiles matter first and something a
+     * rectangle cannot be asked for. Any truthy value means the whole world;
+     * the pair says where the eye is.
      */
     want(projection, width, height, at, whole = false) {
       if (!projection || !width || !height) return;
@@ -928,10 +930,11 @@ export function createField(source) {
 
       const frame = whole ? WHOLE_WORLD : mercatorFrame(projection, width, height);
       // Stopped at GLOBE_LEVEL for the same reason `drawWarp` stops there, and
-      // it has to be the same stop: the two used to disagree, and a zoomed globe
-      // asked for 1,024 tiles of level 5 and then drew level 4, which nothing
-      // had fetched. So the field crawled in from a level-2 ancestor while the
-      // queue spent the whole allowance on tiles no painter would ever read.
+      // it has to be the same stop: the two used to disagree, and a zoomed
+      // globe asked for 1,024 tiles of level 5 and then drew level 4, which
+      // nothing had fetched. So the field crawled in from a level-2 ancestor
+      // while the queue spent the whole allowance on tiles no painter would
+      // ever read.
       const z = whole ? Math.min(level(projection), GLOBE_LEVEL) : level(projection);
       const focus = Array.isArray(whole) ? metresAt(whole[0], whole[1]) : null;
       const target = incoming ?? shown;
@@ -942,7 +945,7 @@ export function createField(source) {
       // The store is normally kept by `draw`: it drops the outgoing frame when
       // a handover finishes, and evicts the least recently drawn tiles after
       // it. But `draw` is a render-loop callback, and the render loop stops
-      // when the tab is hidden — while the clock does not. A moment that
+      // when the tab is hidden, while the clock does not. A moment that
       // arrives and is replaced before anything is ever drawn leaves its tiles
       // behind with nothing to collect them, and the only bound on how many
       // times that can happen is how long the page is left open.
@@ -991,14 +994,14 @@ export function createField(source) {
      *
      * The failure this exists for is the quiet one. A dish that does not reply
      * is dropped from its tile, the tile is kept without it, and the territory
-     * it covered draws as clear sky — which on a weather layer is not a blank,
+     * it covered draws as clear sky, which on a weather layer is not a blank,
      * it is a reading, and a wrong one. The same is true of a tile that never
      * arrived at all: the ancestor beneath it is stretched over the gap and the
      * result is plausible, smooth, and older than it looks.
      *
      * So the count goes to the glass. `whole` is what the view asked for,
      * `held` what is drawn from real tiles at this level, and `partial` those
-     * standing with a dish missing. Nothing here judges — the footer decides
+     * standing with a dish missing. Nothing here judges: the footer decides
      * what is worth saying, because how much of a sky is missing before it is
      * worth mentioning is a question about reading, not about tiles.
      */
@@ -1030,7 +1033,7 @@ export function createField(source) {
      * construction: a tile that never arrived, a tile covered by a coarse
      * ancestor, a tile missing one satellite, and a genuinely cloudless sky all
      * render as the same dark ground. Arguing about which one you are looking
-     * at from a screenshot does not work — this says which.
+     * at from a screenshot does not work, so this says which.
      *
      * Off unless the address carries `?tiles`. See the map.
      */
@@ -1066,7 +1069,7 @@ export function createField(source) {
       // Rounded, and rounded from the shared edge rather than from a width:
       // neighbouring tiles then agree on where the boundary is and the grid
       // leaves no gaps between them. Rounded to whole blocks now rather than to
-      // whole pixels, which is the same guarantee one grid coarser — and it
+      // whole pixels, which is the same guarantee one grid coarser, and it
       // keeps every tile edge on the block lattice, so a tile boundary is never
       // a half-lit row of blocks.
       const place = (tile) => {
@@ -1085,13 +1088,13 @@ export function createField(source) {
       // The same question the globe asks of its world picture below, with the
       // view added: that one is the whole planet in world coordinates and a
       // rotation only moves the eye over it, while this one is in screen space,
-      // so where a tile sits on it is a function of the projection too. The rest
-      // is identical — which moments are up, how far between them, whether
+      // so where a tile sits on it is a function of the projection too. The
+      // rest is identical: which moments are up, how far between them, whether
       // anything has landed since, and what colour they are painted in.
       //
-      // `fading` is the term no signature can carry, because it is time passing:
-      // a tile that arrived within the last fifth of a second is still coming up
-      // and has to be redrawn on a frame where nothing else changed.
+      // `fading` is the term no signature can carry, because it is time
+      // passing: a tile that arrived within the last fifth of a second is still
+      // coming up and has to be redrawn on a frame where nothing else changed.
       const signature = `${shown}|${incoming}|${fade}|${arrivals}|${tint}|${z}|${bw}|${bh}|${k}|${tx}|${ty}`;
       if (signature !== bufferAt || fading) {
         bufferCtx.clearRect(0, 0, bw, bh);
@@ -1099,13 +1102,13 @@ export function createField(source) {
 
         // The frame on the glass, on its way out, and the one arriving over it.
         // Both are drawn only while they are worth something, so the ordinary
-        // case — one frame, no handover — is a single pass at full weight.
+        // case of one frame and no handover is a single pass at full weight.
         for (const tile of wanted) {
           const box = place(tile);
           if (box.w <= 0 || box.h <= 0) continue;
           // Out as the other comes in, and the complement is the point: held at
-          // full weight the two frames sum to more field than either of them is,
-          // and the pair reads as one doubled rather than one replacing the
+          // full weight the two frames sum to more field than either of them
+          // is, and the pair reads as one doubled rather than one replacing the
           // other. Both are washes, so the two halves add back to a whole.
           if (shown !== null && fade < 1) {
             drawTile(bufferCtx, shown, tile.z, tile.x, tile.y, box, now, 1 - fade);
@@ -1193,8 +1196,8 @@ export function createField(source) {
      * transform canvas can be given that draws either.
      *
      * So the tiles are not drawn to the glass. They are composed onto one flat
-     * picture of the whole world — the same tiles, the same painter, the same
-     * crossfade — and that picture is then laid over the world in patches: a
+     * picture of the whole world, the same tiles, the same painter and the same
+     * crossfade, and that picture is then laid over the world in patches: a
      * mesh of lat/lon cells, each one a rectangle of the picture put through
      * whatever projection is being asked for. A cell is small enough that the
      * curve inside it is under a pixel, so the affine canvas can draw and the
@@ -1204,7 +1207,7 @@ export function createField(source) {
      * That the projection is only ever *asked* is the whole point of the shape
      * of this. It is never inverted and never has to be Mercator, so the globe
      * at rest, the world rolling up into it, and the boot unfold are one path
-     * with one picture behind them — which is what lets the sky stay on the
+     * with one picture behind them, which is what lets the sky stay on the
      * ground while the ground is changing shape.
      *
      * The world picture itself is rebuilt only when it has changed, which is on
@@ -1228,7 +1231,7 @@ export function createField(source) {
        * a figure π times smaller, because its raw has a gain of π built in so
        * that a sphere and a Mercator can be mixed in the same units. Read as
        * though the two agreed, the field's resolution jumped by a factor of π
-       * at the frame the swap handed over — which is a cloud layer visibly
+       * at the frame the swap handed over, which is a cloud layer visibly
        * resetting at the end of a move that is meant to be continuous.
        *
        * Two points a quarter degree apart on the equator answer it for any
@@ -1243,19 +1246,19 @@ export function createField(source) {
           : 2 * Math.PI * projection.scale();
 
       // The level. It has to be the level the map *asked* for, or the pyramid
-      // holds tiles nobody draws and draws tiles nobody fetched — `drawTile`
+      // holds tiles nobody draws and draws tiles nobody fetched. `drawTile`
       // only ever walks up, so a mismatch falls all the way back to the one
       // tile that covers the planet.
       //
       // Held to GLOBE_LEVEL as well, and that stop is the whole difference
-      // between this and the flat map. The flat map asks for the tiles under the
-      // viewport, so zooming in asks for a deeper level and no more of them. The
-      // globe asks for the *world*, every time, so a deeper level is four times
-      // as many tiles of it — and the count is what runs away: level 3 is 64
-      // tiles, level 5 is 1,024. Measured on a zoomed globe, 1,024 tiles took
-      // over a minute to arrive four at a time and the layer simply never
-      // finished, which reads as the cloud having disappeared. Stopping the
-      // level instead costs a field softer than the planet it is drawn on,
+      // between this and the flat map. The flat map asks for the tiles under
+      // the viewport, so zooming in asks for a deeper level and no more of
+      // them. The globe asks for the *world*, every time, so a deeper level is
+      // four times as many tiles of it, and the count is what runs away: level
+      // 3 is 64 tiles, level 5 is 1,024. Measured on a zoomed globe, 1,024
+      // tiles took over a minute to arrive four at a time and the layer simply
+      // never finished, which reads as the cloud having disappeared. Stopping
+      // the level instead costs a field softer than the planet it is drawn on,
       // which is a wash behind a map and can afford to be.
       const z = clamp(Math.round(Math.log2(worldPx / tilePx)), 0, Math.min(maxLevel, GLOBE_LEVEL));
       // Every tile of it. On a sphere half the planet is on screen and the rest
@@ -1278,7 +1281,7 @@ export function createField(source) {
       // Whether the picture on the world canvas is still the right one. Every
       // term is something that changes what a tile is drawn as: which moments
       // are up, how far between them, whether a tile has landed since, and what
-      // colour they are being painted in. `fading` carries the last of it — a
+      // colour they are being painted in. `fading` carries the last of it: a
       // tile that arrived within the fade is still coming up, and a signature
       // cannot see time passing.
       const signature = shown + "|" + incoming + "|" + fade + "|" + arrivals + "|" + tint + "|" + z + "|" + ww;
@@ -1315,7 +1318,7 @@ export function createField(source) {
       // exactly as the flat map's is: the lattice the field is quantised to
       // belongs to the screen in every view, and does not change pitch when the
       // world folds up. Its own rather than the flat map's because this one is
-      // kept between frames — see `warpAt` — and a buffer the other view
+      // kept between frames (see `warpAt`), and a buffer the other view
       // composes into is one that would be handed back holding a flat map.
       const bw = Math.max(1, Math.round(width / BLOCK_PX));
       const bh = Math.max(1, Math.round(height / BLOCK_PX));
@@ -1330,7 +1333,7 @@ export function createField(source) {
       }
 
       // Everything the picture on that buffer is a function of. The projection
-      // is not asked what it is — it is asked where it puts two points, which
+      // is not asked what it is. It is asked where it puts two points, which
       // is the same question the resolution above is taken from and answers for
       // a sphere, a Mercator, and every shape between them alike. Two points
       // and a rotation fix an orthographic view completely, and through the
@@ -1429,7 +1432,7 @@ export function createField(source) {
             // The affine that carries the picture's rectangle onto the cell's
             // parallelogram. Three corners fix it; the fourth is where the quad
             // and the parallelogram part company, and at this mesh that is a
-            // fraction of a pixel — under the block this whole layer is
+            // fraction of a pixel, under the block this whole layer is
             // quantised to, which is why the patches leave no seams.
             const ax = (x10 - x00) / step;
             const bx = (y10 - y00) / step;

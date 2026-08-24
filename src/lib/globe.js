@@ -8,7 +8,7 @@ import { facing } from "./unfold.js";
  * `unfold.js` owns the planet that comes apart into the map: one projection at
  * two values of one number, and the whole of it is in service of the frame
  * where the two are the same picture. This is the other thing the same sphere
- * can be — a view the reader stays in — and it is kept apart from that for one
+ * can be, a view the reader stays in, and it is kept apart from that for one
  * reason: the unfold is a gesture with an end, and everything in it is timed.
  * Nothing here is. The world simply sits where it was last turned to.
  *
@@ -25,17 +25,17 @@ export const globeRadius = (width, height) => (Math.min(width, height) - PAD * 2
 /**
  * The rotation a centre longitude and latitude make, in d3's own terms.
  *
- * Everything on this map that already knows about a sphere — `facing`, and the
- * `sphere` block `paintLand` takes — speaks in rotations, because that is what
- * the unfold hands it. The globe thinks in where it is pointed. One conversion,
- * in one place, rather than a scattering of minus signs.
+ * Everything on this map that already knows about a sphere, meaning `facing`
+ * and the `sphere` block `paintLand` takes, speaks in rotations, because that
+ * is what the unfold hands it. The globe thinks in where it is pointed. One
+ * conversion, in one place, rather than a scattering of minus signs.
  */
 export const rotationFor = ([lon, lat]) => [-lon, -lat];
 
 // What a culled point comes back as. Not null: every caller on this map already
 // guards a projected point with `isFinite`, because Mercator hands back
 // infinities at the poles and always has. Answering a point behind the planet
-// the same way means the cull costs nothing anywhere — no call site learns that
+// the same way means the cull costs nothing anywhere. No call site learns that
 // a globe exists, and the ones that would have drawn Sumatra through the middle
 // of the Pacific simply skip it, on the check they were already making.
 const BEHIND = [NaN, NaN];
@@ -44,13 +44,13 @@ const BEHIND = [NaN, NaN];
  * The planet, centred on `[lon, lat]`, as something every caller can use.
  *
  * A d3 projection with one addition: points on the far side are not projected.
- * Orthographic is two-to-one — the hidden hemisphere folds onto the visible one,
- * mirrored — so a strike in Java drawn without this lands in the Pacific, at a
- * position that is not wrong by a little.
+ * Orthographic is two-to-one, and the hidden hemisphere folds onto the visible
+ * one, mirrored, so a strike in Java drawn without this lands in the Pacific,
+ * at a position that is not wrong by a little.
  *
  * `k` is how much of that radius the planet is drawn at. One is the sphere the
- * boot screen leaves and the unfold hands over — the size the two shapes agree
- * on — and below it the reader has pushed the world away to stand further off.
+ * boot screen leaves and the unfold hands over, the size the two shapes agree
+ * on, and below it the reader has pushed the world away to stand further off.
  * Everything the projection reports about itself is taken from the same scaled
  * radius, so the limb, the inverse and the sky's warp all move together and no
  * caller has to be told the planet can be a different size.
@@ -98,7 +98,7 @@ export function globeProjection(width, height, [lon, lat], k = 1) {
     return [
       // Wrapped, because the centre it is measured from is itself a longitude
       // and the sum runs past the antimeridian near the limb. Everything
-      // downstream — the readout, the country lookup — expects a coordinate.
+      // downstream, the readout and the country lookup, expects a coordinate.
       ((((east + 180) % 360) + 360) % 360) - 180,
       Math.asin(cosC * sinLat + (dy * sinC * cosLat) / rho) / RAD,
     ];
@@ -115,8 +115,9 @@ export function globeProjection(width, height, [lon, lat], k = 1) {
   // Read by anything that wants the sphere itself rather than a point on it:
   // the sky's warp, and the tube's own limb.
   projection.sphere = { x: width / 2, y: height / 2, r: radius, lon, lat, rotate };
-  // Carried so the callers that already ask a projection its scale — the tile
-  // pyramid picks its level from it — get an answer in the units they expect.
+  // Carried so the callers that already ask a projection its scale, such as the
+  // tile pyramid picking its level from it, get an answer in the units they
+  // expect.
   projection.scale = inner.scale;
   projection.translate = inner.translate;
   return projection;
@@ -128,7 +129,8 @@ export function globeProjection(width, height, [lon, lat], k = 1) {
 // with the pointer whatever the tube is: a radian at the centre of the disk is
 // the radius in pixels, so a pixel is a radian over the radius. Dragging the
 // width of the visible hemisphere turns it by a little under sixty degrees,
-// which is the rate at which the ball reads as being rolled rather than scrubbed.
+// which is the rate at which the ball reads as being rolled rather than
+// scrubbed.
 const DEG_PER_PX = 180 / Math.PI;
 
 // The poles are where an orthographic view stops being one: past this the
@@ -142,8 +144,8 @@ const TILT_LIMIT = 80;
  * The surface goes where the pointer goes, which is why the longitude runs
  * against the drag: pulling the ball to the right brings its western face to
  * the middle, and the meridian under the eye moves west with it. The latitude
- * does not need the same inversion — screen y grows downward, and pulling down
- * brings the north up — so the two signs disagreeing here is the correct
+ * does not need the same inversion, because screen y grows downward and pulling
+ * down brings the north up, so the two signs disagreeing here is the correct
  * arithmetic rather than a slip.
  */
 export function turned(at, dx, dy, radius) {
@@ -155,8 +157,8 @@ export function turned(at, dx, dy, radius) {
 export function pointed([lon, lat], dLon, dLat) {
   const next = lon + dLon;
   return [
-    // Kept in ±180 so that everything reading it — the readout, the country
-    // lookup — gets a longitude rather than a winding count.
+    // Kept in ±180 so that everything reading it, the readout and the country
+    // lookup, gets a longitude rather than a winding count.
     ((((next + 180) % 360) + 360) % 360) - 180,
     Math.max(-TILT_LIMIT, Math.min(TILT_LIMIT, lat + dLat)),
   ];

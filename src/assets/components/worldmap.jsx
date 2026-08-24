@@ -38,7 +38,7 @@ import GeoData from "../../lib/world.json";
 
 // Dot spacing at world zoom, in pixels on the glass.
 //
-// This was a distance once — 175km — and a distance is the wrong unit for it.
+// This was a distance once, 175km, and a distance is the wrong unit for it.
 // What it lands as on screen depends on how many pixels the world was fitted
 // into, so one constant drew a 6px array on a desktop tube and a 1.5px one on a
 // phone, where the world is a quarter as wide. At that spacing the marks sit
@@ -47,7 +47,7 @@ import GeoData from "../../lib/world.json";
 //
 // So it is stated as what it has to be true of, which is the glass, and the
 // distance is derived from it per view. That is the direction the dependency
-// runs anyway — the array is a property of the display, not of the earth.
+// runs anyway: the array is a property of the display, not of the earth.
 const GRID_GAP_PX = 5.5;
 // The gap above is right on a desktop tube and too open on a phone. Stating it
 // on the glass fixed the marks at a readable size everywhere, but a phone still
@@ -64,8 +64,8 @@ const GRID_TIGHT_W = 420; // at or under this, the tight gap
 // globe repaints the matrix on every frame of a turn where the flat map only
 // stretches a bitmap to pan, and the repaint is what has to fit in the frame.
 // Measured on a 1500×950 tube, that repaint costs 4.2ms at the map's own
-// spacing, 7.4ms here, 13ms at twice, and 25ms — half a frame over budget, and
-// visibly a drag that stutters — at the full two and a half.
+// spacing, 7.4ms here, 13ms at twice, and at the full two and a half 25ms,
+// which is half a frame over budget and visibly a drag that stutters.
 //
 // So this is the last value that leaves most of the frame for everything else
 // in it, and it is worth about a third more dots along each axis than the map
@@ -95,7 +95,7 @@ const MIN_BURN = 3; // strikes a cell needs before it leaves a mark
 // that mark may get: the floor keeps a cell from vanishing where the meridians
 // close up, the ceiling keeps Mercator from inflating one at the top of the map
 // into a disc that swallows the pole. `ALPHA` is the weight of a single mark at
-// full probability — low, because the band is built out of the overlap of
+// full probability, and low, because the band is built out of the overlap of
 // several hundred of them and anything heavier closes to solid white.
 const AURORA_MIN_PX = 3;
 // Generous, because the mark fades to nothing at its rim: a soft mark can be
@@ -104,7 +104,7 @@ const AURORA_MIN_PX = 3;
 const AURORA_MAX_PX = 70;
 const AURORA_ALPHA = 0.45;
 // A mark reaches this much past the block it stands for. Wide, so that the
-// falloffs interlock rather than merely touch — where two marks meet, both are
+// falloffs interlock rather than merely touch: where two marks meet, both are
 // already most of the way to nothing, and it takes real overlap for that to add
 // back up to an even field. The only softness added anywhere: the model itself
 // is never interpolated.
@@ -113,7 +113,7 @@ const AURORA_SPREAD = 1.7;
 // hangs off: blocks fall away as the square of it.
 //
 // The model is published at a degree, which is about two pixels at world zoom
-// and about seven on the globe — finer than anybody can read, and far finer
+// and about seven on the globe, finer than anybody can read and far finer
 // than the thing being drawn actually is. The aurora has no structure at a
 // degree. It is a diffuse curtain tens of kilometres thick and thousands long,
 // and OVATION is a model of where it is likely to be rather than a photograph
@@ -130,8 +130,8 @@ const AURORA_SHIMMER = 0.34;
 // This is the trick the stars already use to breathe: the loop holds the frame
 // when nothing has changed, and a layer that moved continuously would mean the
 // tube never rests again for as long as the layer is on. Stepped instead, the
-// oval advances about eight times a second — which is all a slow shimmer needs
-// — and the rest signature carries the step number, so a still map repaints on
+// oval advances about eight times a second, which is all a slow shimmer needs,
+// and the rest signature carries the step number, so a still map repaints on
 // the steps rather than on every frame. Silence stays cheap.
 const AURORA_STEP_MS = 125;
 // One full turn of the slower wave, in milliseconds.
@@ -192,32 +192,32 @@ const WHEEL_K = 0.0016; // wheel delta to zoom exponent
 // Which shape the world is drawn as is the `view` dial and nothing else. Zoom
 // used to decide it too: the map stopped at the whole world, the globe had no
 // zoom at all, and the effort refused at either rail was spent on crossing to
-// the other mode — with the first fifth of the fold drawn under the gesture as
+// the other mode, with the first fifth of the fold drawn under the gesture as
 // an offer. It read well and it meant the reader could not zoom out on the map,
 // or in on the globe, without changing shape underneath themselves. A dial that
 // says which world you are in should be the only thing that changes it.
 //
 // So both modes now simply zoom. On the globe that is the planet's size on the
-// glass, which is the only thing zoom can honestly mean on a sphere: there is no
-// pan and no k, only how close you are standing to it.
+// glass, which is the only thing zoom can honestly mean on a sphere: there is
+// no pan and no k, only how close you are standing to it.
 //
 // How small it may be pushed. Far enough back to see the whole of it with sky
-// around it, and no further: past this the world is a marble in a black tube and
-// the readings on it stop being readable.
+// around it, and no further: past this the world is a marble in a black tube
+// and the readings on it stop being readable.
 const GLOBE_MIN_K = 0.55;
 // And how large. The ceiling is the land matrix rather than taste: the globe is
 // drawn from a matrix built for the whole flat world, so its cost goes with the
-// square of this while the flat map only ever builds the box on screen. At three
-// the matrix holds 83,000 dots against the world view's 9,000. See the `grid`
-// memo, where `globeK` sets the spacing.
+// square of this while the flat map only ever builds the box on screen. At
+// three the matrix holds 83,000 dots against the world view's 9,000. See the
+// `grid` memo, where `globeK` sets the spacing.
 //
 // Set where the turn still reads as one. Measured, turning, on a 1400×828 tube:
-// 60fps to about two, 50 at three, 41 at four — against 31 and 26 for those last
-// two before the near-side cull and the two precomputed arrays that feed it (see
-// `gridVectors`, `gridDaylit`, and `minCos` in `paintLand`). What remains at the
-// stop is d3 projecting the dots that survive the cull, which is a real cost for
-// a real number of dots rather than work being wasted; going further would mean
-// doing the orthographic transform here instead of asking d3 for it.
+// 60fps to about two, 50 at three, 41 at four, against 31 and 26 for those last
+// two before the near-side cull and the two precomputed arrays that feed it
+// (see `gridVectors`, `gridDaylit`, and `minCos` in `paintLand`). What remains
+// at the stop is d3 projecting the dots that survive the cull, which is a real
+// cost for a real number of dots rather than work being wasted; going further
+// would mean doing the orthographic transform here instead of asking d3 for it.
 const GLOBE_MAX_K = 3;
 // Frontiers are an orientation aid, not geography, and they are held to the
 // band where they are one. Below, the map is a planet and a political overlay
@@ -255,8 +255,9 @@ const GLOBE_STOP_MS = 900;
  * legible thing the matrix can draw and it is only ever seen in passing. A
  * globe you are left sitting on is a different question: it has to be pointed
  * at the part of the world worth watching, and that is the Atlantic. Centred
- * there, Europe and North America are both on the disk at once — between them
- * most of what this network hears — with the tropics and west Africa below.
+ * there, Europe and North America are both on the disk at once, and between
+ * them they are most of what this network hears, with the tropics and west
+ * Africa below.
  *
  * The start is derived from it rather than chosen. The throw is the same one
  * the unfold uses, so its length is already fixed, and the only free end is the
@@ -265,7 +266,8 @@ const GLOBE_STOP_MS = 900;
  */
 const GLOBE_HOME = [-40, 32];
 // What the planet coasts through while the drift is being eased off, which is
-// the average of the drift over the stop — the rate falls evenly to nothing.
+// the average of the drift over the stop, since the rate falls evenly to
+// nothing.
 const GLOBE_COAST = (GLOBE_DRIFT_PER_S * (GLOBE_STOP_MS / 1000)) / 2;
 const GLOBE_FROM = GLOBE_HOME[0] - GLOBE_SWEEP - GLOBE_COAST;
 
@@ -428,24 +430,24 @@ const AT_LIMIT = 1e-9;
  * because past it Mercator runs to infinity. The globe has no such edge: it is
  * a sphere, it draws the pole like any other point, and the land mask has had
  * the ground all along. So the caps were missing for no better reason than that
- * the matrix is built from a box the flat map defined — which cost the north of
+ * the matrix is built from a box the flat map defined, which cost the north of
  * Greenland and Ellesmere, and cost most of Antarctica, whose rows carry more
  * land than any row at the limit does.
  *
  * Conditioned on the box rather than on `spinning`, which is the version that
  * was tried first and is wrong in both directions. Zoomed into a city the
  * bounds are a degree across, and opening those to the poles would build the
- * whole planet to draw a suburb — so it cannot be unconditional. But keyed on
+ * whole planet to draw a suburb, so it cannot be unconditional. But keyed on
  * the mode, the caps appear and vanish on the first frame of every crossing:
  * the swap and the boot unfold both draw a sphere while `spinning` still says
  * otherwise, and the world would pop its poles on and off mid-move. The view
  * reaching the limit is the state every crossing actually runs in, and it is
- * the honest test either way — the pole is in frame, so build it.
+ * the honest test either way: the pole is in frame, so build it.
  *
  * On the flat map at world zoom this does build dots that are then discarded:
  * they project past the top and bottom of the tube and `mark` culls them, as it
  * culls everything off-canvas. It is 4% more of the matrix by the cosine, and
- * only the land part of that — the price of the seam not existing.
+ * only the land part of that, which is the price of the seam not existing.
  */
 function toThePoles([west, south, east, north]) {
   return [
@@ -466,7 +468,7 @@ function toThePoles([west, south, east, north]) {
 // into 28 km blocks, which is a visible fault rather than a saving.
 //
 // That handover lands where it should. The grid is built for the visible extent
-// only, so the far side of it — zoomed in past roughly k=10 — is the end where
+// only, so the far side of it, zoomed in past roughly k=10, is the end where
 // the polygons were never expensive: a city view asks 144 questions and takes
 // 0.2ms, against 21,333 and 33ms for the world.
 const MASK_MIN_DEG = LAND_RES;
@@ -494,7 +496,8 @@ function buildMatrix([west, south, east, north], stepKm) {
 }
 
 // A jagged descent onto the strike point, tightening as it nears the ground.
-// Held as offsets from the strike, so the bolt survives the map moving under it.
+// Held as offsets from the strike, so the bolt survives the map moving under
+// it.
 function makeBolt(scale = 1) {
   const points = [];
   const steps = 5;
@@ -534,12 +537,12 @@ function useElementSize(ref) {
 // How many device pixels the tube is drawn at, per pixel of layout.
 //
 // The screen's own answer, up to a point. Past two the marks this map is made
-// of stop gaining anything — a dot is 1.8px of glass and a hairline is one, and
-// neither is carrying detail a third sample could resolve — while everything
-// that costs area goes on getting more expensive as its square. A phone at
-// three is drawing 2.25 times the pixels of the same tube at two, four times
-// over per frame (the void, the sky, the matrix, the burn-in), for a picture
-// that is a dot matrix on black.
+// of stop gaining anything, since a dot is 1.8px of glass and a hairline is
+// one, and neither is carrying detail a third sample could resolve, while
+// everything that costs area goes on getting more expensive as its square. A
+// phone at three is drawing 2.25 times the pixels of the same tube at two, four
+// times over per frame (the void, the sky, the matrix, the burn-in), for a
+// picture that is a dot matrix on black.
 //
 // It is the globe that made this worth stating. The flat map pans by stretching
 // a bitmap it already has, so its area is paid once per settle; a rotation has
@@ -555,7 +558,7 @@ const density = () => Math.min(MAX_DENSITY, window.devicePixelRatio || 1);
  * store is megabytes, it is held outside the JavaScript heap where nothing the
  * collector is measuring can see it, and a browser that has run past its own
  * canvas budget deals with it by dropping backing stores that are still being
- * drawn — which is a layer that goes blank rather than an error anybody can
+ * drawn, which is a layer that goes blank rather than an error anybody can
  * catch. Sized to nothing first, the memory goes when this is called rather
  * than whenever the collector next feels like it.
  *
@@ -620,7 +623,7 @@ function Cycle({ label, value, options, onChange, title }) {
 }
 
 /**
- * Land, daylight and graticule — onto whatever context, through whatever
+ * Land, daylight and graticule, onto whatever context and through whatever
  * projection.
  *
  * Two callers. The settle paints it into an offscreen bitmap through the map's
@@ -649,7 +652,7 @@ function paintLand(
   // else those two edges are not one meridian: the outline crosses itself and
   // the fill lands on the far side of its own edge, washing night over day. It
   // is worth recording how little it takes, because it looks like a curvature
-  // problem and is not — at t = 0.99, one degree of rotation short of home, the
+  // problem and is not: at t = 0.99, one degree of rotation short of home, the
   // wash is still fully inverted, and closing it against the meridian actually
   // at the edge only moves the failure around.
   //
@@ -758,13 +761,14 @@ function paintLand(
 
   // Where a dot stops being on the map. The canvas is the answer on the globe:
   // a sphere has no edge, and the poles are drawn like any other point. The
-  // flat map does have one — Mercator stops at `LAT_LIMIT` — and the matrix is
-  // built past it, to the poles, so that the globe has its caps. Culled against
-  // the canvas alone those rows land in the band between the edge of the world
-  // and the edge of the tube: a couple of pixels of the fit's padding on a
-  // desktop, where the world nearly fills the height, and most of the screen on
-  // a phone, where a tall viewport fits the world by its width and leaves deep
-  // empty bands above and below it. That is where the dots were escaping to.
+  // flat map does have one, since Mercator stops at `LAT_LIMIT`, and the matrix
+  // is built past it, to the poles, so that the globe has its caps. Culled
+  // against the canvas alone those rows land in the band between the edge of
+  // the world and the edge of the tube: a couple of pixels of the fit's padding
+  // on a desktop, where the world nearly fills the height, and most of the
+  // screen on a phone, where a tall viewport fits the world by its width and
+  // leaves deep empty bands above and below it. That is where the dots were
+  // escaping to.
   let left = -dot;
   let top = -dot;
   let right = deviceW + dot;
@@ -797,7 +801,7 @@ function paintLand(
     // per dot is four thousand state changes a frame, and the answer only ever
     // takes four values.
     const sun = subsolar(new Date(sunAt));
-    // The globe at rest has no far side to draw — the projection refuses those
+    // The globe at rest has no far side to draw. The projection refuses those
     // points and `back` is zero, so both of the far passes would be laid down
     // at no weight at all. Sorted out of the work rather than out of the
     // picture: half the planet is behind the planet, and asking whether each
@@ -822,9 +826,9 @@ function paintLand(
     );
     const minCos = hidden && sphere.r > corner ? Math.sqrt(1 - (corner / sphere.r) ** 2) : 0;
     // A dot on the near side has already been asked which side it is on, and
-    // the globe's own projection asks again before it will answer — it is what
-    // culls the far side. Where the answer is known, the cull can be skipped
-    // and the sphere addressed directly.
+    // the globe's own projection asks again before it will answer, since it is
+    // what culls the far side. Where the answer is known, the cull can be
+    // skipped and the sphere addressed directly.
     const put = hidden && projection.plain ? projection.plain : projection;
     const passes = [[], [], [], []]; // near/far × day/night
     // Where the planet is pointed, as the unit vector the dots are held as.
@@ -844,8 +848,8 @@ function paintLand(
       const night = (litFlags ? litFlags[i] : daylit(point[0], point[1], sun)) ? 0 : 1;
       passes[(cos > 0 ? 0 : 2) + night].push(point);
     }
-    // A dot can only be taken away from, never added to — it is already the
-    // full weight of its token — so which half of the world gets faded is a
+    // A dot can only be taken away from, never added to, being already the
+    // full weight of its token, so which half of the world gets faded is a
     // property of the medium, exactly as it is for the wash above and for the
     // same reason. On a tube, fading a dot darkens it: night is the half that
     // gives way. On paper, fading a dot lightens it toward the sheet, so
@@ -919,7 +923,7 @@ function paintLand(
 //
 // A property of the burn-in alone: which cells are firing, and how near a
 // capital they are. Neither term knows where the map is pointed, and the answer
-// changes when App re-bins — twice a second — rather than when the view moves.
+// changes when App re-bins, twice a second, rather than when the view moves.
 //
 // It used to be worked out inside the paint, which was affordable while the
 // paint happened on a settle: a hundred-odd cell lookups for each of 138
@@ -979,7 +983,7 @@ function litCapitals(bins) {
  * The oval was drawn as filled ellipses first, and on the flat map it read as
  * exactly what it was: a bed of discs. A hard-edged shape at partial alpha
  * shows its own edge no matter how faint it is, and laying more of them down
- * only draws more edges — the marks have to *stop* somewhere, and wherever they
+ * only draws more edges: the marks have to *stop* somewhere, and wherever they
  * stop is a line the eye finds. No amount of overlap fixes it, because the
  * overlap has an edge too.
  *
@@ -989,7 +993,7 @@ function litCapitals(bins) {
  * sprite costs less than rasterising an antialiased ellipse path, and this
  * painter runs on every frame of a rotation.
  *
- * White, because the ink is decided at the point of use — the sprite is a shape,
+ * White, because the ink is decided at the point of use. The sprite is a shape,
  * and the token it is filled through is the caller's business.
  */
 /**
@@ -1034,12 +1038,12 @@ function auroraSprite() {
   const gradient = ctx.createRadialGradient(r, r, 0, r, r, r);
   // Held flat through the middle and then let go, rather than falling from the
   // very centre. A pure gaussian leaves the field lumpy at the marks' own
-  // spacing — each one is brightest at its own middle, so the band beads. A
-  // plateau is what makes several of them add up to something even.
-  // A core and then a long tail. The core is what makes the band read as a
-  // band; the tail is the glow, and it is most of the sprite's radius for very
-  // little of its weight — a light source on a dark ground is mostly halo, and
-  // an aurora seen from the ground is nearly all halo. Getting that by drawing
+  // spacing: each one is brightest at its own middle, so the band beads. A
+  // plateau is what makes several of them add up to something even. A core and
+  // then a long tail. The core is what makes the band read as a band; the tail
+  // is the glow, and it is most of the sprite's radius for very little of its
+  // weight, because a light source on a dark ground is mostly halo, and an
+  // aurora seen from the ground is nearly all halo. Getting that by drawing
   // every mark twice would double the blits; putting it in the falloff is free.
   gradient.addColorStop(0, "rgba(255,255,255,1)");
   gradient.addColorStop(0.3, "rgba(255,255,255,0.82)");
@@ -1056,34 +1060,36 @@ function auroraSprite() {
  * The auroral oval, onto whatever context, through whatever projection.
  *
  * Two callers, exactly as `paintLand` and `paintHistory` have two, and for the
- * same reason: the flat map rasterises it once per settle, and the globe repaints
- * it per turn because a rotation is not a transform a bitmap can be stretched by.
+ * same reason: the flat map rasterises it once per settle, and the globe
+ * repaints it per turn because a rotation is not a transform a bitmap can be
+ * stretched by.
  *
  * ── Why it is drawn as light ────────────────────────────────────────────────
  *
  * In the reading token, and composited additively within its own bitmap. Both
  * of those are the same decision, which is that this is a light source and not
  * a wash. The stars on this tube are drawn in `text` for the argument written
- * beside them — a star is the only light on the glass that is not weather, and
- * the reading token is what makes it read as light rather than as dust — and the
- * aurora is that argument again with more of it: it is literally the sky glowing.
+ * beside them, that a star is the only light on the glass that is not weather
+ * and the reading token is what makes it read as light rather than as dust, and
+ * the aurora is that argument again with more of it: it is literally the sky
+ * glowing.
  *
- * Additive is what light does. Two cells overlapping make a brighter cell, never
- * a muddier one, and because addition is commutative the band builds the same
- * way whatever order the cells happen to be walked in. It is also what lets the
- * oval be drawn as a few thousand soft overlapping marks and still come out as
- * one continuous curtain rather than a bed of discs: the overlap *is* the
- * smoothness, so nothing has to be interpolated between cells that the model
- * never measured between.
+ * Additive is what light does. Two cells overlapping make a brighter cell,
+ * never a muddier one, and because addition is commutative the band builds the
+ * same way whatever order the cells happen to be walked in. It is also what
+ * lets the oval be drawn as a few thousand soft overlapping marks and still
+ * come out as one continuous curtain rather than a bed of discs: the overlap
+ * *is* the smoothness, so nothing has to be interpolated between cells that the
+ * model never measured between.
  *
  * Confined to this bitmap, which is what makes it safe. `lighter` needs to know
- * what it is adding to, and the map's own stack does not currently promise that;
- * inside a transparent canvas of its own the layer only ever adds to itself, and
- * what reaches the tube is one ordinary blit.
+ * what it is adding to, and the map's own stack does not currently promise
+ * that; inside a transparent canvas of its own the layer only ever adds to
+ * itself, and what reaches the tube is one ordinary blit.
  *
  * On paper the mode flips to `multiply` and the ink drops a rung to `dim`. Ink
- * on a page darkens where light on a tube brightens, so an additive curtain on a
- * white sheet is a curtain that erases itself — the same inversion the night
+ * on a page darkens where light on a tube brightens, so an additive curtain on
+ * a white sheet is a curtain that erases itself, the same inversion the night
  * wash and the dot matrix each make, for the same reason.
  */
 function paintAurora(
@@ -1105,13 +1111,13 @@ function paintAurora(
   //
   // It is also the only way the additive part works. `lighter` adds what is
   // under it, so stamping coloured marks straight onto the map would add the
-  // map — the land dots and the graticule would brighten wherever the oval
+  // map: the land dots and the graticule would brighten wherever the oval
   // crossed them, which is a layer reaching into layers below it. On a
   // transparent sheet of its own the marks only ever add to each other.
   // Held between frames rather than made each one. On the globe this painter
   // runs on every frame of a drag, and a full-size canvas allocated and thrown
   // away sixty times a second is the largest piece of garbage the map could
-  // manufacture — `field.js` holds its block buffer for exactly this reason.
+  // manufacture, and `field.js` holds its block buffer for exactly this reason.
   // Cleared instead, which is what the two callers would have had to do anyway.
   const sheet = auroraScratch(ctx.canvas.width, ctx.canvas.height);
   const sheetCtx = sheet.getContext("2d");
@@ -1124,7 +1130,7 @@ function paintAurora(
 
   for (const [lon, lat, percent, lonSpan, latSpan] of cells) {
     // The far side, thrown out before it costs anything. The projection refuses
-    // those points anyway, but it refuses them after doing the trigonometry —
+    // those points anyway, but it refuses them after doing the trigonometry,
     // and on a rotation this painter runs on every frame, so half the planet's
     // worth of that is the cheapest thing here to stop paying for. The land
     // matrix culls the same way and for the same reason.
@@ -1143,12 +1149,12 @@ function paintAurora(
     //
     // This is the whole of what makes the layer read as a curtain instead of a
     // bank of smoke. A degree of longitude and a degree of latitude are not the
-    // same distance anywhere except the equator, and at the top of the oval they
-    // are nothing like it: at 75° the meridians have closed to a quarter of
-    // their spacing, and at the pole itself all 360 of them meet. Drawn as
+    // same distance anywhere except the equator, and at the top of the oval
+    // they are nothing like it: at 75° the meridians have closed to a quarter
+    // of their spacing, and at the pole itself all 360 of them meet. Drawn as
     // circles on the diagonal, every polar cell stays as wide as it is tall
-    // while the ground under it shrinks, so the same mark gets laid down six and
-    // then sixty times over — which saturates to flat opaque grey, rings the
+    // while the ground under it shrinks, so the same mark gets laid down six
+    // and then sixty times over, which saturates to flat opaque grey, rings the
     // pole in hard arcs, and puts a solid disc exactly where all the meridians
     // land. The oval came out looking like weather rather than light.
     //
@@ -1170,8 +1176,8 @@ function paintAurora(
     // screen's east anywhere but the middle of the disc.
     const tilt = Math.atan2(east[1] - y, east[0] - x);
 
-    // Square-rooted, so the faint end of the oval — which is most of its area
-    // and all of its shape — is visible at all. Linear alpha on a field whose
+    // Square-rooted, so the faint end of the oval, which is most of its area
+    // and all of its shape, is visible at all. Linear alpha on a field whose
     // values are mostly single digits draws the two brightest cells and nothing
     // else, which is a map of the peak rather than of the oval.
     const strength = Math.sqrt((percent - FLOOR) / (100 - FLOOR));
@@ -1240,7 +1246,7 @@ function paintAurora(
  *
  * Returns where the names ended up, in this context's own coordinates. The live
  * loop needs them: the storm readouts are drawn on a different canvas at a
- * different cadence, and without this they collide freely — which is what put a
+ * different cadence, and without this they collide freely, which is what put a
  * cell's figures through the middle of "Washington".
  */
 function paintHistory(
@@ -1442,7 +1448,7 @@ const WorldMap = ({
   // ── The globe ────────────────────────────────────────────────────────────
   //
   // A mode rather than a view: there is no k and no pan, only where the planet
-  // is pointed. Held apart from `view` for that reason — a rotation is not a
+  // is pointed. Held apart from `view` for that reason: a rotation is not a
   // screen transform, and the moment the two share a state one of them is lying
   // about what it means. Switching modes leaves the other's state where it was,
   // so going out to the globe and back comes home to the same map.
@@ -1463,8 +1469,8 @@ const WorldMap = ({
   //
   // One is as large as the glass will hold, which is the size the unfold hands
   // over at and the size the mode always opens at. Below it the reader has
-  // pushed the world away to stand further off it; above it they have leaned in,
-  // and the matrix is rebuilt finer to meet them — `globeK` is a term in the
+  // pushed the world away to stand further off it; above it they have leaned
+  // in, and the matrix is rebuilt finer to meet them. `globeK` is a term in the
   // spacing, so a planet drawn twice the size is drawn from twice the dots
   // rather than from the same ones spread further apart. `GLOBE_MAX_K` is where
   // that stops paying for itself.
@@ -1480,8 +1486,8 @@ const WorldMap = ({
   //
   // Abandoned rather than finished the moment a hand touches the globe: a turn
   // that went on completing under a drag would be two things rotating the same
-  // planet, and the reader would lose. `stopTurn` is called from everywhere that
-  // can mean that — see `flush` for the drag, and the mode swap below.
+  // planet, and the reader would lose. `stopTurn` is called from everywhere
+  // that can mean that: see `flush` for the drag, and the mode swap below.
   const turnRef = useRef(null);
   const stopTurn = useCallback(() => {
     turnRef.current = null;
@@ -1494,13 +1500,13 @@ const WorldMap = ({
 
   // Everything downstream reads one projection and does not learn which it is.
   // The globe answers `invert`, and answers a point behind the planet the way
-  // Mercator answers a pole — with something that is not a finite number, which
+  // Mercator answers a pole, with something that is not a finite number, which
   // is the guard every caller here already makes.
   const projection = useMemo(() => globe ?? zoomed(base, view), [globe, base, view]);
   // The one thing the globe does not take over: what the offscreen bitmaps were
-  // drawn for. It has none — it paints straight onto the tube, per turn — but
-  // the land matrix and the tile pyramid are still built from the flat world at
-  // k = 1, which is exactly the ground a globe covers.
+  // drawn for. It has none, since it paints straight onto the tube, per turn,
+  // but the land matrix and the tile pyramid are still built from the flat
+  // world at k = 1, which is exactly the ground a globe covers.
   const layerProjection = useMemo(() => zoomed(base, settled), [base, settled]);
 
   // The render loop reads these rather than closing over them. They change on
@@ -1522,7 +1528,7 @@ const WorldMap = ({
   // screen, and until then the world turns and stays whole.
   const unfoldRef = useRef({ at: null, from: null, done: false });
   // Whether the world has finished flattening. The view is held at the whole
-  // earth until it has, and nothing may move it — not the reader, and not a
+  // earth until it has, and nothing may move it, not the reader and not a
   // link. A globe is drawn at one scale, from a matrix built for one scale, and
   // there is no meaning to being zoomed into Oklahoma on a planet seen from
   // orbit: the matrix would hold dots for Oklahoma alone and the globe would
@@ -1555,22 +1561,23 @@ const WorldMap = ({
   // puts the flat view back where it can be returned to. Both halves matter: a
   // globe that always opens on the Atlantic throws away the only thing the
   // reader had said about where they wanted to be, and the land matrix is built
-  // from the flat view at whatever zoom it was left at — a globe drawn from a
-  // matrix built for Oklahoma is an empty wireframe with Oklahoma on it.
+  // from the flat view at whatever zoom it was left at, and a globe drawn from
+  // a matrix built for Oklahoma is an empty wireframe with Oklahoma on it.
   //
   // And it is a move, not a switch. The unfold already owns the one animation
   // that can carry it: the world coming apart into the map is a real projection
   // interpolated, and a projection interpolated runs in both directions. So
-  // going out to the globe is that same move played backwards — the map rolls
-  // up into the planet it was made from — and coming back is the boot's own
-  // unfold, on demand. See `swapRef`.
+  // going out to the globe is that same move played backwards, with the map
+  // rolling up into the planet it was made from, and coming back is the boot's
+  // own unfold, on demand. See `swapRef`.
   const wasSpinning = useRef(spinning);
   const swapRef = useRef(null);
   useEffect(() => {
     if (spinning === wasSpinning.current) return;
     wasSpinning.current = spinning;
     // The mode is changing under it and the swap sets the rotation itself; a
-    // turn still running would be writing to the same state from the other side.
+    // turn still running would be writing to the same state from the other
+    // side.
     stopTurn();
 
     let target = spinRef.current;
@@ -1582,12 +1589,12 @@ const WorldMap = ({
       }
     }
     // Both, together, and not just the live view. The matrix is built from the
-    // *settled* one, and it normally catches up a settle later — which is fine
-    // when the view is being dragged and fatal here: the swap starts on the next
-    // frame and would spend its first third drawing a world whose dots are all
-    // in whichever country the map happened to be zoomed into. Set here, the
-    // matrix is rebuilt in the same render that arms the swap, so the world the
-    // planet rolls up out of is a whole one.
+    // *settled* one, and it normally catches up a settle later, which is fine
+    // when the view is being dragged and fatal here: the swap starts on the
+    // next frame and would spend its first third drawing a world whose dots are
+    // all in whichever country the map happened to be zoomed into. Set here,
+    // the matrix is rebuilt in the same render that arms the swap, so the world
+    // the planet rolls up out of is a whole one.
     if (spinning) {
       setView({ k: MIN_K, x: 0, y: 0 });
       setSettled({ k: MIN_K, x: 0, y: 0 });
@@ -1620,36 +1627,36 @@ const WorldMap = ({
   /**
    * The planet arrives turning.
    *
-   * The unfold is a throw with a beginning and an end — the world leaves rest,
+   * The unfold is a throw with a beginning and an end. The world leaves rest,
    * is carried through most of a third of a turn, and comes apart under the
-   * readout — and opening straight onto the globe should be the same arrival
+   * readout, and opening straight onto the globe should be the same arrival
    * minus the coming apart. So it is: the same sweep, the same easing, the same
    * constants, and at the end of it nothing to unroll into.
    *
    * What replaces the unroll is a stop. The drift exists so that a planet held
    * under a line still reading "fetching..." does not look like a hang, and the
-   * moment the readout goes there is nothing left for it to do — a globe you
+   * moment the readout goes there is nothing left for it to do: a globe you
    * are meant to point at cannot be one that is quietly turning away from where
    * you pointed it. So the drift is eased to nothing, and where it stops is
    * where the world is from then on.
    */
   // When the throw began, and whether it has finished. Two facts rather than
   // one, because this effect is keyed on the tube's size and the tube gets its
-  // size in more than one step on nearly every layout there is — a panel
+  // size in more than one step on nearly every layout there is: a panel
   // settling, a font landing, an address bar going up. Each of those runs this
   // again, mid-throw, having just cancelled the frame the throw was waiting on.
   //
   // Refusing the second run is what this did, and it is the worse of the two
   // failures available: the planet stops where it was, `setFlat` is never
   // reached, and everything that waits on the world having arrived waits for
-  // good — the whole control strip stays off the glass, and `heldStill` goes on
+  // good. The whole control strip stays off the glass, and `heldStill` goes on
   // refusing every drag, which is also the last way a reader had of asking the
   // globe to repaint itself. A reload was the only way out, which is exactly
   // what it looked like from the outside.
   //
   // So it resumes instead. The start is kept, so the arithmetic below picks up
   // where it left off rather than throwing the planet a second time, and the
-  // one thing that must happen once — arriving — is guarded by its own flag.
+  // one thing that must happen once, arriving, is guarded by its own flag.
   const threwAt = useRef(null);
   const stopped = useRef(false);
   useEffect(() => {
@@ -1710,7 +1717,7 @@ const WorldMap = ({
   const linked = useRef(false);
   useEffect(() => {
     // Not until the world is flat. A link names a place on the map, and until
-    // the unfold is done there is no map for it to name — applied early it
+    // the unfold is done there is no map for it to name. Applied early it
     // empties the land matrix under the globe and leaves the animation to run
     // over nothing.
     if (!base || linked.current || !flat) return;
@@ -1768,13 +1775,13 @@ const WorldMap = ({
     if (!base || !layerProjection || !width || !height) return [];
     // The gap asked for on the glass, converted to the distance that draws it.
     // Mercator puts x = scale·λ with λ in radians, so a gap of one earth radius
-    // is a gap of `scale` pixels and the conversion is that ratio. `base` is the
-    // world at k = 1; the falloff below carries the zoom, exactly as it did when
-    // this was a fixed distance.
+    // is a gap of `scale` pixels and the conversion is that ratio. `base` is
+    // the world at k = 1; the falloff below carries the zoom, exactly as it did
+    // when this was a fixed distance.
     //
-    // The globe is drawn at a larger scale than the flat map — half a planet
+    // The globe is drawn at a larger scale than the flat map, half a planet
     // across the shorter side against a whole one across the tube, about two
-    // and a half times — so the same array lands that much more open on the
+    // and a half times, so the same array lands that much more open on the
     // sphere, and the coastline starts being guessed from too few marks.
     //
     // Not closed all the way, though, and this is the trade that decides it:
@@ -1784,7 +1791,7 @@ const WorldMap = ({
     // times more here than they are there, and matching the scale exactly costs
     // the turn its frame rate. See GLOBE_GRID.
     // The planet's own size is in here too. Pushed away it covers fewer pixels,
-    // so the same spacing in kilometres lands closer together on the glass —
+    // so the same spacing in kilometres lands closer together on the glass,
     // the array crowding into a smaller disk rather than staying the texture it
     // was. Carried here, the gap on the glass is what stays fixed, which is
     // what it is asked for in, and the marks that fall off the back of it are
@@ -1801,15 +1808,15 @@ const WorldMap = ({
    * The same dots as unit vectors on the sphere, three floats each.
    *
    * Which dots are on screen is the cosine of their angular distance from where
-   * the planet is pointed, and that is a dot product between two unit vectors —
+   * the planet is pointed, and that is a dot product between two unit vectors,
    * but only if the vectors already exist. Computed from lon/lat inside the
    * frame it costs five trigonometric calls per dot per frame, which at the far
    * zoom is three quarters of a million of them at sixty hertz, for an answer
    * that is thrown away for most of the array.
    *
    * The dots do not move between settles and the viewer does, so this is built
-   * once with the matrix and read every frame. Only the globe wants it; the flat
-   * map has no such question and does not pay for it.
+   * once with the matrix and read every frame. Only the globe wants it; the
+   * flat map has no such question and does not pay for it.
    */
   const gridVectors = useMemo(() => {
     if (!spinning) return null;
@@ -1846,9 +1853,9 @@ const WorldMap = ({
    * Which of those dots are in daylight, one byte each.
    *
    * The same argument as the vectors above, against a slower clock. Neither the
-   * dots nor the sun move between frames — the terminator is on `sunAt`, which
-   * ticks once a minute — so asking each dot where the sun is, sixty times a
-   * second, is the same answer recomputed four thousand times over. It was a
+   * dots nor the sun move between frames, since the terminator is on `sunAt`,
+   * which ticks once a minute, so asking each dot where the sun is, sixty times
+   * a second, is the same answer recomputed four thousand times over. It was a
    * sixth of a turn's frame time at the far zoom.
    */
   const gridDaylit = useMemo(() => {
@@ -1870,7 +1877,8 @@ const WorldMap = ({
   // The burn-in and its ceiling. Read this way only by the globe, which paints
   // them per turn rather than per settle and so is not the effect that has them
   // in scope. The identity of `bins` is the signature: App hands over a new
-  // array each time the window moves, and the same array means the same picture.
+  // array each time the window moves, and the same array means the same
+  // picture.
   const binsRef = useRef(bins);
   const burnFullRef = useRef(burnFull);
   gridRef.current = grid;
@@ -1885,7 +1893,7 @@ const WorldMap = ({
   useEffect(() => {
     const state = unfoldRef.current;
     // Recorded whether or not the unfold is going to run. On the globe it never
-    // does, and this is still the moment the readout finished — which is what
+    // does, and this is still the moment the readout finished, which is what
     // the throw above is waiting for before it brings the planet to rest.
     if (unfolding && state.from === null) state.from = performance.now();
   }, [unfolding]);
@@ -2001,7 +2009,7 @@ const WorldMap = ({
    * Two occasions, and they are the same occasion: the world is between shapes
    * and the animation owns the projection. Before it has arrived that is the
    * boot's unfold, and `heldStill` has always said so. A swap is the same
-   * animation on demand, and it has to say so too — a view moved under a
+   * animation on demand, and it has to say so too: a view moved under a
    * running swap is not the view the swap is drawing, and worse, `settled`
    * follows it and rebuilds the land matrix for wherever the reader zoomed to.
    * The planet then comes up holding dots for that one place: the empty
@@ -2017,8 +2025,9 @@ const WorldMap = ({
    *
    * A sphere has no pan and no k, so this is the only thing zoom can mean here.
    * Out, the world shrinks to `GLOBE_MIN_K` and stops, because a globe is
-   * already the whole planet and further off is not a view of anything more. In,
-   * it grows to `GLOBE_MAX_K`, where the land matrix runs out of dots to give.
+   * already the whole planet and further off is not a view of anything more.
+   * In, it grows to `GLOBE_MAX_K`, where the land matrix runs out of dots to
+   * give.
    *
    * Both ends are stops and neither is a door: zooming does not change which
    * shape the world is drawn as, and the `view` dial is the only thing that
@@ -2052,7 +2061,7 @@ const WorldMap = ({
     const { base: fitted, width: w, height: h } = geom.current;
 
     // A gesture and the frame that applies it are one frame apart, which is
-    // long enough for a swap to have been armed between them — the crossing
+    // long enough for a swap to have been armed between them, and the crossing
     // itself is armed exactly that way. What was queued belongs to a view the
     // animation is no longer drawing, so it is dropped rather than carried
     // across and applied on the other side.
@@ -2073,8 +2082,8 @@ const WorldMap = ({
       q.spinY = 0;
       // A hand on the planet outranks a turn it was asked for by name. Dropped
       // rather than queued behind: the reader is already pointing the globe
-      // themselves, and finishing the old turn afterwards would take it back off
-      // the place they had just chosen.
+      // themselves, and finishing the old turn afterwards would take it back
+      // off the place they had just chosen.
       stopTurn();
       // The drawn radius, not the full one: a planet pushed away is a smaller
       // ball, and a drag that turns it at the rate of a larger one scrubs.
@@ -2091,8 +2100,8 @@ const WorldMap = ({
       // to the world and left there.
       //
       // Read from the ref rather than from `prev` below, because the answer is
-      // needed before deciding whether there is an update to make at all: at the
-      // stop with nothing left to move, `clampView` would hand back a view
+      // needed before deciding whether there is an update to make at all: at
+      // the stop with nothing left to move, `clampView` would hand back a view
       // identical in all but identity, and every wheel notch against the rail
       // would still be a render of the largest component in the app.
       stopTurn();
@@ -2138,15 +2147,15 @@ const WorldMap = ({
   /**
    * The planet, turning to where it was asked to look.
    *
-   * `setSpin` per frame, which is what the drag and the arrival throw both do —
-   * the projection is memoised on `spin`, so a rotation is a render whichever
+   * `setSpin` per frame, which is what the drag and the arrival throw both do.
+   * The projection is memoised on `spin`, so a rotation is a render whichever
    * way it is caused, and there is no cheaper path here that the other two are
    * not already not taking.
    *
    * Eased rather than linear, on the same `glide` the unfold and the swap use,
    * so a planet answering a button accelerates and settles the way a planet
-   * coming apart into the map does. A turn that started at a constant rate would
-   * read as a slide rather than as a mass being moved.
+   * coming apart into the map does. A turn that started at a constant rate
+   * would read as a slide rather than as a mass being moved.
    */
   useEffect(() => {
     if (!turning || !turnRef.current) return undefined;
@@ -2157,9 +2166,9 @@ const WorldMap = ({
       if (!turn) return;
       const t = glide((now - turn.at) / turn.ms);
       if (turn.view) {
-        // Zoom moves geometrically and the middle moves in world coordinates, so
-        // the ground under the centre travels at an even rate instead of rushing
-        // while the map is wide and crawling once it is close.
+        // Zoom moves geometrically and the middle moves in world coordinates,
+        // so the ground under the centre travels at an even rate instead of
+        // rushing while the map is wide and crawling once it is close.
         const k = turn.from.k * (turn.to.k / turn.from.k) ** t;
         const cx = turn.from.cx + (turn.to.cx - turn.from.cx) * t;
         const cy = turn.from.cy + (turn.to.cy - turn.from.cy) * t;
@@ -2186,8 +2195,8 @@ const WorldMap = ({
     return () => cancelAnimationFrame(raf);
   }, [turning, width, height]);
 
-  // On the flat map this frames a box. On the globe there is no framing to do —
-  // one scale, and only a place to be pointed — so the same control turns the
+  // On the flat map this frames a box. On the globe there is no framing to do,
+  // only one scale and a place to be pointed, so the same control turns the
   // planet until the middle of that box is under the eye. It is the same
   // request answered in the terms the mode has: show me this.
   const focusRegion = ([west, south, east, north]) => {
@@ -2198,7 +2207,7 @@ const WorldMap = ({
       const from = spinRef.current;
       // The short way round. Longitudes are kept in ±180, so a turn from 170 to
       // -170 is twenty degrees over the antimeridian and not three hundred and
-      // forty back across Asia — which is the whole difference between the
+      // forty back across Asia, which is the whole difference between the
       // planet answering the question and the planet taking a tour.
       const delta = wrapLon(to[0] - from[0]);
       const rise = to[1] - from[1];
@@ -2235,8 +2244,8 @@ const WorldMap = ({
       setView(to);
       return;
     }
-    // The layers are viewport-sized bitmaps stretched through the delta from the
-    // view they were built for, which is fine for a drag and ruinous for a
+    // The layers are viewport-sized bitmaps stretched through the delta from
+    // the view they were built for, which is fine for a drag and ruinous for a
     // flight: a matrix built for europe is a patch in the middle of the glass
     // on the way to africa, and the dots are simply gone until the settle. Sent
     // back to the world for the length of the turn, the bitmap contains every
@@ -2453,9 +2462,9 @@ const WorldMap = ({
   // so it is painted once per settle and reused as a bitmap.
   //
   // Two canvases, taken in turn. One is on the glass and one is being painted
-  // into, which is what keeps the promise below — a matrix is published whole
-  // or not at all — without asking the browser for a new one every settle. A
-  // tube's worth of backing store is the largest thing this component holds,
+  // into, which is what keeps the promise below, that a matrix is published
+  // whole or not at all, without asking the browser for a new one every settle.
+  // A tube's worth of backing store is the largest thing this component holds,
   // and a phone at three device pixels to one makes it twelve megabytes; a
   // fresh one per settle is that much garbage thrown at a collector that is
   // already being asked to keep out of a sixty-hertz loop's way. Safari on a
@@ -2463,8 +2472,9 @@ const WorldMap = ({
   // stores, and a dropped backing store is a layer that goes blank.
   const landSpare = useRef(null);
   useEffect(() => {
-    // Nothing on the globe reads these — it paints its own, through the sphere
-    // — so they are handed back rather than kept warm for a mode that is not on.
+    // Nothing on the globe reads these, since it paints its own through the
+    // sphere, so they are handed back rather than kept warm for a mode that is
+    // not on.
     // Held, the flat map's two layers and the globe's two are four tubes of
     // backing store for a screen that is drawing two of them.
     if (spinning) {
@@ -2545,7 +2555,7 @@ const WorldMap = ({
   // and the footer reads the same function so the two never disagree.
   //
   // The live end is a named moment rather than "whatever is newest" because the
-  // whole screen has to be one frame — a sky assembled out of several is a sky
+  // whole screen has to be one frame: a sky assembled out of several is a sky
   // whose clouds jump when the pyramid changes level. The interval below exists
   // to re-render when the moment it names has moved on.
   const [irTick, setIrTick] = useState(0);
@@ -2556,7 +2566,7 @@ const WorldMap = ({
   }, [kind, cadence.refresh]);
 
   // A tab nobody is looking at is asked for again the moment it is. The fetch
-  // below stands down while the page is hidden — see there for why — so this
+  // below stands down while the page is hidden (see there for why), so this
   // is what starts it back up, rather than leaving the sky an hour stale until
   // the next tick of the interval above.
   useEffect(() => {
@@ -2569,20 +2579,20 @@ const WorldMap = ({
 
   const irAt = momentFor(kind, replay ? replay.at : null, Date.now());
 
-  // Which projection the pyramid is asked about. The globe's, when there is one,
-  // and pointed at [0, 0] rather than where the reader has it: which tiles are
-  // wanted is the whole world either way, so a rotation would re-queue the same
-  // request sixty times a second for an answer that cannot change.
+  // Which projection the pyramid is asked about. The globe's, when there is
+  // one, and pointed at [0, 0] rather than where the reader has it: which tiles
+  // are wanted is the whole world either way, so a rotation would re-queue the
+  // same request sixty times a second for an answer that cannot change.
   //
   // The zoom is a different matter and has to be carried. It is the one term in
-  // the globe's scale, so it is the one term in the level the pyramid picks —
-  // and `drawWarp` measures its own level off the live projection, which has it.
-  // Left at k = 1 here the two disagreed below about k = 0.63, where the drawn
-  // level is one shallower than the fetched one: `want` seeds the detail level,
-  // a floor three below it, and level 0, so the level actually being drawn was
-  // the one gap in that set and `drawTile` only walks up. It fell past the floor
-  // to level 0 — one tile for the planet — which is the smudge the comment in
-  // the effect below warns about, arrived at by the other road.
+  // the globe's scale, so it is the one term in the level the pyramid picks,
+  // and `drawWarp` measures its own level off the live projection, which has
+  // it. Left at k = 1 here the two disagreed below about k = 0.63, where the
+  // drawn level is one shallower than the fetched one: `want` seeds the detail
+  // level, a floor three below it, and level 0, so the level actually being
+  // drawn was the one gap in that set and `drawTile` only walks up. It fell
+  // past the floor to level 0, one tile for the planet, which is the smudge the
+  // comment in the effect below warns about, arrived at by the other road.
   const skyProjection = useMemo(
     () =>
       spinning && width && height
@@ -2601,10 +2611,10 @@ const WorldMap = ({
   useEffect(() => {
     if (!kind || !skyProjection || !width || !height) return;
     // A hidden tab is not a reader. The clock keeps moving behind a background
-    // page — the ten-minute tick still fires — so without this the map would
-    // spend a night fetching thirty megabytes of weather nobody can see, from
-    // somebody else's servers, and hold it in a pyramid the render loop is no
-    // longer running to sweep. Picked up again on visibilitychange above.
+    // page, since the ten-minute tick still fires, so without this the map
+    // would spend a night fetching thirty megabytes of weather nobody can see,
+    // from somebody else's servers, and hold it in a pyramid the render loop is
+    // no longer running to sweep. Picked up again on visibilitychange above.
     if (document.hidden) return;
     // Held back past the map's own settle. What the wait is for has changed:
     // it used to stop a pan from throwing away five full-screen requests it had
@@ -2617,7 +2627,7 @@ const WorldMap = ({
     // do not agree: a sphere puts the whole world across the disk's diameter
     // where the map puts it across the tube. Left on the flat projection the
     // globe would be drawing a level nothing had fetched, and `drawTile` only
-    // walks up — so it would fall back to the one tile that covers the planet
+    // walks up, so it would fall back to the one tile that covers the planet
     // and the sky would be a smudge.
     const id = setTimeout(() => {
       // Where the globe is pointed, read when the settle fires rather than
@@ -2633,15 +2643,15 @@ const WorldMap = ({
   // ── The coverage layer ───────────────────────────────────────────────────
   //
   // A second pyramid, on the same machinery and the same settle, holding what
-  // MTG's Lightning Imager saw. It is not a third field and does not take a turn
-  // with the other two: it is a second opinion on the dots, so it has to be able
-  // to be on at the same time as the weather they are firing in. See `flash.js`
-  // for what that opinion is worth and where it disagrees.
+  // MTG's Lightning Imager saw. It is not a third field and does not take a
+  // turn with the other two: it is a second opinion on the dots, so it has to
+  // be able to be on at the same time as the weather they are firing in. See
+  // `flash.js` for what that opinion is worth and where it disagrees.
   //
   // Everything below is the sky's arrangement above, on this source's own
   // numbers. It is deliberately not shared with it: the two run on different
   // steps and different lags, they are switched by different settings, and the
-  // one thing that must not be common between them is the moment — a coverage
+  // one thing that must not be common between them is the moment: a coverage
   // layer quantised to the cloud's ten minutes would sit up to five minutes off
   // its own publication and answer 502 for the privilege.
   const covering = settings.coverage;
@@ -2664,13 +2674,13 @@ const WorldMap = ({
   const flashAt = momentAt(FLASH_STEP_MS, FLASH_LAG_MS, replay ? replay.at : null, Date.now());
 
   useEffect(() => {
-    // A register brighter than the weather, and deliberately. The cloud field is
-    // painted in the land token and the text token — terrain, and a reading laid
-    // on terrain. This is not terrain at all: it is an observation of the same
-    // thing the dots are, so it is drawn in the two tokens the instrument uses
-    // for what it has measured. Left in the land token it was legible over an
-    // empty map and indistinguishable from cloud over a cloudy one, which is the
-    // one view where a reader is actually comparing the two.
+    // A register brighter than the weather, and deliberately. The cloud field
+    // is painted in the land token and the text token, terrain and a reading
+    // laid on terrain. This is not terrain at all: it is an observation of the
+    // same thing the dots are, so it is drawn in the two tokens the instrument
+    // uses for what it has measured. Left in the land token it was legible over
+    // an empty map and indistinguishable from cloud over a cloudy one, which is
+    // the one view where a reader is actually comparing the two.
     flash.current?.palette(palette.text, palette.strike);
   }, [palette.text, palette.strike, covering]);
 
@@ -2687,9 +2697,9 @@ const WorldMap = ({
   }, [covering, skyProjection, spinning, width, height, flashAt, flashTick, irTick]);
 
   // The one layer here that is neither derived from the strikes nor cut into
-  // tiles: the whole planet arrives in a single request, so there is no pyramid,
-  // no queue and no eviction to hold — see `aurora.js`. Null whenever the layer
-  // is off, which is what empties the bitmap below.
+  // tiles: the whole planet arrives in a single request, so there is no
+  // pyramid, no queue and no eviction to hold (see `aurora.js`). Null whenever
+  // the layer is off, which is what empties the bitmap below.
   const aurora = useAurora(settings.aurora);
   // Read by the health poll below, which runs on a timer rather than a render.
   const auroraStateRef = useRef(aurora);
@@ -2717,8 +2727,8 @@ const WorldMap = ({
         const state = field?.health();
         return state?.whole ? state : null;
       };
-      // Aurora is not a pyramid — one request for the whole planet — so it has
-      // no tiles to count. What it has instead is a frame that stops being
+      // Aurora is not a pyramid, being one request for the whole planet, so it
+      // has no tiles to count. What it has instead is a frame that stops being
       // refreshed while staying on the glass, which is the same failure wearing
       // different clothes: something plausible drawn from data nobody is
       // keeping current. `useAurora` stamps it; this carries it to the footer.
@@ -2744,7 +2754,7 @@ const WorldMap = ({
   // repainting anyway. The flat map is not: its layer is a bitmap rebuilt from
   // an effect, so something has to ask for the rebuild, and this is the same
   // shape as the slow clock the sun already keeps. Nothing ticks when the layer
-  // is off, and nothing ticks for a reader who asked for stillness — the oval
+  // is off, and nothing ticks for a reader who asked for stillness. The oval
   // is then simply a still curtain, which is the whole of what reduced motion
   // should cost it.
   const [auroraAt, setAuroraAt] = useState(0);
@@ -2765,10 +2775,10 @@ const WorldMap = ({
   const auroraStep = useMemo(() => {
     // d3's Mercator lays x out as scale·λ with λ in radians, so the scale is
     // pixels per radian and this is pixels per degree at the equator. The globe
-    // is the same question asked of its radius.
-    // `layerProjection` rather than `base`, because it is the one that carries
-    // the zoom: the flat map's scale is the fitted world times k, and asking the
-    // unzoomed fit would summarise a street the way it summarises a hemisphere.
+    // is the same question asked of its radius. `layerProjection` rather than
+    // `base`, because it is the one that carries the zoom: the flat map's scale
+    // is the fitted world times k, and asking the unzoomed fit would summarise
+    // a street the way it summarises a hemisphere.
     const perDegree =
       ((spinning
         ? globeRadius(width, height) * globeK
@@ -2797,7 +2807,7 @@ const WorldMap = ({
   auroraRef.current = auroraCells;
 
   // The oval, flat. Rasterised on a settle and stretched between them, exactly
-  // as the burn-in and the matrix are — it is a picture of the world at a
+  // as the burn-in and the matrix are: it is a picture of the world at a
   // moment, and a pan is a transform of that picture rather than a reason to
   // walk the model again.
   useEffect(() => {
@@ -3008,29 +3018,29 @@ const WorldMap = ({
     // is how you know where you are looking, and a wash laid over it takes the
     // coastline away exactly where the weather is. Underneath, the same wash
     // reads as something lit behind the world, which is what a tube does best
-    // and costs the map nothing it was using.
-    // `now` is the render loop's own clock, handed down rather than re-read: the
-    // sky's fades are timed against it and a second reading here would put them
-    // a fraction of a frame away from everything else that is decaying.
+    // and costs the map nothing it was using. `now` is the render loop's own
+    // clock, handed down rather than re-read: the sky's fades are timed against
+    // it and a second reading here would put them a fraction of a frame away
+    // from everything else that is decaying.
     /**
      * The sky behind the planet, on any of the three paths that draw a sphere.
      *
      * Under everything, including the weather: it is the only thing on this
      * tube that is further away than the ground. `alpha` is how much of a
-     * sphere there is to be behind — one on the globe, and falling to nothing
+     * sphere there is to be behind, one on the globe and falling to nothing
      * as the world flattens, since a map has no outside for a star to be in.
      *
      * Both media, in the ink each one has for something that is behind the map
      * but is not furniture. On the tube that is `text`, the brightest thing
-     * short of a strike — a star is a light source and the only one on the
+     * short of a strike. A star is a light source and the only one on the
      * glass that is not weather, and drawing it in the same ink as a readout is
      * what makes it read as light rather than as dust. On paper it is `dim`,
      * one rung down, because ink on a page darkens where light on a tube
      * brightens and the star that glows on the void would blot on the sheet.
      *
      * Printed at all, which it was not: a sky on paper used to be refused as a
-     * hundred specks of dirt. What settles it is that these are real stars now
-     * — a printed chart of the sky is a thing that exists, and it is drawn
+     * hundred specks of dirt. What settles it is that these are real stars now:
+     * a printed chart of the sky is a thing that exists, and it is drawn
      * exactly this way, in dark ink on a light page.
      */
     const drawSky = (sphere, alpha, now) => {
@@ -3042,7 +3052,7 @@ const WorldMap = ({
         width,
         height,
         // Stepped, so that a globe nobody is turning still holds most of its
-        // frames — see `STAR_STEP` — and stopped outright for a reader who
+        // frames (see `STAR_STEP`), and stopped outright for a reader who
         // asked for stillness, who gets the field and not the breathing.
         now: reduceMotion ? 0 : Math.floor(now / STAR_STEP) * STAR_STEP,
         // The sun's clock, not the loop's: the stars are turned under the earth
@@ -3071,15 +3081,15 @@ const WorldMap = ({
      * Returns whether it took the frame. While it does, nothing else on the
      * tube draws: every other layer here is either a bitmap rasterised for a
      * flat view or a mark placed by the flat projection, and on a sphere they
-     * would all be in the wrong place at once. There is nothing to miss —
+     * would all be in the wrong place at once. There is nothing to miss:
      * the readout is over the screen for the whole of it, and the strikes it
      * would have shown have not arrived yet.
      */
     const drawUnfold = (now) => {
       const state = unfoldRef.current;
       if (state.done || reduceMotion) return false;
-      // Anything that got the view off world zoom anyway — a focus, a located
-      // reader — ends this rather than fighting it. The globe is drawn at one
+      // Anything that got the view off world zoom anyway, a focus or a located
+      // reader, ends this rather than fighting it. The globe is drawn at one
       // scale from a matrix built for that scale, and there is nothing to
       // unfold into a view it no longer matches.
       if (viewRef.current.k > MIN_K + 1e-3) {
@@ -3092,8 +3102,8 @@ const WorldMap = ({
 
       const t = state.from === null ? 0 : glide((now - state.from) / UNFOLD_MS);
       // Stopped one frame short of flat, and the land layer draws the last one.
-      // At t = 1 the two are the same picture — `unfoldProjection` is
-      // `fitProjection` to the pixel there — so this is where the handover is
+      // At t = 1 the two are the same picture, `unfoldProjection` being
+      // `fitProjection` to the pixel there, so this is where the handover is
       // free, and taking it a frame early costs a fraction of a degree of turn
       // nobody can see and saves matching two painters' rounding.
       if (t >= 1) {
@@ -3120,15 +3130,16 @@ const WorldMap = ({
         sunAt: sunRef.current,
         width,
         height,
-        // The world is at k = 1 throughout, where borders have not appeared yet.
+        // The world is at k = 1 throughout, where borders have not appeared
+        // yet.
         frontierK: 1,
         sphere: {
           rotate: [rotate[0] * (1 - t), rotate[1] * (1 - t)],
           back: ramp(t, 0, FACING),
-          // Eased off before the end rather than cut at it. Nothing replaces it
-          // — the flat map's wash starts a frame later — so the last of the
-          // unfold is a world with the light coming even across it, and the
-          // wash arrives onto that rather than swapping with something.
+          // Eased off before the end rather than cut at it. Nothing replaces
+          // it, because the flat map's wash starts a frame later, so the last
+          // of the unfold is a world with the light coming even across it, and
+          // the wash arrives onto that rather than swapping with something.
           shade: 1 - ramp(t, HANDOVER, 1),
         },
       });
@@ -3142,9 +3153,9 @@ const WorldMap = ({
      * The flat map holds these still for a settle and stretches them through
      * the delta to the live view in between, which is what makes a pan cost a
      * `drawImage` rather than twenty thousand projections. A rotation has no
-     * delta to be stretched through — it is not a screen transform, and there
-     * is no affine that turns a picture of one hemisphere into a picture of
-     * another — so this is the honest version of the same trade: repaint when
+     * delta to be stretched through, because it is not a screen transform and
+     * there is no affine that turns a picture of one hemisphere into a picture
+     * of another, so this is the honest version of the same trade: repaint when
      * it changed, reuse when it did not. Turning the planet costs what the
      * unfold costs, which is a price this map already pays sixty times a second
      * on the way in; holding it still costs a `drawImage`.
@@ -3159,7 +3170,7 @@ const WorldMap = ({
      * `ready` is whether what was painted is a picture at all.
      *
      * The bitmap is kept until its signature changes, and on a planet nobody
-     * is turning that is never — which is the right trade for a picture and a
+     * is turning that is never, which is the right trade for a picture and a
      * trap for a frame that arrived before the thing it draws. A matrix that is
      * not built yet paints a graticule over an empty world, and that empty
      * world is then held as the answer for as long as the globe sits still.
@@ -3215,10 +3226,10 @@ const WorldMap = ({
       }
 
       // Over the weather and under the matrix, which is where it belongs on all
-      // three paths: it is a reading about the strikes rather than a backdrop for
-      // them, so it goes on top of the wash — and still under the land, because
-      // a coverage layer that hid the coastline would be answering a question
-      // about where by taking away the where.
+      // three paths: it is a reading about the strikes rather than a backdrop
+      // for them, so it goes on top of the wash, and still under the land,
+      // because a coverage layer that hid the coastline would be answering a
+      // question about where by taking away the where.
       if (flash.current) {
         flash.current.drawWarp(
           ctx,
@@ -3230,16 +3241,17 @@ const WorldMap = ({
         );
       }
 
-      // The oval, under the matrix on this path as on the flat one. The globe is
-      // the mode it is worth being in for: a sphere shows a whole cap at once,
-      // and the oval is a ring around the pole rather than the two disconnected
-      // arcs the top and bottom of a Mercator sheet can make of it.
+      // The oval, under the matrix on this path as on the flat one. The globe
+      // is the mode it is worth being in for: a sphere shows a whole cap at
+      // once, and the oval is a ring around the pole rather than the two
+      // disconnected arcs the top and bottom of a Mercator sheet can make of
+      // it.
       //
       // Asked for only when there is one, and handed back when there is not.
-      // `globeBitmap` allocates before it consults `ready`, so calling it for an
-      // empty layer would hold a tube of backing store *and* clear it on every
-      // frame, the signature never being kept — the most expensive way there is
-      // to draw nothing.
+      // `globeBitmap` allocates before it consults `ready`, so calling it for
+      // an empty layer would hold a tube of backing store *and* clear it on
+      // every frame, the signature never being kept, which is the most
+      // expensive way there is to draw nothing.
       if (auroraRef.current.length) {
         globeBitmap(
           "aurora",
@@ -3279,7 +3291,7 @@ const WorldMap = ({
         "land",
         // The matrix itself is the first term, and by identity, exactly as the
         // burn-in is below: it is the thing being drawn, and it is rebuilt on a
-        // settle of its own — a resize, a change of mode — which the rotation
+        // settle of its own, a resize or a change of mode, which the rotation
         // has nothing to say about. Left out, a planet nobody happens to be
         // turning goes on showing a picture of a matrix that has been replaced.
         [
@@ -3309,15 +3321,15 @@ const WorldMap = ({
             width,
             height,
             frontierK: MIN_K,
-            // The far side is already gone — the projection refuses it — so
-            // there is nothing to fade it to. `shade` is full: on the globe the
-            // terminator is a boundary in the brightness of the land, and it is
-            // the only thing carrying it, since the night wash needs a flat map
-            // to be closed against.
+            // The far side is already gone, the projection having refused it,
+            // so there is nothing to fade it to. `shade` is full: on the globe
+            // the terminator is a boundary in the brightness of the land, and
+            // it is the only thing carrying it, since the night wash needs a
+            // flat map to be closed against.
             sphere: { rotate: sphere.rotate, back: 0, shade: 1 },
           }),
         // An empty matrix is not a world with no land on it, it is a world that
-        // has not been built yet — unlike the burn-in below, where nothing to
+        // has not been built yet, unlike the burn-in below, where nothing to
         // draw is a true answer about a quiet planet and worth keeping.
         gridRef.current.length > 0
       );
@@ -3344,7 +3356,7 @@ const WorldMap = ({
      * map: the unfold, on demand, in whichever direction was asked for.
      *
      * Not a second animation that resembles the first. It is the first, driven
-     * from a different pair of endpoints — one projection interpolated, so the
+     * from a different pair of endpoints: one projection interpolated, so the
      * dots arrive where they belong rather than being tweened into place and
      * hoping, and so the frame it hands over on is the same picture twice at
      * both ends. `t = 1` is `fitProjection` to the pixel, and `t = 0` is the
@@ -3367,7 +3379,7 @@ const WorldMap = ({
       drawSky(morphSphere(rotate), 1 - back, now);
 
       // The sky goes down first, under the matrix, exactly as it does on either
-      // side of the move — and it goes down through the same projection the
+      // side of the move, and it goes down through the same projection the
       // land is about to be drawn through, so it stays on the ground the whole
       // way rather than being taken off at one end and put back at the other.
       //
@@ -3433,7 +3445,7 @@ const WorldMap = ({
         // where the field is arriving from a cold cache and a tile landing is a
         // rectangle snapping in; there is no such thing to hide at the end of a
         // swap, because the same field has been on the same ground for the
-        // whole of it. Restarting that fade — which this did — is the sky going
+        // whole of it. Restarting that fade, which this did, is the sky going
         // out and coming back on a move that was meant to be continuous.
         return false;
       }
@@ -3448,10 +3460,10 @@ const WorldMap = ({
       // view and stretched by a delta that a rotation does not have.
       if (live?.sphere) return drawGlobeLayers(now, live);
 
-      // Flat, and the sphere's are handed back — the other half of what the
-      // layer effects do on the way out to the globe. Nothing here reads them,
-      // and tubes of backing store held against a mode that is off is how a
-      // phone arrives at a canvas budget it cannot pay.
+      // Flat, and the sphere's are handed back, which is the other half of what
+      // the layer effects do on the way out to the globe. Nothing here reads
+      // them, and tubes of backing store held against a mode that is off is how
+      // a phone arrives at a canvas budget it cannot pay.
       if (globeLayers.land || globeLayers.history || globeLayers.aurora) {
         globeLayers.land = release(globeLayers.land);
         globeLayers.history = release(globeLayers.history);
@@ -3464,17 +3476,17 @@ const WorldMap = ({
       // but a tile at the very edge is placed by rounding and can put a pixel
       // over the line. Clipped, so the margin the fit leaves around the world
       // at k = 1 stays void.
-      // Nothing to fade from if the unfold never ran — a reader who asked for
+      // Nothing to fade from if the unfold never ran: a reader who asked for
       // stillness gets the sky at full strength from the first frame, which is
       // what the map did before any of this existed.
       const settledAt = unfoldRef.current.doneAt;
       const skyFade = settledAt == null ? 1 : glide((now - settledAt) / SKY_FADE_MS);
 
-      // One clip and one fade for both pyramids. They are the same kind of thing
-      // to this end of the code — a rectangle of the world, placed by asking the
-      // live projection where it is now — and the coverage layer arrives out of
-      // the same cold cache on the same unfold, so it has the same reason to be
-      // faded up rather than snapped on.
+      // One clip and one fade for both pyramids. They are the same kind of
+      // thing to this end of the code, a rectangle of the world placed by
+      // asking the live projection where it is now, and the coverage layer
+      // arrives out of the same cold cache on the same unfold, so it has the
+      // same reason to be faded up rather than snapped on.
       if ((sky.current || flash.current) && live && skyFade > 0) {
         const [west] = live([-180, 0]);
         const [east] = live([180, 0]);
@@ -3503,8 +3515,9 @@ const WorldMap = ({
       // the argument written above `drawSky`: the dot array is how a reader
       // knows what they are looking at, and anything laid over it takes the
       // coastline away exactly where the layer has something to say. It is also
-      // the physically odd way round — the aurora is a hundred kilometres above
-      // the ground, not under it — and the glass wins, as it does for the cloud.
+      // the physically odd way round, since the aurora is a hundred kilometres
+      // above the ground and not under it, and the glass wins, as it does for
+      // the cloud.
       drawLayer(auroraLayer.current);
       drawLayer(landLayer.current);
       drawLayer(historyLayer.current);
@@ -3519,7 +3532,7 @@ const WorldMap = ({
     //
     // It is worth writing down what that is and is not worth, because the shape
     // of the code oversells it. Measured in the browser at DPR 2 on a 1400x900
-    // tube, those full-screen operations cost 0.26ms of a 16.7ms frame — they
+    // tube, those full-screen operations cost 0.26ms of a 16.7ms frame. They
     // are blits, not fills, and the GPU does them almost for free. Holding a
     // frame is not what makes this map fast.
     //
@@ -3527,21 +3540,21 @@ const WorldMap = ({
     // feed goes quiet, or goes down, and the map is then a still picture that
     // was being redrawn sixty times a second to stay still. Measured with the
     // socket stopped, this takes it from every frame to 5% of them. On a live
-    // feed it almost never fires — there is always a strike decaying somewhere
-    // on earth — and that is the honest scope of it.
+    // feed it almost never fires, because there is always a strike decaying
+    // somewhere on earth, and that is the honest scope of it.
     //
     // The mechanism is the trick this file already uses for the
     // globe's bitmaps and `field.js` uses for its world picture: say what the
     // frame is a function of, and compare. The terms split in two.
     //
     // Some things run on their own clock, and no signature can stand for time
-    // passing — a decaying strike, a replay, the unfold, a tile coming up. Those
+    // passing: a decaying strike, a replay, the unfold, a tile coming up. Those
     // do not get a signature; they simply mean paint.
     //
     // The rest is state, and it is compared part by part. Most of it is
     // identity rather than value: `bins`, the storm list and the two layer
-    // bitmaps are handed over as new objects exactly when their contents change,
-    // which is the same signature the layers themselves are keyed on.
+    // bitmaps are handed over as new objects exactly when their contents
+    // change, which is the same signature the layers themselves are keyed on.
     //
     // Everything in this effect's dependency array is absent on purpose. A
     // change to any of it tears the loop down and builds a new one, and the new
@@ -3573,7 +3586,7 @@ const WorldMap = ({
       // change of size is in it. The radius has to be here as much as the
       // centre does: pushed away, the world is the same world pointed the same
       // way, so without it the frame reads as settled and the glass keeps the
-      // picture it already has — the planet only catching up on the next turn,
+      // picture it already has, the planet only catching up on the next turn,
       // which is a drag repainting it rather than the zoom.
       const sphere = projection.sphere;
       return [
@@ -3597,12 +3610,12 @@ const WorldMap = ({
         landLayer.current,
         historyLayer.current,
         auroraLayer.current,
-        // The cells themselves as well as the bitmap they are drawn into. On the
-        // flat map the bitmap is the whole story, but the globe has no bitmap of
-        // its own out here — it paints from these directly — so a planet sitting
-        // still while the service published a new oval would go on showing the
-        // old one until something else moved. This is the same term the globe's
-        // own signature carries, for the same reason.
+        // The cells themselves as well as the bitmap they are drawn into. On
+        // the flat map the bitmap is the whole story, but the globe has no
+        // bitmap of its own out here and paints from these directly, so a
+        // planet sitting still while the service published a new oval would go
+        // on showing the old one until something else moved. This is the same
+        // term the globe's own signature carries, for the same reason.
         auroraRef.current,
         // And the shimmer's step, on the same argument the stars' breathing is
         // in here on: a ramp is time rather than state, and the only way a
@@ -3620,8 +3633,8 @@ const WorldMap = ({
         config.field,
         // Switched off, the pyramid is dropped and the last frame it painted is
         // still on the glass. Nothing else here would notice: no tile is
-        // arriving, so `restless` says the layer is at rest, and it would be —
-        // it would just also still be visible.
+        // arriving, so `restless` says the layer is at rest, and it would be.
+        // It would just also still be visible.
         config.coverage,
       ];
     };
@@ -3636,8 +3649,8 @@ const WorldMap = ({
       }
 
       // Nothing has moved and nothing is moving: the glass already holds this
-      // picture. The loop stays running — it is what notices that something has
-      // changed — but the tube is left alone.
+      // picture. The loop stays running, since it is what notices that
+      // something has changed, but the tube is left alone.
       const resting = settledFrame(now, projection);
       if (resting && painted && same(painted, resting)) {
         frame = requestAnimationFrame(render);
@@ -3788,9 +3801,9 @@ const WorldMap = ({
         //
         // A jump adds a figure at that level too, and is allowed to make the
         // label long because it is rare: almost every cell is not doing this.
-        // It adds no arrow. There was one, and it read as a digit at 10px —
-        // "↑47/min" is "747/min" at a glance — while saying nothing the second
-        // ring had not already said more clearly.
+        // It adds no arrow. There was one, and it read as a digit at 10px,
+        // where "↑47/min" is "747/min" at a glance, while saying nothing the
+        // second ring had not already said more clearly.
         const parts = [`${storm.count}`];
         if (track && showAhead) parts.push(`${Math.round(track.kmh)}km/h`);
         if (rate?.jump && showAhead) parts.push(`${Math.round(rate.rate)}/min`);
@@ -3816,10 +3829,10 @@ const WorldMap = ({
       //
       // The capitals are already on the glass, on the history layer, drawn at
       // that layer's own view. They are seeded into the occupied list through
-      // the same delta the bitmap itself is drawn through, so a pan cannot slide
-      // a name under a readout. Names win: a place name is orientation and
-      // cannot be moved, while a cell's figures can go and lose nothing the ring
-      // was not already saying.
+      // the same delta the bitmap itself is drawn through, so a pan cannot
+      // slide a name under a readout. Names win: a place name is orientation
+      // and cannot be moved, while a cell's figures can go and lose nothing the
+      // ring was not already saying.
       const taken = [];
       const names = placedNames ? null : historyLayer.current;
       if (placedNames) taken.push(...placedNames);
@@ -4104,7 +4117,7 @@ const WorldMap = ({
           pointer handlers are stopped here, so dragging the strip cannot also
           drag the map underneath it. */}
       {/* Held off the glass until the world is one. None of it means anything
-          over a globe — the presets frame a rectangle of a flat map, the zoom
+          over a globe: the presets frame a rectangle of a flat map, the zoom
           figure is the zoom this is refusing to let you change, and the rewind
           track offers a past for a map that is not finished arriving. They fade
           in with the sky rather than appearing, so the instrument assembles
@@ -4164,7 +4177,7 @@ const WorldMap = ({
             and this says which map. */}
         <Cycle
           label="view"
-          title="Flat is the whole planet at once, which is what this instrument is mostly for. Globe is the same data on a sphere — half a world at a time, at one scale, turned by dragging it."
+          title="Flat is the whole planet at once, which is what this instrument is mostly for. Globe is the same data on a sphere: half a world at a time, at one scale, turned by dragging it."
           value={settings.globe ? "globe" : "flat"}
           options={["flat", "globe"]}
           onChange={(v) => onSetting("globe", v === "globe")}

@@ -74,7 +74,7 @@ export const PHOSPHOR = {
 
   // Crimson, by WildLeoKnight. https://lospec.com/palette-list/crimson
   //
-  // Four colours, so hues repeat across the rungs — which is not a shortfall.
+  // Four colours, so hues repeat across the rungs, which is not a shortfall.
   // A four-colour palette has four hues, and the levels between them are the
   // instrument's to set.
   crimson: {
@@ -89,7 +89,8 @@ export const PHOSPHOR = {
     },
   },
 
-  // Blood Demon RX, by Chicknhawk. https://lospec.com/palette-list/blood-demon-rx
+  // Blood Demon RX, by Chicknhawk.
+  // https://lospec.com/palette-list/blood-demon-rx
   //
   // Dark navy up through wine and crimson to a hot pink. The one that was never
   // going to have a light end: inverted it is a page the colour of a wound.
@@ -110,8 +111,8 @@ export const PHOSPHOR = {
  * What the configuration offers, for a medium: all of them on the tube, none at
  * all on paper.
  *
- * Empty rather than `["white"]`, because white is not a choice among one — it
- * is the absence of a coating, which is what paper has. The panel reads the
+ * Empty rather than `["white"]`, because white is not a choice among one. It is
+ * the absence of a coating, which is what paper has. The panel reads the
  * length of this and drops the control.
  *
  * `derive` makes the same test rather than trusting this one. Both halves are
@@ -208,9 +209,10 @@ const mix = (ground, colour, t) => colour.map((c, i) => clamp(ground[i] + (c - g
  * contrast the grey one has and took over the whole map.
  *
  * So each colour is slid along the line between it and the ground until it sits
- * at exactly the contrast the reference palette gives that token. Hue and chroma
- * are the palette's; the level is the instrument's. Bisection rather than a
- * closed form because the channels clamp, which the arithmetic cannot invert.
+ * at exactly the contrast the reference palette gives that token. Hue and
+ * chroma are the palette's; the level is the instrument's. Bisection rather
+ * than a closed form because the channels clamp, which the arithmetic cannot
+ * invert.
  */
 function atWeight(ground, colour, target) {
   let lo = 0;
@@ -254,13 +256,13 @@ function baseline(theme) {
  *
  * Pure so it can be checked. `scripts/check-palette.cjs` runs every phosphor
  * against every contrast on both media and asserts the hierarchy the stylesheet
- * was built with still holds — a claim the README has always made and nothing
+ * was built with still holds, a claim the README has always made and nothing
  * ever tested, which is a comfortable place for a new palette to break it.
  */
 export function derive(colours, { phosphor, contrast, medium = "dark" }) {
   // Neither shape survives paper, so on paper neither is read: whatever is
   // stored, light derives the instrument's own ink. One condition rather than
-  // two, because it is one fact — a phosphor is a property of a tube.
+  // two, because it is one fact: a phosphor is a property of a tube.
   const tube = medium === "dark";
   const entry = tube ? (PHOSPHOR[phosphor] ?? null) : null;
   const given = isPalette(entry) ? entry.dark : null;
@@ -312,9 +314,9 @@ export function applyPalette(theme, { phosphor, contrast, bloom }) {
     if (colours[token]) root.style.setProperty(`--c-${token}`, colours[token]);
   }
 
-  // The halo. Normally the medium's own — white light added on the tube, black
-  // ink spreading in paper — but a palette may hand over its own, which is what
-  // puts a cyan glow around a white strike.
+  // The halo. Normally the medium's own, white light added on the tube and
+  // black ink spreading in paper, but a palette may hand over its own, which is
+  // what puts a cyan glow around a white strike.
   const entry = PHOSPHOR[phosphor];
   // The same test `derive` makes, and it has to stay the same one: a halo
   // taking a palette's colour while the marks under it had fallen back to ink

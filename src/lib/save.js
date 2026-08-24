@@ -28,7 +28,7 @@ function download(blob, name) {
  * The retained history, as CSV.
  *
  * Exactly what is held and nothing reconstructed. A retained strike is four
- * numbers — where, when it was heard, and when it happened — because the memory
+ * numbers (where, when it was heard, and when it happened), because the memory
  * budget for the hour was set at four and the naming and the fix quality were
  * deliberately not kept past the flush that reported them. So the file has four
  * columns, and what it does carry it carries exactly: the gap between the two

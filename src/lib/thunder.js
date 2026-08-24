@@ -4,8 +4,8 @@
 // sound a counter makes, and it says nothing about where anything was. This
 // says only that. Once the reader has told the map where they are, a strike
 // near enough for its sound to reach them is played when the sound would reach
-// them — the real distance, at the real speed, worn down the way the air wears
-// it down on the way over.
+// them, at the real distance and the real speed, worn down the way the air
+// wears it down on the way over.
 //
 // The panel already counts that arrival down (`watch.thunder`), which is the
 // same physics written as a number: sound covers about 343 m/s, so the gap
@@ -39,7 +39,7 @@ const CRACK_S = 0.55; // the near end, where there is no roll left to spread
 // Absorption, as one curve. The cutoff a strike arrives under, in hertz: full
 // bandwidth up close, falling away with range because the top of the spectrum
 // is the part the air takes. The scale length is fitted to the audible range
-// rather than to a published absorption coefficient — the point it has to get
+// rather than to a published absorption coefficient. The point it has to get
 // right is that twenty kilometres is a rumble and two is a crack, and it does.
 const OPEN_HZ = 3400;
 const FLOOR_HZ = 130;
@@ -91,7 +91,7 @@ function buffer(ctx) {
  * Schedule one strike's thunder.
  *
  * `km` is how far off it fell and `inSeconds` is how long the sound still has
- * to travel — the caller knows both, because it knows when the flash actually
+ * to travel. The caller knows both, because it knows when the flash actually
  * happened and the network runs several seconds behind. Scheduled on the audio
  * clock rather than by timer: this is a measurement of an interval, and the
  * only clock in the browser that will hold one accurately for a minute is the
@@ -128,8 +128,8 @@ export function roll(km, inSeconds) {
   const gain = ctx.createGain();
   // Spreading, mostly: the sound goes out over a growing sphere, and the
   // absorption that took the top off has taken some of the level with it. The
-  // near end is capped rather than allowed to reach one — a strike at half a
-  // kilometre is a genuinely alarming noise and this is a browser tab.
+  // near end is capped rather than allowed to reach one, because a strike at
+  // half a kilometre is a genuinely alarming noise and this is a browser tab.
   const loud = 0.55 / (1 + km / 4);
 
   // The envelope is the other half of the distance. Close, it is an edge: on in

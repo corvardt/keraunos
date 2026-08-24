@@ -2,16 +2,16 @@
 //
 // The CSV in `save.js` was a one-way door. Everything this instrument knows is
 // derived from a stream nobody archives and held for an hour in a tab, and that
-// file was the only part of it that survived the tab being closed — but nothing
+// file was the only part of it that survived the tab being closed, but nothing
 // could read it back, so the one afternoon the storm was worth keeping could be
 // taken away and never returned to. This is the other half of that door.
 //
 // What comes back is not a recording of a map. It is the strikes, and they are
 // put into the same pipe the relay feeds: one at a time, in arrival order, at
-// life size. Everything downstream then builds itself exactly as it does live —
+// life size. Everything downstream then builds itself exactly as it does live:
 // the feed, the storm cells with their tracks and headings, the rate and its
-// trace, the burn-in, the ranking, the rewind track filling in behind you — for
-// the simple reason that nothing downstream can tell the difference.
+// trace, the burn-in, the ranking, the rewind track filling in behind you. That
+// is for the simple reason that nothing downstream can tell the difference.
 //
 // Replaying the *derived* map instead would have been easier and worth much
 // less. That path already exists: it is what rewinding does, and what it can
@@ -20,7 +20,7 @@
 // rings. An archive played through the front of the pipe carries all of them.
 
 // The retention this instrument was built around, used here as the ceiling on
-// what a file is allowed to bring in. A larger file is not refused — it is
+// what a file is allowed to bring in. A larger file is not refused. It is
 // played from its last strikes back, which is the same window a session of that
 // length would have kept anyway.
 export const MAX_ROWS = 120000;
@@ -31,7 +31,7 @@ export const MAX_BYTES = 32 * 1024 * 1024;
 // The columns `saveStrikes` writes, which is the only shape this reads.
 const HEADER = "flash_utc,received_utc,lon,lat";
 // A strike cannot be heard before it happens, but the two times are taken off
-// two different clocks — the network's and the browser's — and a browser whose
+// two different clocks, the network's and the browser's, and a browser whose
 // clock is a moment behind writes rows that say it was. A second of slack
 // accepts that and still rejects a file whose columns are the wrong way round.
 const SKEW_MS = 1000;
@@ -44,7 +44,7 @@ const TICK_MS = 100;
  * One row, in the shape the socket hands upward.
  *
  * The time is the flash's own, in UTC, so a replayed feed row reads as the
- * moment the strike happened rather than the moment it is being played — the
+ * moment the strike happened rather than the moment it is being played. The
  * rebasing below moves the instrument's clock, not the record.
  *
  * Three fields the file does not carry, and none of them is inventable. Which
@@ -77,8 +77,8 @@ function frame(strike) {
  *
  * This is somebody else's download, which makes it the only untrusted input
  * this instrument has: everything else arrives from the relay in a shape the
- * relay guarantees. So it is read defensively and cheaply — split, four
- * numbers, bounds — and a row that fails any of that is dropped and counted
+ * relay guarantees. So it is read defensively and cheaply, with a split, four
+ * numbers and bounds, and a row that fails any of that is dropped and counted
  * rather than allowed to become a NaN somewhere in a render loop an hour later.
  *
  * Throws with something worth reading when the file is not one of these at all.

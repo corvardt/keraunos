@@ -1,7 +1,7 @@
 // The one audio context.
 //
-// Two things here make noise — the detector click and the thunder — and a
-// browser counts contexts rather than sounds: a handful per page, each needing
+// Two things here make noise, the detector click and the thunder. A browser
+// counts contexts rather than sounds: a handful per page, each needing
 // its own gesture before it will start and its own resume after the tab has
 // been away. Two of them would be two things to keep awake and twice as much
 // to get wrong, for one loudspeaker.

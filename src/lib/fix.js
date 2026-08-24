@@ -41,8 +41,8 @@ export function fixQuality(gap) {
 // How far out the position may be, at each end of that ramp.
 //
 // Stated rather than measured, and the distinction matters: `fixQuality` above
-// is calibrated — the gap was reproduced from the raw frames and checked at
-// r = 1.000 — whereas these two are a reading of what this network is generally
+// is calibrated: the gap was reproduced from the raw frames and checked at
+// r = 1.000. These two are instead a reading of what this network is generally
 // held to manage, a kilometre or two when a strike is ringed and something far
 // worse when it is seen from one side. Nothing here has been checked against
 // ground truth, because we have none.

@@ -12,8 +12,8 @@ export default {
   theme: {
     extend: {
       // Not a width. The instrument is drawn at 10px because that is the scale
-      // an instrument reads at, and that is right on any screen; what changes on
-      // a phone is the pointer, which is a fingertip and not a pixel. So the
+      // an instrument reads at, and that is right on any screen; what changes
+      // on a phone is the pointer, which is a fingertip and not a pixel. So the
       // controls keep their type and are given the room around it that a finger
       // needs, keyed off the pointer itself rather than off the viewport: a
       // tablet is wide and still coarse.
@@ -22,16 +22,17 @@ export default {
         // Where the instrument sits side by side rather than stacked.
         //
         // Not a width, for the same reason `touch` is not: the question is
-        // whether there is a landscape to put a world map in, and a phone turned
-        // on its side has one while being nowhere near a desktop's width. Held
-        // at `lg` before, it got the worst of the three layouts — the map clamped
-        // to 45vh of a 390px-tall viewport is a 175px strip, with the panel below
-        // the fold, on the one orientation somebody turned the phone to *for* the
-        // map. The short-landscape arm is what phones and small tablets answer.
+        // whether there is a landscape to put a world map in, and a phone
+        // turned on its side has one while being nowhere near a desktop's
+        // width. Held at `lg` before, it got the worst of the three layouts:
+        // the map clamped to 45vh of a 390px-tall viewport is a 175px strip,
+        // with the panel below the fold, on the one orientation somebody turned
+        // the phone to *for* the map. The short-landscape arm is what phones
+        // and small tablets answer.
         wide: { raw: "(min-width: 1024px), (orientation: landscape) and (max-height: 560px)" },
-        // That same short landscape on its own. The panel is a fixed column, and
-        // a column sized for a desktop takes half of a phone held sideways, so
-        // there it gives some back. Declared after `wide`, because it is the
+        // That same short landscape on its own. The panel is a fixed column,
+        // and a column sized for a desktop takes half of a phone held sideways,
+        // so there it gives some back. Declared after `wide`, because it is the
         // narrower case and has to be the one that wins.
         short: { raw: "(orientation: landscape) and (max-height: 560px)" },
       },

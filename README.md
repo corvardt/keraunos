@@ -65,7 +65,7 @@ worth changing while you watch, which is why they are not behind a panel.
 | **Rate** | Strikes a minute over the last 60 seconds, with a trace, and the number of storm cells being tracked. An `↑` counts the cells whose flash rate is climbing sharply |
 | **Session** | Arrivals by the minute for as long as the tab has been open, the hairline at midnight UTC, and the hardest minute of it. Lightning runs on a schedule: the planet fires hardest over land in the afternoon, so the global rate rises and falls about three times a day as Africa, the Americas and Asia come round into the sun. An hour of history cannot show that; a day of it can |
 | **Link** | Median delay from a strike happening to this browser hearing about it, and the median number of detectors used to place recent strikes |
-| **Reach** | How far each strike was heard, split into daylight paths and darkness. The far end should be longer at night: sunlight makes a lossy layer at 60–70 km that the signal has to bounce off, and after sunset the reflection moves up to 85–90 km, where less is lost at every hop |
+| **Reach** | How far each strike was heard, split into daylight paths and darkness. The far end should be longer at night: sunlight makes a lossy layer at 60 to 70 km that the signal has to bounce off, and after sunset the reflection moves up to 85 to 90 km, where less is lost at every hop |
 | **Here** | Present once you have pressed `here`: distance to the nearest strike, and a countdown to its thunder |
 | **Most active** | Places holding the cells still burning right now, not session totals. Click one to narrow the map to it |
 | **Strike feed** | Each arrival as it lands, named. Click a row to narrow to that place |
@@ -288,7 +288,7 @@ are not this project's to relicense, and commercial use of them is prohibited by
 the people who collect them.
 
 Cloud field from [RealEarth](https://realearth.ssec.wisc.edu/) (SSEC, University
-of Wisconsin–Madison) and [EUMETSAT](https://www.eumetsat.int/); rain field from
+of Wisconsin-Madison) and [EUMETSAT](https://www.eumetsat.int/); rain field from
 [RainViewer](https://www.rainviewer.com/); imager coverage from EUMETSAT's
 MTG-I Lightning Imager; the auroral oval from
 [NOAA SWPC](https://www.swpc.noaa.gov/)'s OVATION model. The borrowed phosphor

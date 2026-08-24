@@ -5,7 +5,7 @@
  * not about the troposphere at all. A lightning map is a map of charge finding
  * its way to the ground through air; this is charge arriving from the sun and
  * being steered into the atmosphere by the earth's own field. They share a
- * planet, a medium and nothing else — which is exactly why this layer can be on
+ * planet, a medium and nothing else, which is exactly why this layer can be on
  * at the same time as everything else without any of the trouble the fields
  * give each other. The oval lives at the latitudes lightning does not, so it
  * cannot cover a reading, and it is the one addition that needed no argument
@@ -15,8 +15,8 @@
  *
  * One value per whole degree of the planet: 360 longitudes by 181 latitudes,
  * 65,160 in all, each the modelled *probability of visible aurora* at that
- * point, in percent. Not a brightness and not a measurement — OVATION is a
- * model driven by the solar wind as it is read at L1, about an hour upstream of
+ * point, in percent. Not a brightness and not a measurement: OVATION is a model
+ * driven by the solar wind as it is read at L1, about an hour upstream of
  * us, which is what buys the forecast its lead time and is the whole reason the
  * product exists.
  *
@@ -24,7 +24,7 @@
  * and it is labelled as such wherever it is named. `ir.js` opens by saying that
  * nothing here is a forecast and that every pixel was measured; that stays true
  * of the weather. This is a different subject, carried in a different register,
- * and it is allowed in on the condition that it never pretends otherwise — so a
+ * and it is allowed in on the condition that it never pretends otherwise, so a
  * decoded frame carries both of the service's own times, and the lead between
  * them is the reading's honesty rather than a comment's claim.
  *
@@ -53,7 +53,7 @@ import { useEffect, useState } from "react";
 
 // Published to anyone who asks, with `access-control-allow-origin: *`, so this
 // is fetched straight from the tab. No key, no account, and no proxy of our own
-// in front of it — unlike EUMETSAT, which needs `functions/msg.js` because it
+// in front of it, unlike EUMETSAT, which needs `functions/msg.js` because it
 // will serve a picture and then not say who may read it.
 const SOURCE = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json";
 
@@ -69,7 +69,7 @@ export const FLOOR = 5;
  *
  * SWPC republishes about every five minutes and the file carries a one-minute
  * `cache-control`, so anything faster than this re-fetches a frame that has not
- * changed. It is 148 KB on the wire once gzipped — the whole planet in one
+ * changed. It is 148 KB on the wire once gzipped, the whole planet in one
  * request, which is the trade this layer makes against the tile pyramids: no
  * grid, no queue, no eviction, and no second request however far you pan.
  */
@@ -78,12 +78,12 @@ export const REFRESH_MS = 5 * 60 * 1000;
 /**
  * Where a cell sits in the packed grid.
  *
- * The service publishes `[lon, lat, aurora]` triples in a fixed order —
- * longitude 0…359 outermost, latitude −90…90 innermost — which makes the whole
- * of it addressable arithmetic and the coordinates in the payload redundant.
- * They are dropped on decode: keeping 65,160 two-element arrays alive to hold
- * numbers that are implied by their own position is three megabytes of heap for
- * a lookup that is one multiply.
+ * The service publishes `[lon, lat, aurora]` triples in a fixed order, with
+ * longitude 0…359 outermost and latitude −90…90 innermost, which makes the
+ * whole of it addressable arithmetic and the coordinates in the payload
+ * redundant. They are dropped on decode: keeping 65,160 two-element arrays
+ * alive to hold numbers that are implied by their own position is three
+ * megabytes of heap for a lookup that is one multiply.
  */
 export const indexOf = (lon, lat) => lon * LAT_ROWS + (lat + 90);
 
@@ -91,7 +91,7 @@ export const indexOf = (lon, lat) => lon * LAT_ROWS + (lat + 90);
  * The payload, as a grid.
  *
  * Verified rather than trusted: the order above is a property of somebody
- * else's file, and a layout that quietly changed would not throw — it would
+ * else's file, and a layout that quietly changed would not throw. It would
  * draw a plausible aurora in the wrong place, which is the failure this whole
  * instrument is least able to notice. So the triples are checked against the
  * positions they claim as they are read, and a file that disagrees is refused
@@ -133,7 +133,7 @@ export function decode(payload) {
  *
  * Nearest cell rather than interpolated. The model's own resolution is the
  * degree, and smoothing between cells would draw a gradient the data does not
- * have — the layer's softness comes from how it is painted, not from inventing
+ * have. The layer's softness comes from how it is painted, not from inventing
  * values between the ones published.
  */
 export function probabilityAt(grid, lon, lat) {
@@ -152,7 +152,7 @@ export function probabilityAt(grid, lon, lat) {
  * ── Why this is not simply every lit cell ───────────────────────────────────
  *
  * It was, and it made the globe crawl. The model publishes at a degree, and a
- * degree is about two pixels at world zoom — so drawing one mark per cell is
+ * degree is about two pixels at world zoom, so drawing one mark per cell is
  * some nine thousand antialiased fills for a band a reader could not resolve
  * that finely if they tried. On the flat map that cost lands once per settle
  * and is merely wasteful. On the globe the bitmap is keyed to where the planet
@@ -162,7 +162,7 @@ export function probabilityAt(grid, lon, lat) {
  * So the grid is walked at whatever step actually resolves on the glass, and
  * each step reports the strongest cell under it. The strongest rather than the
  * mean: the oval is a narrow band inside a mostly empty field, and averaging a
- * block that is half band and half nothing halves the band — the layer would
+ * block that is half band and half nothing halves the band, and the layer would
  * fade exactly as it was zoomed out, which is the opposite of what a summary
  * should do.
  *
@@ -170,7 +170,7 @@ export function probabilityAt(grid, lon, lat) {
  *
  * Because a degree of longitude is not a distance. At 70°, where the oval sits,
  * the meridians have closed to a third of their equatorial spacing, and at the
- * pole all 360 of them meet at a point — so a fixed step oversamples the top of
+ * pole all 360 of them meet at a point, so a fixed step oversamples the top of
  * the oval by three times and the pole by everything. Dividing the step by the
  * cosine asks for marks that are square on the ground rather than square in the
  * table, which is both many fewer of them and an even band rather than one that
@@ -190,7 +190,7 @@ export function litCells(grid, spacing = 1) {
     // The cosine is taken at the edge of the row nearest the pole, which is
     // where the meridians are closest and so where the step has to be widest.
     // Taken at the middle instead, the poleward half of every row still
-    // oversamples — the error is small at 60° and unbounded at 89°.
+    // oversamples, and the error is small at 60° and unbounded at 89°.
     const edge = Math.abs(lat) > Math.abs(lat + latSpan - 1) ? lat : lat + latSpan - 1;
     const cos = Math.cos((Math.abs(edge) * Math.PI) / 180);
     // Capped at a quarter of the world: past that a "block" is no longer a
@@ -227,7 +227,7 @@ export function litCells(grid, spacing = 1) {
  * The layer, held for as long as it is switched on.
  *
  * Nothing is fetched until somebody asks for it, and nothing is fetched while
- * the tab is in the background — the same rule the tile pyramids keep, and for
+ * the tab is in the background, the same rule the tile pyramids keep, and for
  * the same reason: a hidden page spending somebody else's bandwidth on a
  * picture nobody can see is a cost with no reader at the end of it.
  */
@@ -235,10 +235,10 @@ export function litCells(grid, spacing = 1) {
  * How long a frame may sit on the glass before it stops being nearly true.
  *
  * The service publishes every five minutes and the oval itself moves over tens
- * of minutes, so a frame that failed to refresh once is still a fair picture and
- * saying anything about it would be noise. Four missed refreshes is twenty
+ * of minutes, so a frame that failed to refresh once is still a fair picture
+ * and saying anything about it would be noise. Four missed refreshes is twenty
  * minutes, which is long enough that what is drawn is a different sky from the
- * one outside — and long enough that the cause is an outage rather than a blip.
+ * one outside, and long enough that the cause is an outage rather than a blip.
  */
 const STALE_MS = 20 * 60 * 1000;
 
@@ -268,8 +268,8 @@ export function useAurora(on) {
         if (!live) return;
         fresh = Date.now();
         warned = false;
-        // Stamped with when it was fetched, not with the moment it models —
-        // the panel already reads both of the service's own times out of the
+        // Stamped with when it was fetched, not with the moment it models.
+        // The panel already reads both of the service's own times out of the
         // payload. This is the other question, and only this can answer it:
         // whether what is on the glass is still being kept up.
         setState({ ...decoded, fresh, stale: false });
@@ -277,7 +277,7 @@ export function useAurora(on) {
         // A frame that does not arrive leaves the last one on the glass, which
         // is the honest state for a while: the oval moves over tens of minutes,
         // so the picture already drawn is still very nearly true. What was
-        // missing is the end of that sentence — it stops being true, and
+        // missing is the end of that sentence: it stops being true, and
         // nothing said so. Only an abort is silent; that is this effect tearing
         // itself down.
         if (error.name === "AbortError" || !live) return;

@@ -2,7 +2,7 @@
  * What is behind the planet.
  *
  * The flat map has a ground: the world fills the tube edge to edge and the void
- * is a margin. The globe does not — it is a disk with the whole rest of the
+ * is a margin. The globe does not. It is a disk with the whole rest of the
  * glass around it, and that emptiness is what makes the sphere read as a
  * drawing of a ball rather than as something standing off in space. So the
  * emptiness gets a depth, and the cheapest honest one is the sky.
@@ -12,15 +12,15 @@
  *
  * The reader is somebody standing off the planet, not somebody spinning it. A
  * drag flies the camera around a stationary earth, so the stars turn with the
- * look direction at exactly the rate it turns — no fraction, no drift constant.
+ * look direction at exactly the rate it turns: no fraction, no drift constant.
  * That the field sweeps across the glass faster than the ground under the
  * pointer does is not a fault to be tuned out; it is the whole of the parallax,
  * and it is what "the ground is near and the sky is not" looks like.
  *
  * The camera is a lens, so its focal length fixes both things at once. The
  * planet is a ball of known size at a known distance and the stars are at no
- * distance at all, which means one number — `f` below — sets how large the
- * globe is drawn *and* how far a star travels for a degree of turn. There is no
+ * distance at all, which means one number, `f` below, sets how large the globe
+ * is drawn *and* how far a star travels for a degree of turn. There is no
  * second knob to disagree with the first.
  *
  * Pushing the world away moves the camera back. The globe shrinks and the sky
@@ -30,13 +30,13 @@
  * as holding the lens still.
  *
  * The stars are the real ones. Yale's catalogue, at J2000, turned under the
- * earth by sidereal time from the same clock that puts the sun where it is — so
+ * earth by sidereal time from the same clock that puts the sun where it is, so
  * the night side of the globe faces the constellations that are actually behind
  * it, and the sky at four in the morning is not the sky at midnight.
  *
  * Nothing is drawn over the planet. The globe's land is dots on the void with
  * no fill behind them, so a star inside the disk is not a star behind the
- * earth, it is the earth turning transparent. It is cut at the limb — and the
+ * earth, it is the earth turning transparent. It is cut at the limb, and the
  * limb is exactly where the camera says the earth occludes the sky, so the cut
  * is the same geometry stated once rather than an effect laid on top.
  *
@@ -45,10 +45,10 @@
  * the caller picks for the medium, which on the tube is the one the readouts
  * use: a star is the only light source on this glass that is not weather, and
  * held under the coastline it stopped reading as one. Depth is carried by the
- * limb and by the parallax, which is what they were built to carry — it was
+ * limb and by the parallax, which is what they were built to carry. It was
  * never the brightness doing it.
  *
- * Sixty on average, is the honest way to put it — between thirty and a hundred,
+ * Sixty on average, is the honest way to put it, between thirty and a hundred
  * depending on where the globe is pointed. The decorative field was even
  * everywhere, because it was made that way. This one is thin over the galactic
  * poles and crowded through Sagittarius, and a reader who turns the planet far
@@ -69,8 +69,8 @@ const RAD = Math.PI / 180;
  * that it is somewhere: 6.61 radii is the geostationary belt, the altitude
  * every weather satellite whose pictures this instrument draws is actually at.
  * The planet at that distance spans about 17 degrees, and the lens that fits it
- * to the tube is a mild telephoto — near enough to rectilinear that the field
- * does not bow, far enough that the limb is a circle and not a horizon.
+ * to the tube is a mild telephoto, near enough to rectilinear that the field
+ * does not bow and far enough that the limb is a circle and not a horizon.
  *
  * It replaces two constants that used to be tuned against each other: how large
  * the sky was drawn, and what fraction of the world's turn it took. Both are
@@ -84,7 +84,7 @@ const ALTITUDE = 6.6107;
 //
 // A ball of radius one at distance D subtends asin(1/D); a pinhole camera of
 // focal length f puts that angle at f·tan of it. Which makes f the sky's scale
-// too, since a star at angle θ off the axis lands at f·tanθ — the same lens,
+// too, since a star at angle θ off the axis lands at f·tanθ: the same lens,
 // asked about something infinitely further away.
 const FOCAL = Math.sqrt(ALTITUDE * ALTITUDE - 1);
 
@@ -102,7 +102,7 @@ const HEM = 8;
 //
 // It is also the only knob the geometry did not take away, and that is
 // deliberate. The camera has a real altitude and the stars have real places,
-// and neither can be moved to make the field fuller — but no display has
+// and neither can be moved to make the field fuller. But no display has
 // sixteen hundred to one, and every star chart and every long exposure
 // compresses this same range for the same reason. So when the honest sky came
 // out emptier than the drawn one it replaced, this is what gave, and nothing
@@ -116,14 +116,14 @@ const HEM = 8;
 //
 // It is the faint end that this is really for. Nine stars in ten on the glass
 // are past the fifth magnitude, so lifting them is what the eye reads as a
-// brighter sky — where lifting the ceiling would only touch the dozen that were
+// brighter sky, where lifting the ceiling would only touch the dozen that were
 // already the brightest things out there.
 const COMPRESS = 0.22;
 
 // The whole field's weight, against the map it sits behind.
 //
 // The ceiling, not a level: this is what fraction of its ink the brightest star
-// in the sky gets, and at one it gets all of it. There is nothing above this —
+// in the sky gets, and at one it gets all of it. There is nothing above this:
 // a brighter sky than a full-strength mark is a brighter ink, which is the
 // choice the caller makes and not a number here.
 //
@@ -142,10 +142,10 @@ const BIG = 2;
 // this is meant to be noticed by somebody who was already looking, and a field
 // that flickers is a fault report, not a sky.
 //
-// The one thing on this tube that is a drawing rather than a fact. Scintillation
-// is an atmosphere the camera is above, so strictly there is none of it out
-// here; it is kept because a field of perfectly still points reads as dirt on
-// the glass, which is a worse lie than the one it tells.
+// The one thing on this tube that is a drawing rather than a fact.
+// Scintillation is an atmosphere the camera is above, so strictly there is none
+// of it out here; it is kept because a field of perfectly still points reads as
+// dirt on the glass, which is a worse lie than the one it tells.
 const SLOW = 7200;
 const QUICK = 2600;
 
@@ -153,7 +153,7 @@ const QUICK = 2600;
  * The frame the sky is quantised to, in milliseconds.
  *
  * The tube holds a frame when nothing about it has changed, and a twinkle is
- * time rather than state — left alone it would mean the globe repaints sixty
+ * time rather than state, and left alone it would mean the globe repaints sixty
  * times a second forever, which is exactly the silence the hold was written
  * for. So the twinkle advances in steps, the render loop's rest signature
  * carries which step it is on, and a globe nobody is touching repaints at this
@@ -210,8 +210,8 @@ const build = () => {
 /**
  * The sky behind `sphere`, on the tube.
  *
- * `sphere` is the globe's own — centre, radius on the glass, and where it is
- * pointed — which is what makes the cut at the limb and the turn of the field
+ * `sphere` is the globe's own centre, radius on the glass, and where it is
+ * pointed, which is what makes the cut at the limb and the turn of the field
  * the same fact stated once. `at` is the wall clock the sun is drawn from; the
  * sky reads the same one, or the two would be pictures of different moments.
  *
@@ -260,7 +260,7 @@ export function paintStars(ctx, sphere, { colour, alpha = 1, dpr, width, height,
 
   // The narrowest cone that can hold the glass. A star at angle θ off the axis
   // lands at f·tanθ, so anything beyond the corner is out of the picture before
-  // it is worth projecting — which is most of the catalogue, rejected on three
+  // it is worth projecting, which is most of the catalogue, rejected on three
   // multiplies. Measured from the sphere's centre because that is where the
   // axis meets the glass.
   const reach = Math.max(

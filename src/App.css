@@ -1,9 +1,9 @@
 /* ── Under a finger ─────────────────────────────────────────────────────────
    A tapped control on a phone gets a grey box thrown over it by the browser,
    which is the one thing on this screen that was not drawn by the instrument.
-   The controls answer a press themselves — every one of them lights to reading
-   weight while it is held — so the box is turned off and the phosphor says it
-   instead. */
+   The controls answer a press themselves, every one of them lighting to
+   reading weight while it is held, so the box is turned off and the phosphor
+   says it instead. */
 button,
 a {
   -webkit-tap-highlight-color: transparent;

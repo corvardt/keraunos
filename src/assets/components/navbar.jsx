@@ -3,8 +3,8 @@ import { memo } from "react";
 // Every control on the right reads as the same kind of thing.
 //
 // The padding is the whole control on a phone. Drawn, these are four letters
-// tall — a 14px target, where a fingertip covers about forty — so under a
-// coarse pointer each one is given a box it can actually be hit in, and lights
+// tall, a 14px target where a fingertip covers about forty, so under a coarse
+// pointer each one is given a box it can actually be hit in, and lights
 // on press rather than on a hover that never arrives.
 const item =
   "text-2xs uppercase tracking-label text-dim transition-colors hover:text-text active:text-text touch:px-1.5 touch:py-3";
@@ -22,8 +22,8 @@ function Navbar({ phase, host, archive, onLive, pulse, theme, onTheme, onConfig,
   // This instrument will tell you how far away the nearest strike is and count
   // down to its thunder, and an archive answers both of those about an
   // afternoon that is over. Everything else on the tube is identical to a live
-  // map by construction — that is the point of playing the strikes rather than
-  // the picture — so the only thing standing between a replayed storm and being
+  // map by construction, which is the point of playing the strikes rather than
+  // the picture, so the only thing standing between a replayed storm and being
   // read as the weather outside is this label. It does not get to be subtle.
   const state = down
     ? "no signal"
@@ -80,8 +80,9 @@ function Navbar({ phase, host, archive, onLive, pulse, theme, onTheme, onConfig,
           className="flex items-center gap-1 border-l border-line pl-2.5 sm:gap-3 sm:pl-4"
         >
           {/* Named for the two modes rather than for the two media. The media
-              are real — light emitted on glass, ink deposited on a sheet, and
-              they composite differently — but that belongs in the key panel.
+              are real, light emitted on glass against ink deposited on a
+              sheet, and they composite differently, but that belongs in the
+              key panel.
               A control has one job, and a reader scanning a strip of controls
               for the brightness switch should not have to work out that the
               tube is the dark one. */}

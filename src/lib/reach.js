@@ -1,22 +1,23 @@
 // How far the network hears, and what the sun does to it.
 //
-// A sferic — the radio crack a stroke puts out at a few kilohertz — does not
+// A sferic, the radio crack a stroke puts out at a few kilohertz, does not
 // travel in a straight line to the horizon and stop. It is trapped between the
 // ground and the underside of the ionosphere and bounces along the gap, which
 // is why a lightning network can be a network at all: a strike over Java is
 // heard in Finland. What the gap is made of at the top changes twice a day.
-// Sunlight ionises a thin layer at about 60–70 km, the D region, and that layer
-// is lossy — the waveguide it roofs is low and absorbs. After sunset the D
-// region decays within the hour and the reflecting height moves up to 85–90 km:
-// a taller waveguide, fewer bounces over the same ground, and much less lost at
-// each one. Measured on WWLLN, eastward propagation runs about 1.13 dB per
-// megametre by day against about 0.71 by night (Hutchins et al. 2013, JGR 118).
+// Sunlight ionises a thin layer at about 60 to 70 km, the D region, and that
+// layer is lossy, because the waveguide it roofs is low and absorbs. After
+// sunset the D region decays within the hour and the reflecting height moves up
+// to 85 to 90 km: a taller waveguide, fewer bounces over the same ground, and
+// much less lost at each one. Measured on WWLLN, eastward propagation runs
+// about 1.13 dB per megametre by day against about 0.71 by night (Hutchins et
+// al. 2013, JGR 118).
 //
 // So the instrument can watch the ionosphere turn on and off, using nothing but
 // lightning and the stations that heard it, and this is the accumulator that
 // lets it. Every strike names the detectors that solved it and the registry
 // already knows where they stand, so the distance to the farthest one is
-// already in the building — no new field on the wire, nothing stored, and it
+// already in the building. No new field on the wire, nothing stored, and it
 // costs one pass over at most forty stations per strike.
 //
 // Three things have to be said about the figure, because two of them are large:
@@ -25,7 +26,7 @@
 //   says the signal got that far. It cannot say it would not have gone further,
 //   and where it stops is mostly a fact about where volunteers live: a strike
 //   in the South Pacific has nobody downrange and reads short no matter how far
-//   it actually carried. That would ruin an absolute number — and it is exactly
+//   it actually carried. That would ruin an absolute number, and it is exactly
 //   why the reading here is a comparison. Station geography is the same at
 //   midnight as at noon, so it cancels between the two bins, and what is left
 //   over is the part that changed, which is the sky.
@@ -38,10 +39,10 @@
 //   without saying so.
 //
 //   Day and night are not the only thing propagation cares about. East-west
-//   asymmetry — the earth's magnetic field makes westward paths lossier than
-//   eastward ones — is comparable in size to the effect being drawn here, and
-//   is not separated out. The two distributions are day against night with that
-//   left in.
+//   asymmetry, where the earth's magnetic field makes westward paths lossier
+//   than eastward ones, is comparable in size to the effect being drawn here,
+//   and is not separated out. The two distributions are day against night with
+//   that left in.
 //
 // The terminator that matters is not the one on the map. The map's line is
 // where the sun sets on the ground; what governs the waveguide is whether the

@@ -8,7 +8,8 @@ export const MAX_K = 40; // roughly a 200km span across the tube
 // small pan would still find land under it. It never reached the screen. The
 // layers are drawn to canvases exactly the size of the viewport, so everything
 // built outside it was clipped at paint: at 3x zoom, 9,239 of 15,288 dots, 60%
-// of the build, discarded on every settle, for an edge that stayed empty anyway.
+// of the build, discarded on every settle, for an edge that stayed empty
+// anyway.
 //
 // Covering that edge for real means canvases larger than the viewport, and they
 // are already the largest allocation in the app. So this is the honest version:
@@ -100,7 +101,7 @@ export function viewForBounds(base, width, height, [west, south, east, north]) {
  *   x = k·λ + tx,  y = ty − k·ln(tan(π/4 + φ/2))
  * and inverting it wraps longitude, so a right edge sitting exactly on the
  * antimeridian comes back as −180 instead of +180. That is not a rounding to
- * shrug at — it turns the whole world into a box a rounding error wide, and
+ * shrug at: it turns the whole world into a box a rounding error wide, and
  * everything built from the box comes out empty. It is what the globe did on
  * every flat → globe swap: the mode sets the view to the whole earth exactly,
  * which lands precisely on the wrap, and the land matrix collapsed from 4,704

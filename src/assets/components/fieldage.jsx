@@ -9,7 +9,7 @@ import { fieldFor, momentFor } from "../../lib/sources.js";
  * arrive in seconds; a satellite has to finish sweeping a disc and an agency
  * has to publish it, so the sky under the strikes is always some tens of
  * minutes behind them. Unsaid, that is a quiet lie of exactly the kind this map
- * is otherwise careful about — a reader watching a cell fire over a clear patch
+ * is otherwise careful about: a reader watching a cell fire over a clear patch
  * has no way to know the cloud simply has not caught up yet.
  *
  * Off when the field is, because then there is no age to report and a footer
@@ -18,7 +18,7 @@ import { fieldFor, momentFor } from "../../lib/sources.js";
  * Owns its own tick, for the reason `Clock` does: a minute passing is not a
  * reason to re-render the map, the feed and the panels. Thirty seconds rather
  * than sixty so the figure is never more than half a minute behind its own
- * rounding — it is cheap, this is one span.
+ * rounding. It is cheap, this is one span.
  */
 /**
  * Whether the layer is whole, in the fewest words that are still true.
@@ -29,11 +29,11 @@ import { fieldFor, momentFor } from "../../lib/sources.js";
  * missing that the picture itself is misleading.
  *
  * A fifth, because of what the gap looks like. A missing tile is not drawn as a
- * hole — the ancestor beneath it is stretched over the ground instead — and a
- * dish that failed leaves its territory drawn as clear sky. Both are plausible
- * weather. One tile short of thirty is a corner nobody is reading; a fifth of
- * the sky is a reading, and a reader deciding whether a cell is firing into
- * clear air deserves to know the clear air might be missing data.
+ * hole, because the ancestor beneath it is stretched over the ground instead,
+ * and a dish that failed leaves its territory drawn as clear sky. Both are
+ * plausible weather. One tile short of thirty is a corner nobody is reading; a
+ * fifth of the sky is a reading, and a reader deciding whether a cell is firing
+ * into clear air deserves to know the clear air might be missing data.
  */
 const SHORT = 0.2;
 
@@ -60,7 +60,7 @@ export default function FieldAge({ kind, replayAt, health }) {
   if (!field) return null;
 
   // Rounded up, not to nearest, and the direction is the whole point. This
-  // figure is already a lower bound on the true age — the services answer a
+  // figure is already a lower bound on the true age: the services answer a
   // named moment with the newest frame at or before it, so what is drawn may be
   // a step older than the moment it was asked for. Rounding down would push the
   // one number a reader has for the staleness of this layer further in the
@@ -79,7 +79,7 @@ export default function FieldAge({ kind, replayAt, health }) {
         (missing && health
           ? `. ${health.held} of ${health.whole} tiles under this view have answered` +
             (health.partial ? `, ${health.partial} of them with a satellite missing` : "") +
-            ` — where they have not, the map is drawing coarser imagery or clear sky rather than what is actually there.`
+            `. Where they have not, the map is drawing coarser imagery or clear sky rather than what is actually there.`
           : "")
       }
     >

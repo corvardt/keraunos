@@ -2,19 +2,20 @@
 //
 // This was a ring of 120 slots, one per half-second flush, summed and called
 // strikes per minute. That is only a minute if the flushes are half a second
-// apart, and a background tab is exactly where they are not: a browser throttles
-// timers it cannot see, and measured in a hidden tab this instrument's own
-// 500ms interval was firing every five seconds, then every minute. A hundred and
-// twenty of those is hours of arrivals presented as one minute — the panel read
-// 173 strikes a second against a planet that makes 44, which is the reading this
-// project exists to be honest about, inverted into a boast.
+// apart, and a background tab is exactly where they are not: a browser
+// throttles timers it cannot see, and measured in a hidden tab this
+// instrument's own 500ms interval was firing every five seconds, then every
+// minute. A hundred and twenty of those is hours of arrivals presented as one
+// minute: the panel read 173 strikes a second against a planet that makes 44,
+// which is the reading this project exists to be honest about, inverted into a
+// boast.
 //
 // So the window is measured in time rather than counted in ticks, and a flush
 // carries the stretch of time it covered rather than a single instant. That
 // second half matters as much as the first: a throttled tab hands over a minute
 // of arrivals in one call, and a window that counted such a batch as landing at
-// one moment would still be a third too high at the boundary — better than ten
-// times, and still wrong. Each batch is spread across the interval it actually
+// one moment would still be a third too high at the boundary, better than ten
+// times and still wrong. Each batch is spread across the interval it actually
 // covered, and the part of that interval lying inside the last sixty seconds is
 // the part that counts.
 //
@@ -70,7 +71,7 @@ export function createRate(startedAt = Date.now()) {
      *
      * A span lying wholly inside the window counts whole. One straddling the
      * far edge counts for the fraction of itself that is still inside it, which
-     * assumes its arrivals were spread evenly across it — the same assumption
+     * assumes its arrivals were spread evenly across it, the same assumption
      * every rate over an interval makes, and the only one available without
      * keeping the strikes themselves, which this deliberately does not.
      *
@@ -99,7 +100,7 @@ export function createRate(startedAt = Date.now()) {
         sum += span.n * (inside / width);
         // Per second, not per flush. The trace draws the shape of the window
         // across its own width, and under a throttle a flush holds ten times as
-        // many strikes because it covered ten times as long — plotted raw, that
+        // many strikes because it covered ten times as long. Plotted raw, that
         // is a spike where the reading did not change at all.
         samples.push((span.n / width) * 1000);
       }

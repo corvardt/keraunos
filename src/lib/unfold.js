@@ -9,8 +9,8 @@ import { fitProjection, LAT_LIMIT, PAD } from "./view.js";
  * scale and a translate, and raw functions can be mixed. So the planet on the
  * boot screen and the map underneath it are the same object at two values of
  * one number, and everything between is a real projection that a point can be
- * put through — which is why the dots arrive where they belong rather than
- * being tweened into place and hoping.
+ * put through, which is why the dots arrive where they belong rather than being
+ * tweened into place and hoping.
  *
  * The end has to be exact, not close: at t = 1 this is `fitProjection` to the
  * pixel, so the frame where the unfold stops and the map's own land layer takes
@@ -21,7 +21,7 @@ import { fitProjection, LAT_LIMIT, PAD } from "./view.js";
 // Orthographic raw puts the sphere in a unit disk; Mercator raw puts the world
 // in ±π. Mixed as they come, the Mercator term is three times the size of the
 // other and the blend is nearly flat by the time it is a third of the way
-// through — the globe would not unroll, it would snap. This gain puts the two
+// through: the globe would not unroll, it would snap. This gain puts the two
 // in the same units first, so t moves the shape at the rate t suggests.
 const GAIN = Math.PI;
 
@@ -76,10 +76,10 @@ export function unfoldProjection(t, width, height, rotate) {
  * Orthographic raw is two-to-one: without a clip angle the far hemisphere folds
  * onto the near one and the globe is drawn twice, mirrored, which reads as a
  * fault rather than as a planet. d3's own orthographic clips those points away
- * entirely, and that is exactly what cannot be done here — they are needed at
- * the end, when the world is flat and has no far side. So they are not clipped,
- * they are faded: this says which are which, and the unfold brings them up as
- * they swing round the limb.
+ * entirely, and that is exactly what cannot be done here, because they are
+ * needed at the end, when the world is flat and has no far side. So they are
+ * not clipped, they are faded: this says which are which, and the unfold brings
+ * them up as they swing round the limb.
  */
 export function facing(lon, lat, rotate) {
   return cosCentre(lon, lat, rotate) > 0;
@@ -89,7 +89,7 @@ export function facing(lon, lat, rotate) {
  * The cosine of the angular distance from the point the sphere is pointed at.
  *
  * What `facing` tests, handed out as the number rather than the verdict. One is
- * the middle of the disk, zero is the limb, and negative is round the back — so
+ * the middle of the disk, zero is the limb, and negative is round the back, so
  * a caller that knows how much of the planet its canvas can hold can cull at
  * that angle instead of at the horizon. On a globe drawn larger than the glass
  * most of the near side is off the edge, and asking each of those dots whether

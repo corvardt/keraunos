@@ -125,10 +125,10 @@ const cloudMark = (
   </svg>
 );
 
-// The coverage layer's two passes, in the two tokens it is actually painted in
-// — text for everywhere a flash was seen, strike for the busiest of it. The
-// weather fields above are drawn in the terrain tokens; this one is not terrain,
-// and the mark has to say so or it reads as a third field.
+// The coverage layer's two passes, in the two tokens it is actually painted in:
+// text for everywhere a flash was seen, strike for the busiest of it. The
+// weather fields above are drawn in the terrain tokens; this one is not
+// terrain, and the mark has to say so or it reads as a third field.
 const coverage = (
   <svg viewBox="0 0 24 16" className="h-4 w-6">
     <path d="M4 5h7v3H4zM6 9h9v3H6zM13 4h6v4h-6z" className="fill-text" opacity="0.28" />
@@ -137,8 +137,8 @@ const coverage = (
 );
 
 // The oval, as the map draws it: a soft band with no edge anywhere on it. In
-// the reading token, because it is light rather than terrain — the same
-// argument the stars are drawn on.
+// the reading token, because it is light rather than terrain, the same argument
+// the stars are drawn on.
 const aurora = (
   <svg viewBox="0 0 24 16" className="h-4 w-6">
     <defs>
@@ -286,14 +286,14 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry mark={rainMark} term="Rain field">
           A ground-radar composite: what is actually falling, rather than how high the cloud over it
-          reached. The body is the rain, and the harder cores are the convective centres — the same
+          reached. The body is the rain, and the harder cores are the convective centres, the same
           thing the cloud field&rsquo;s bright tops are looking for, seen from underneath instead of
           from orbit. Where the two disagree is interesting: an anvil with nothing under it is a
           storm that has finished.
           <br />
           <br />
           Its footprint is not the planet. Radar is built and maintained by national services, so
-          this covers the ground somebody put a network on and stops — sharply, and often at a
+          this covers the ground somebody put a network on and stops sharply, often at a
           coastline. Empty here means unwatched, not dry, which is the opposite of what empty means
           on every other layer of this map. Most of the ocean is unwatched.
           <br />
@@ -301,8 +301,8 @@ export default function Legend({ onClose }) {
           The tiles arrive rendered rather than raw, so the reading is taken back out of the
           picture: the service publishes its colour scheme as a table of one colour per dBZ, and the
           map inverts it. That is exact rather than approximate, and it is checked against live
-          tiles by <span className="text-text">npm run check:rain</span> — a palette read wrongly
-          would draw a plausible field that is quantitatively false, which is the one failure worth
+          tiles by <span className="text-text">npm run check:rain</span>, since a palette read
+          wrongly would draw a plausible field that is quantitatively false, which is the one failure worth
           testing for. From RainViewer, published in ten-minute frames.
         </Entry>
         <Entry mark={coverage} term="Imager coverage">
@@ -383,7 +383,7 @@ export default function Legend({ onClose }) {
           <br />
           This is how well each strike was placed, drawn rather than counted. A strike caught in a
           full sheaf was pinned from every side; one wearing a fan was heard from a single
-          direction, and placed the more loosely for it — the widest angle it was{" "}
+          direction, and placed the more loosely for it. The widest angle it was{" "}
           <span className="text-text">not</span> heard from is the whole of the reading, and most of
           what this network sees, it sees from one side. Watch a storm for a minute and you can see
           which way it is listening from.
@@ -462,8 +462,8 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry term="Saving">
           Two things can leave, both under Session in configuration. The strikes still retained go
-          out as CSV — where each one was, when it happened, and when this browser heard about it,
-          the gap between the last two being the network&rsquo;s own delay. The tube goes out as a
+          out as CSV, holding where each one was, when it happened, and when this browser heard
+          about it, the gap between the last two being the network&rsquo;s own delay. The tube goes out as a
           PNG of the frame as drawn, rewound or live, which is the only way an actual moment can be
           handed to somebody.
         </Entry>
@@ -510,7 +510,7 @@ export default function Legend({ onClose }) {
         <p className="py-1 text-xs leading-relaxed text-dim">
           A speed appears only after a cell has been watched for 10 minutes. That wait is set by
           geometry: a 45 km/h cell moves 3.75 km in five minutes while being roughly 100 km across,
-          which is too small a shift to measure against its own size. Speeds outside 8–140 km/h are
+          which is too small a shift to measure against its own size. Speeds outside 8 to 140 km/h are
           withheld as tracking errors rather than shown.
         </p>
         <p className="py-1 text-xs leading-relaxed text-dim">
@@ -529,8 +529,8 @@ export default function Legend({ onClose }) {
       </Group>
 
       {/* Last, and the only group here that is not about reading the map.
-          It exists because two of the readings above — the distance to the
-          nearest strike, and the countdown to its thunder — are the ones most
+          It exists because two of the readings above, the distance to the
+          nearest strike and the countdown to its thunder, are the ones most
           easily mistaken for something to act on, and because the network this
           is built from asks in its own terms not to be used that way. */}
       <Group title="What this is not">

@@ -7,7 +7,7 @@ import { record } from "../../lib/stations.js";
 // Blitzortung asks that a project using their data pull it from its own server,
 // and this used to be one socket to theirs per open tab. The relay in `relay/`
 // holds exactly one, whatever the audience, and passes the frames through
-// untouched — so everything below this line is the same as it ever was.
+// untouched, so everything below this line is the same as it ever was.
 //
 // Configured rather than compiled in, because the relay is deployed separately
 // from the site and the two need not share a hostname.
@@ -59,7 +59,7 @@ function Seeker({ onDataReceived, onStatus }) {
 
     // Said out loud rather than thrown. Without a relay there is no feed and
     // there is nothing this can do about it, and a socket opened on `undefined`
-    // fails as a network error somewhere in the console — which reads exactly
+    // fails as a network error somewhere in the console, which reads exactly
     // like the network being down, and is the one thing it is not.
     if (!FEED) {
       report("down", "no relay configured: set VITE_FEED_URL");

@@ -10,9 +10,9 @@
     "bindings": [{ "name": "FEED", "class_name": "Feed" }]
   },
 
-  // SQLite-backed, which is the only kind the free plan carries. Nothing here
-  // stores anything — the object keeps an alarm and a socket — but the storage
-  // backend is chosen at the migration and cannot be changed afterwards.
+  // SQLite-backed, which is the only kind the free plan carries. The object
+  // keeps an alarm and a socket and stores nothing, but the storage backend is
+  // chosen at the migration and cannot be changed afterwards.
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Feed"] }],
 
   "vars": {

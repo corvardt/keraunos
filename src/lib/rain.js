@@ -5,7 +5,7 @@
  * is reaching the ground, because 10.8µm reads the top of the column and
  * nothing below it: a dying anvil and a shelf about to drop hail off its front
  * look much the same from above. Radar looks at the other end. It reports what
- * is falling — how much of it, in what size of drop — and it is the only layer
+ * is falling, how much of it and in what size of drop, and it is the only layer
  * here measured from underneath the weather rather than over it.
  *
  * The two therefore answer different questions and are offered as alternatives
@@ -34,15 +34,15 @@
  * picture, which is exactly as fragile as it sounds unless it is done exactly.
  *
  * It can be. The scheme is a 256-entry table, one entry per dBZ from -32 up,
- * published as RGBA — so the ramp below is that table and the inversion is a
+ * published as RGBA, so the ramp below is that table and the inversion is a
  * lookup rather than a fit. Two conditions make it exact, and both are
  * requested in `url` for this reason and no other: smoothing off, because a
  * blurred tile interpolates between palette entries and produces colours that
  * are not in the table and do not mean anything; and snow in the rain colours,
  * because the separate snow ramp is a second table over the same pixels.
  *
- * Above 65 dBZ the scheme stops being injective — white covers 65 to 74 and
- * green everything past it — and the map takes the lowest dBZ of any repeated
+ * Above 65 dBZ the scheme stops being injective, with white covering 65 to 74
+ * and green everything past it, so the map takes the lowest dBZ of any repeated
  * colour. That whole region is past the top of real precipitation (60 dBZ is
  * already giant hail), so what is being rounded is the difference between
  * saturated and more saturated.
@@ -77,8 +77,8 @@ const TILE_PX = 300;
 /**
  * Where the pyramid stops.
  *
- * Not where the radar stops — the composite has detail past this — but where
- * the map does. Level 7 is already about as deep as the tube's own MAX_K
+ * Not where the radar stops, since the composite has detail past this, but
+ * where the map does. Level 7 is already about as deep as the tube's own MAX_K
  * reaches, so a level 8 tile would be a request for ground no view can get to.
  */
 export const MAX_LEVEL = 7;
@@ -99,7 +99,7 @@ export const STEP_MS = 10 * 60 * 1000;
  * Much shorter than the cloud field's twenty minutes, because there are no
  * satellites to wait for: the newest listed frame is typically a couple of
  * minutes old. Five gives the composite time to be published and indexed, and
- * anything it does not cover is covered anyway — a moment with no frame at or
+ * anything it does not cover is covered anyway: a moment with no frame at or
  * before it is resolved to the newest one there is rather than failing.
  */
 export const LAG_MS = 5 * 60 * 1000;
@@ -127,8 +127,8 @@ const packed = (r, g, b, a) => (((r << 24) | (g << 16) | (b << 8) | a) >>> 0);
 
 // Colour to dBZ. First occurrence wins, so a colour the scheme reuses at the
 // top of its range is read as the lowest reading it can stand for rather than
-// the highest — the conservative direction, and the only one that does not
-// invent intensity out of a palette that has run out of colours.
+// the highest. That is the conservative direction, and the only one that does
+// not invent intensity out of a palette that has run out of colours.
 const SCALE = (() => {
   const map = new Map();
   for (let i = 0; i * 8 < RAMP.length; i++) {

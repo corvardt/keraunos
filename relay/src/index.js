@@ -14,9 +14,9 @@
 //
 // One object for the whole world: `idFromName("world")`. That means every
 // reader is served from wherever this object happens to live, which adds a
-// hop's latency to the far side of the planet — against a feed whose own
-// median delay from strike to browser is several seconds, and which is the
-// figure the panel reports. It is not a cost worth splitting the object for.
+// hop's latency to the far side of the planet, against a feed whose own median
+// delay from strike to browser is several seconds, and which is the figure the
+// panel reports. It is not a cost worth splitting the object for.
 
 const HOSTS = ["ws1", "ws7", "ws8"];
 const HELLO = JSON.stringify({ a: 111 }); // the subscription the feed expects
@@ -106,8 +106,8 @@ export class Feed {
    *
    * It matters more here than it did there. This is one client rather than one
    * per reader, so an outage no longer brings a retry from every open tab in
-   * the world at once — but it is also the only client, and a tight loop from
-   * it would be a tight loop against a volunteer's server with nothing else to
+   * the world at once. But it is also the only client, and a tight loop from it
+   * would be a tight loop against a volunteer's server with nothing else to
    * average it out.
    */
   retry() {
@@ -190,10 +190,10 @@ export default {
     const url = new URL(request.url);
     if (url.pathname !== "/feed") return new Response("not here", { status: 404 });
 
-    // Who may hold this open. Unset, it answers anyone — which is what a local
-    // `wrangler dev` wants and what a public deployment does not: this exists to
-    // keep one connection on a volunteer's server, and an open relay in front of
-    // it would hand that property back to whoever found the hostname.
+    // Who may hold this open. Unset, it answers anyone, which is what a local
+    // `wrangler dev` wants and what a public deployment does not: this exists
+    // to keep one connection on a volunteer's server, and an open relay in
+    // front of it would hand that property back to whoever found the hostname.
     const allowed = (env.ALLOWED_ORIGINS ?? "")
       .split(",")
       .map((origin) => origin.trim())

@@ -6,8 +6,8 @@ import { useEffect, useRef, useState } from "react";
 // the whole length of the screen.
 //
 // The planet turning under the readout is what sets this now. The turn is a
-// throw rather than a revolution — it leaves rest, and is easing off again
-// through the fade — and taken slowly enough to be a planet rather than a
+// throw rather than a revolution. It leaves rest, and is easing off again
+// through the fade, and taken slowly enough to be a planet rather than a
 // spinning top it needs about this long to be worth having watched. The ceiling
 // below is unchanged, so a slow fetch is still let go of at the same moment it
 // always was.
@@ -38,7 +38,7 @@ const BLANK = " ".repeat(9);
  * It is not a curtain and never covered anything: `WorldMap` mounts and runs
  * underneath from the first frame and never waits on this. What it prints over
  * is the map already drawing itself, as a globe, because until these lines are
- * done the map has no reason to be flat yet — see `lib/unfold.js`. So the
+ * done the map has no reason to be flat yet (see `lib/unfold.js`). So the
  * screen is not a loading state. It is the machine saying what it found, over
  * the world it found it on, and it leaves by telling the map to unroll.
  */
@@ -107,7 +107,7 @@ export default function Boot({ onDone, onLeave, outlines, names, status }) {
   // the map is naming Texas "USA" and the Coral Sea "open water", and that is
   // the one gap a reader would take for a fault rather than a wait. The
   // coastlines are already in the bundle. The uplink is a websocket to a
-  // network run by volunteers and is allowed to be slow or absent — nothing on
+  // network run by volunteers and is allowed to be slow or absent. Nothing on
   // the map needs it to draw, and the footer carries it from here on, so
   // holding a curtain over a working instrument until a stranger's socket
   // answers buys nothing. Its line simply goes unfinished, which is what a log
@@ -163,7 +163,7 @@ export default function Boot({ onDone, onLeave, outlines, names, status }) {
       // Top left, and no longer centred. Centred was right against an opaque
       // screen, where there was nothing else to be centred against; over a
       // living map it has to land on the map, and the map is the top left of
-      // this layout in both of them — the left column on a desktop, the upper
+      // this layout in both of them, the left column on a desktop and the upper
       // half on a phone. Anywhere lower and the lines print over the readouts
       // on a narrow screen. It is also simply where a machine's log goes.
       className={`pointer-events-none fixed inset-0 z-40 flex items-start justify-start overflow-hidden px-4 pt-20 sm:px-6 sm:pt-24 ${leaving ? "boot-out" : ""}`}
@@ -176,7 +176,7 @@ export default function Boot({ onDone, onLeave, outlines, names, status }) {
           arrive one at a time: a box that grew to fit them would drift upward
           under the eye while you were reading it, so it is the full four lines
           tall from the first frame and they fill it downward. Nothing is boxed
-          or ruled — the point of the screen is that it is the machine talking,
+          or ruled, because the point of the screen is that it is the machine talking,
           and a machine talking looks like this. */}
         <ul className="h-[4.875rem] whitespace-pre text-xs leading-relaxed">
           {lines.map((line) => (

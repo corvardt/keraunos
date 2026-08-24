@@ -2,15 +2,15 @@
  * The coverage layer: what a satellite saw, over what the network heard.
  *
  * Every other layer here answers a question the strikes cannot. This one asks a
- * question *about* them. Blitzortung is a VLF network on the ground, and what it
- * can hear is a function of where somebody built a detector: it is superb over
- * Europe and thin over the middle of an ocean, and it is biased toward the
+ * question *about* them. Blitzortung is a VLF network on the ground, and what
+ * it can hear is a function of where somebody built a detector: it is superb
+ * over Europe and thin over the middle of an ocean, and it is biased toward the
  * cloud-to-ground return stroke because that is the discharge with a radio
  * signature worth travelling. MTG-I's Lightning Imager is the opposite
  * instrument in every respect. It sits at 0° and photographs the 777.4nm oxygen
- * line at a thousand frames a second, so it sees the optical flash — including
+ * line at a thousand frames a second, so it sees the optical flash, including
  * the intracloud discharge that never reaches the ground and that the network
- * largely does not hear — and it sees it at the same detection efficiency over
+ * largely does not hear, and it sees it at the same detection efficiency over
  * the Congo, the Atlantic and Berlin, because a satellite does not care whether
  * anyone lives underneath it.
  *
@@ -18,7 +18,7 @@
  * this layer land together, two independent instruments on two different
  * physical effects agree that a storm is there. Where this layer is lit and no
  * dots arrive, the network is not hearing something that is definitely
- * happening — which over the South Atlantic is most of the time. That is a fact
+ * happening, which over the South Atlantic is most of the time. That is a fact
  * about the instrument the rest of this page is built out of, and it belongs on
  * the page for the same reason the detector threads do.
  *
@@ -30,32 +30,32 @@
  *
  * Accumulated Flash Area: the ground each flash's optical emission covered,
  * accumulated onto the FCI grid over five minutes and published as a count per
- * pixel. Not a strike list — the individual flashes exist, as LFL in the Data
+ * pixel. Not a strike list. The individual flashes exist, as LFL in the Data
  * Store, but they arrive as netCDF-4 inside a zip behind an OAuth key, and this
  * page has neither a server to unpack that on nor a key it could keep. This is
  * the same measurement already rendered, on a service that answers anonymously.
  *
  * Which means it is not live and cannot be: see LAG_MS. The dots on top of it
  * are seconds old and this is a quarter of an hour behind them, so a cell that
- * has just fired has nothing here yet. The footer says so — `sources.js` carries
- * this layer's own cadence for exactly that reason — and a reader comparing the
- * two layers has to be told, because the whole use of the thing is comparison
- * and the naive reading of a mismatch is "the network missed it".
+ * has just fired has nothing here yet. The footer says so, and `sources.js`
+ * carries this layer's own cadence for exactly that reason, because a reader
+ * comparing the two layers has to be told, because the whole use of the thing
+ * is comparison and the naive reading of a mismatch is "the network missed it".
  *
  * ── Why the colours are the data ────────────────────────────────────────────
  *
  * The same bind the rain field is in, and it is worth reading that file's note
  * on it: the service publishes a picture rather than a grid. There is no
- * colormap in the style to invert — the SLD carries a bare RasterSymbolizer, so
- * the ramp is baked into the raster before GeoServer ever sees it — and the only
- * published statement of what a colour means is the legend graphic. So the ramp
- * below *is* that legend, sampled along the bar, and a pixel is read by finding
- * the nearest entry.
+ * colormap in the style to invert, since the SLD carries a bare
+ * RasterSymbolizer and the ramp is baked into the raster before GeoServer ever
+ * sees it, and the only published statement of what a colour means is the
+ * legend graphic. So the ramp below *is* that legend, sampled along the bar,
+ * and a pixel is read by finding the nearest entry.
  *
  * Nearest rather than exact, unlike the rain, and this is the one soft edge in
- * here. A GetMap resamples the native grid to whatever raster was asked for, and
- * an interpolated pixel on the boundary between a red core and clear sky is a
- * blend of two ramp entries that are far apart — which lands off the curve
+ * here. A GetMap resamples the native grid to whatever raster was asked for,
+ * and an interpolated pixel on the boundary between a red core and clear sky is
+ * a blend of two ramp entries that are far apart, which lands off the curve
  * rather than between two neighbours on it. Those pixels are the outline of a
  * cell and they read as a middling count. On a wash three levels coarser than
  * the sensor, drawn to say "something was here", that is an acceptable lie; it
@@ -76,11 +76,12 @@ import {
 } from "./field.js";
 
 // The same origin the Meteosat dishes are reached through, and for the same
-// reason: EUMETSAT's GeoServer sends no `access-control-allow-origin`, and every
-// pixel of this layer is read back to be turned into a count. `functions/msg.js`
-// carries it in production and `vite.config.js` in development, so this file
-// knows only the path. The layer name is on that proxy's allowlist; adding one
-// here without adding it there is a 400 and an empty map.
+// reason: EUMETSAT's GeoServer sends no `access-control-allow-origin`, and
+// every pixel of this layer is read back to be turned into a count.
+// `functions/msg.js` carries it in production and `vite.config.js` in
+// development, so this file knows only the path. The layer name is on that
+// proxy's allowlist; adding one here without adding it there is a 400 and an
+// empty map.
 const SERVICE = "/msg";
 const LAYER = "mtg_fd:li_afa";
 
@@ -107,13 +108,13 @@ const TILE_PX = 300;
  * is a continuous thing and a coarser picture of it is a slightly softer cloud.
  * This data is not continuous. A flash covers a few pixels of a 4.5km grid, so
  * at level 2 one stored sample is most of a country and the flash is a
- * thousandth of it — and a server resampling that box down to one value will
+ * thousandth of it, and a server resampling that box down to one value will
  * almost always land somewhere else and hand back nothing at all. The first
  * version of this asked at SAMPLES and drew four lit samples over the whole of
  * Africa on an afternoon the ITCZ was firing across it.
  *
  * So it is asked four times finer and reduced here, by taking the strongest
- * sample in each block rather than the mean — the same answer `rain.js` gives to
+ * sample in each block rather than the mean, the same answer `rain.js` gives to
  * the same problem, for the same reason. A flash is small and a mean is exactly
  * the operation that dissolves it into the clear sky around it.
  *
@@ -128,7 +129,7 @@ const FETCH_PX = SAMPLES * 4;
  *
  * A level lower than the other two fields. The Lightning Imager's footprint is
  * about 4.5km at nadir and coarser toward the limb, and a level-6 tile is about
- * 4.8km per sample — so level 7 would be asking GeoServer to interpolate a
+ * 4.8km per sample, so level 7 would be asking GeoServer to interpolate a
  * measurement it does not have, at four times the bytes, to draw a detail that
  * is not in the data. Past here the field is stretched, which is the honest
  * thing to do with a picture that has run out.
@@ -147,14 +148,14 @@ export const STEP_MS = 5 * 60 * 1000;
 /**
  * How far behind the clock the live moment is asked for.
  *
- * Measured rather than assumed, from the layer's own GetCapabilities: the newest
- * time it advertises runs about ten to fourteen minutes behind the wall clock,
- * being five minutes of accumulation and then the processing and publication of
- * it. Fifteen clears that.
+ * Measured rather than assumed, from the layer's own GetCapabilities: the
+ * newest time it advertises runs about ten to fourteen minutes behind the wall
+ * clock, being five minutes of accumulation and then the processing and
+ * publication of it. Fifteen clears that.
  *
  * It has to clear it rather than merely usually clear it, because this service
  * does not answer a moment it does not have by handing back the newest one it
- * does — it answers 502, the same way it does for the Meteosat dishes. An
+ * does. It answers 502, the same way it does for the Meteosat dishes. An
  * optimistic lag here is not a slightly stale layer; it is no layer at all,
  * failing quietly, on an instrument where nothing drawn is indistinguishable
  * from nothing seen.
@@ -168,7 +169,7 @@ export const LAG_MS = 15 * 60 * 1000;
  * one flash to the dark red of twenty or more.
  *
  * Taken off the GetLegendGraphic image rather than out of a style document,
- * because there is no style document to take it out of — see the header. The
+ * because there is no style document to take it out of (see the header). The
  * ends are the bar's own first and last interior pixels; its outermost column
  * blends into the legend's black border and is not a colour this ramp ever
  * produces.
@@ -224,12 +225,12 @@ export function positionFor(r, g, b) {
  * them is claimed.
  *
  * The legend carries ticks at one flash, ten, and twenty-or-more, and the ten
- * does not sit where either a linear or a logarithmic scale would put it. So the
- * shape of the ramp between the marks is unknown, and this interpolates through
- * the marks and says so, rather than fitting a curve nobody published to two
- * intervals of a scale that was never stated. It is the same move `ir.js` makes
- * with the two greyscales, for the same reason: three honest anchors beat one
- * confident formula.
+ * does not sit where either a linear or a logarithmic scale would put it. So
+ * the shape of the ramp between the marks is unknown, and this interpolates
+ * through the marks and says so, rather than fitting a curve nobody published
+ * to two intervals of a scale that was never stated. It is the same move
+ * `ir.js` makes with the two greyscales, for the same reason: three honest
+ * anchors beat one confident formula.
  */
 const MID = 0.529; // where the legend's own "10" tick stands
 const MID_COUNT = 10;
@@ -243,8 +244,8 @@ export function countFor(position) {
 }
 
 // Where the second pass starts. The legend's middle tick, which makes the split
-// between "the satellite saw lightning here" and "the satellite saw a great deal
-// of it" a published number rather than a taste.
+// between "the satellite saw lightning here" and "the satellite saw a great
+// deal of it" a published number rather than a taste.
 const BUSY = MID;
 
 // ── Fetching ────────────────────────────────────────────────────────────────
@@ -255,7 +256,7 @@ const BUSY = MID;
  * The same WMS call `ir.js` makes of the same server, in the same projection,
  * because the tile is the same box: a Mercator rectangle named at a moment. The
  * two differences are TIME, which steps at five minutes here rather than ten,
- * and the size, which is FETCH_PX rather than what is stored — see there.
+ * and the size, which is FETCH_PX rather than what is stored (see there).
  */
 export function url(frame, at) {
   const params = new URLSearchParams({
@@ -285,10 +286,10 @@ export function withinReach(frame) {
 // is a square of this many pixels.
 const REDUCE = FETCH_PX / SAMPLES;
 
-// Said once rather than once per tile. There is one source here, so a failure is
-// not a seam in the picture the way it is on the ring: it is the whole layer,
-// and an empty coverage layer looks exactly like a satellite that saw no
-// lightning. That is the one misreading this layer must not produce silently —
+// Said once rather than once per tile. There is one source here, so a failure
+// is not a seam in the picture the way it is on the ring: it is the whole
+// layer, and an empty coverage layer looks exactly like a satellite that saw no
+// lightning. That is the one misreading this layer must not produce silently,
 // and the footer says so now as well, which is where a reader will see it.
 const load = (src) =>
   loadPicture(src, "lightning imager", "coverage will draw as though it saw nothing.");
@@ -296,16 +297,16 @@ const load = (src) =>
 /**
  * One tile, as a field of bytes.
  *
- * Transparent is the reading that matters most here and the one easiest to lose:
- * it means the imager looked and saw no flash, which is a real answer and a
- * different fact from ground it cannot see at all. The first is drawn as
+ * Transparent is the reading that matters most here and the one easiest to
+ * lose: it means the imager looked and saw no flash, which is a real answer and
+ * a different fact from ground it cannot see at all. The first is drawn as
  * nothing; the second is refused above, before a request is made for it.
  */
 async function fetchTile(z, x, y, at) {
   const frame = tileFrame(z, x, y);
   // Answered, and the answer is that there is no product over this ground.
-  // Returned as an empty tile rather than as a failure: a failure would be asked
-  // for again on every settle, forever, and the answer would not change.
+  // Returned as an empty tile rather than as a failure: a failure would be
+  // asked for again on every settle, forever, and the answer would not change.
   if (!withinReach(frame)) return { field: new Uint8Array(SAMPLES * SAMPLES), any: false };
 
   const { image } = await load(url(frame, at));
@@ -324,8 +325,8 @@ async function fetchTile(z, x, y, at) {
 
   // Reduced by keeping the busiest pixel of each block. Not the mean: a block
   // is up to a few hundred kilometres across at the shallow levels and a flash
-  // is four of them, so a mean would report every storm on the map as a tenth of
-  // a flash and draw nothing at all.
+  // is four of them, so a mean would report every storm on the map as a tenth
+  // of a flash and draw nothing at all.
   const field = new Uint8Array(SAMPLES * SAMPLES);
   let any = false;
   for (let row = 0; row < SAMPLES; row++) {
@@ -352,9 +353,9 @@ async function fetchTile(z, x, y, at) {
     }
   }
 
-  // A tile with no flash in it is still a tile: it is the answer "the imager saw
-  // nothing here", which on this layer is a reading rather than an absence, and
-  // holding it stops the pyramid asking again on the next pan.
+  // A tile with no flash in it is still a tile: it is the answer "the imager
+  // saw nothing here", which on this layer is a reading rather than an absence,
+  // and holding it stops the pyramid asking again on the next pan.
   return { field, any };
 }
 
@@ -364,20 +365,20 @@ async function fetchTile(z, x, y, at) {
  * A tile, as something to look at.
  *
  * Two passes on the same split the legend already makes. The body is every
- * pixel the imager saw a flash in — the point of a coverage layer is that a
- * single flash somewhere the network is deaf must be visible at all, so its
- * floor is a floor rather than a fade to nothing. Over it, the pixels past the
- * legend's own middle tick, harder.
+ * pixel the imager saw a flash in, because the point of a coverage layer is
+ * that a single flash somewhere the network is deaf must be visible at all, so
+ * its floor is a floor rather than a fade to nothing. Over it, the pixels past
+ * the legend's own middle tick, harder.
  *
  * The tokens come from the map, and which two it hands over matters more here
- * than anywhere else on this page: see the palette call in `worldmap.jsx`. Drawn
- * in the terrain tokens this layer is indistinguishable from the cloud field it
- * is usually on top of, which is precisely the view in which somebody is
- * comparing them.
+ * than anywhere else on this page: see the palette call in `worldmap.jsx`.
+ * Drawn in the terrain tokens this layer is indistinguishable from the cloud
+ * field it is usually on top of, which is precisely the view in which somebody
+ * is comparing them.
  *
  * Both passes stay under the land matrix and well under the strikes. This is a
- * layer to notice while looking at something else, which is the one thing it has
- * in common with the fields it is drawn over.
+ * layer to notice while looking at something else, which is the one thing it
+ * has in common with the fields it is drawn over.
  */
 function paintTile({ field }, body, tops) {
   const size = SAMPLES * SAMPLES;
@@ -389,9 +390,10 @@ function paintTile({ field }, body, tops) {
     const v = field[p];
     if (!v) continue;
     const t = v / 255;
-    // Not squared, unlike the cloud wash. That layer covers the whole planet and
-    // has to fall away fast to stay a backdrop; this one is lit over a fraction
-    // of a per cent of the map and is not competing for the same screen.
+    // Not squared, unlike the cloud wash. That layer covers the whole planet
+    // and has to fall away fast to stay a backdrop; this one is lit over a
+    // fraction of a per cent of the map and is not competing for the same
+    // screen.
     seen[p * 4 + 3] = 32 + t * 44;
     if (t > BUSY) {
       busy[p * 4 + 3] = Math.sqrt((t - BUSY) / (1 - BUSY)) * 120;
@@ -415,10 +417,10 @@ function paintTile({ field }, body, tops) {
  * The pyramid, driven by the map.
  *
  * The same shared store both weather fields use, which is what makes this layer
- * cheap enough to be worth having: everything about tiles, queues, ancestors and
- * the handover between two moments is in `field.js` already. What is particular
- * to this one is above — one satellite instead of five, a legend read back out of
- * a picture, and a floor that keeps a single flash visible.
+ * cheap enough to be worth having: everything about tiles, queues, ancestors
+ * and the handover between two moments is in `field.js` already. What is
+ * particular to this one is above: one satellite instead of five, a legend read
+ * back out of a picture, and a floor that keeps a single flash visible.
  */
 export function createFlash() {
   return createField({

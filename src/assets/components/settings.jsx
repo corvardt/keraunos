@@ -103,9 +103,9 @@ function Action({ label, hint, verb, onClick }) {
  * also what makes it work from the keyboard.
  *
  * The value is cleared on the way out. Without that, picking the same file
- * twice in a row is silent — the input has not changed, so nothing fires — and
- * reloading the archive you are already watching is exactly what someone does
- * after leaving it by accident.
+ * twice in a row is silent, because the input has not changed and nothing
+ * fires. Reloading the archive you are already watching is exactly what someone
+ * does after leaving it by accident.
  */
 function Upload({ label, hint, verb, accept, onFile }) {
   const id = useId();
@@ -278,7 +278,7 @@ export default function Settings({
         />
         <Toggle
           label="Imager coverage"
-          hint="Where MTG's Lightning Imager saw flashes from orbit, over the third of the planet it watches. It sees the discharges inside a cloud that the ground network mostly cannot hear, and sees them as well over an ocean as over Europe — so where it is lit and no strikes arrive, the network is deaf rather than the sky quiet. About fifteen minutes behind the strikes."
+          hint="Where MTG's Lightning Imager saw flashes from orbit, over the third of the planet it watches. It sees the discharges inside a cloud that the ground network mostly cannot hear, and sees them as well over an ocean as over Europe, so where it is lit and no strikes arrive, the network is deaf rather than the sky quiet. About fifteen minutes behind the strikes."
           value={settings.coverage}
           onChange={(v) => set("coverage", v)}
         />
@@ -335,7 +335,7 @@ export default function Settings({
               archive.dropped ? ` ${archive.dropped.toLocaleString()} unreadable rows were skipped.` : ""
             }${
               archive.trimmed
-                ? ` Only the last ${archive.count.toLocaleString()} are played — the file is longer than the hour this instrument holds.`
+                ? ` Only the last ${archive.count.toLocaleString()} are played, because the file is longer than the hour this instrument holds.`
                 : ""
             } The field is off while it runs, because the sky behind the map is fetched for now and this is not now. Going back to live empties the session and relinks.`}
             onClick={onLeaveArchive}
@@ -345,7 +345,7 @@ export default function Settings({
             label="Archive"
             verb="load"
             accept=".csv,text/csv"
-            hint="A strike file saved above, played back at life size from its first strike. The map builds itself from it exactly as it does from the network, so the feed, the storm cells and the rewind track all work — but which detectors placed each strike is not in the file and cannot be, so the reach and the detector count read as unavailable. The live feed stops while it plays."
+            hint="A strike file saved above, played back at life size from its first strike. The map builds itself from it exactly as it does from the network, so the feed, the storm cells and the rewind track all work. But which detectors placed each strike is not in the file and cannot be, so the reach and the detector count read as unavailable. The live feed stops while it plays."
             onFile={onLoadArchive}
           />
         )}

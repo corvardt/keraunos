@@ -4,7 +4,7 @@
 # table out of rendered tiles, the coverage layer reads a legend ramp back out
 # of a raster, and the cloud field is calibrated per satellite. A ramp that has
 # quietly been restyled still draws a plausible field at plausible intensities
-# over a plausible map, so there is no way to see the error by looking — which
+# over a plausible map, so there is no way to see the error by looking, which
 # is the whole reason these exist, and the reason they are worth running when
 # nobody has touched the code.
 #

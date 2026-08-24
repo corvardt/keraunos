@@ -29,7 +29,7 @@ export const DEFAULTS = {
   // The world as a sphere rather than as a sheet. Off, and off by default: this
   // instrument is mostly about watching the whole planet at once, and a globe
   // shows you half of one. It is the mode you go to when you want to see where
-  // the weather is rather than all of it — and it is the same planet the boot
+  // the weather is rather than all of it, and it is the same planet the boot
   // screen draws, which is where it came from.
   globe: false,
   storms: true,
@@ -47,8 +47,8 @@ export const DEFAULTS = {
   // this map that comes from outside the strike feed. Cloud by default, because
   // it is the context the strikes are missing, it covers the whole planet, and
   // it is not clutter over the reading: it sits behind the world rather than on
-  // it. Rain is the same idea measured from underneath — a ground-radar
-  // composite of what is actually falling — and the two are alternatives rather
+  // it. Rain is the same idea measured from underneath, a ground-radar
+  // composite of what is actually falling, and the two are alternatives rather
   // than layers, since where they overlap they are drawing the same storm.
   // Off, the map is exactly what it was before, and nothing is requested.
   field: "cloud",
@@ -61,13 +61,13 @@ export const DEFAULTS = {
   // Named for the threads because that is all there is to see: the detectors
   // themselves are drawn only in the moment they hear something.
   stations: false,
-  // The other opinion. MTG's Lightning Imager photographs the optical flash from
-  // orbit, so it sees the intracloud discharge the ground network mostly cannot
-  // hear and sees it as well over an ocean as over Europe. Opt-in for the reason
-  // the detector threads are — it is a fact about the instrument rather than
-  // about the weather — and additionally because it is a quarter of an hour
-  // behind the dots it is there to be compared with, which is a thing a reader
-  // has to have asked for before it can be explained to them.
+  // The other opinion. MTG's Lightning Imager photographs the optical flash
+  // from orbit, so it sees the intracloud discharge the ground network mostly
+  // cannot hear and sees it as well over an ocean as over Europe. Opt-in for
+  // the reason the detector threads are, being a fact about the instrument
+  // rather than about the weather, and additionally because it is a quarter of
+  // an hour behind the dots it is there to be compared with, which is a thing a
+  // reader has to have asked for before it can be explained to them.
   coverage: false,
   // The other electricity. OVATION's auroral oval, off NOAA's space weather
   // service: one value per degree of the planet for the probability of visible
@@ -77,9 +77,9 @@ export const DEFAULTS = {
   // Opt-in, and for a plainer reason than the two above: it is not weather. A
   // reader who came here for lightning should not have the sky over the poles
   // lit up until they ask for it. It is also the one layer here that has not
-  // happened yet — the model runs about an hour ahead of the solar wind that
-  // drives it — so it is named as a forecast wherever it appears, and the panel
-  // prints how far ahead it is looking.
+  // happened yet, since the model runs about an hour ahead of the solar wind
+  // that drives it, so it is named as a forecast wherever it appears, and the
+  // panel prints how far ahead it is looking.
   aurora: false,
   persistence: "normal",
   // Which of the panel's larger groups are folded shut, by name. A map rather
@@ -88,7 +88,7 @@ export const DEFAULTS = {
   // exist in here at all: absent means open, which is what a fresh panel is.
   //
   // Separate from the toggles below, which answer a different question. Those
-  // say whether a reading is wanted at all — a curve that never fills is one
+  // say whether a reading is wanted at all, and a curve that never fills is one
   // somebody may want gone for good. Folding says only "not while I am looking
   // at something else", and is expected to be undone a minute later.
   shut: {},
@@ -96,9 +96,9 @@ export const DEFAULTS = {
   feed: true,
   trace: true,
   // The long view: the same rate the trace shows, banked by the minute and kept
-  // for a day. Separate from `trace` because they answer different questions —
-  // one is what is arriving now, the other is what kind of day it has been —
-  // and because this one is empty for the first minutes of a session, which is
+  // for a day. Separate from `trace` because they answer different questions:
+  // one is what is arriving now, the other is what kind of day it has been. And
+  // because this one is empty for the first minutes of a session, which is
   // a reason someone might want it out of the way.
   day: true,
   // How far the network is hearing, split by daylight. Empty for the first

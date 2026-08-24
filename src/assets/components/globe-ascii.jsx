@@ -5,12 +5,12 @@ import { subsolar } from "../../lib/sun.js";
 
 // A character cell is 0.6 as wide as it is tall, at the size and leading set on
 // the block below. Longitude therefore has to be sampled 1/0.6 as densely as
-// latitude or the planet comes out an egg — the same correction the land matrix
+// latitude or the planet comes out an egg, the same correction the land matrix
 // makes against the glass, made here against the type.
 const ASPECT = 0.6;
 // As large as the narrowest screen this runs on will take. 29 rows of 11px is
 // 319px of planet, and the 48 columns of 6.6px cell that pair with them are
-// 317px across — inside the 328px a 360px phone leaves once the screen's own
+// 317px across, inside the 328px a 360px phone leaves once the screen's own
 // padding is off. Bigger than this and the globe would have to shrink itself on
 // phones, and a planet that is one size here and another there is two drawings
 // rather than one.
@@ -21,7 +21,7 @@ const RADIUS = ROWS / 2 - 0.5;
 
 // Where the eye sits. A satellite looking down the equator sees a band and no
 // poles; lifted a little, the disk reads as a sphere and the northern
-// continents — the ones anybody recognises — face the viewer.
+// continents, the ones anybody recognises, face the viewer.
 const TILT = 16;
 // The meridian under the viewer when the screen appears. Africa and Europe are
 // the most legible thing this grid can draw, so the planet starts showing them
@@ -31,18 +31,18 @@ const START_LON = 10;
 // The turn is a gesture with a beginning and an end, not a loop that happens to
 // be running: the planet is still in the first frame, is carried through most
 // of a third of a turn, and is easing off again by the time the curtain lifts.
-// The ends are what make it — a constant rate reads as a texture scrolling past,
-// and it is the settling that makes it read as mass being brought to rest. Taken
-// no faster than this, because past about a degree a frame the continents stop
-// being places and become a pattern going by.
+// The ends are what make it: a constant rate reads as a texture scrolling past,
+// and it is the settling that makes it read as mass being brought to rest.
+// Taken no faster than this, because past about a degree a frame the continents
+// stop being places and become a pattern going by.
 const SWEEP = 110;
 // The whole of the screen, fade included, so the planet is still easing as the
 // curtain goes and is never seen to arrive.
 const SPIN_MS = 1520;
 // What it settles to, rather than what it stops at. The screen is normally gone
-// before this matters; it matters when a slow fetch holds the door, and a planet
-// frozen mid-frame under a line reading "fetching..." looks like a machine that
-// has hung. So it never quite stops.
+// before this matters; it matters when a slow fetch holds the door, and a
+// planet frozen mid-frame under a line reading "fetching..." looks like a
+// machine that has hung. So it never quite stops.
 const DRIFT_PER_S = 14;
 
 // Zero slope at both ends, so the planet leaves rest and arrives at the drift
@@ -94,7 +94,7 @@ const isLand = (grid, lon, lat) => {
  * Two passes of the same grid, printed one exactly over the other: everything
  * the sun is up over goes in the top layer, everything in night goes in the
  * bottom one, a step darker. Neither layer draws the other's cells, so the
- * terminator is not a line anybody plots — it is the seam between the two
+ * terminator is not a line anybody plots. It is the seam between the two
  * printings, and it falls where the sun actually puts it right now.
  *
  * Sea and land are told apart within a layer by weight of glyph rather than by
@@ -184,8 +184,8 @@ export default function Globe({ index }) {
 
   return (
     // The two layers are one printing in two inks, so they are stacked rather
-    // than laid out: same grid, same origin, same metrics, and the box takes its
-    // size from the first of them.
+    // than laid out: same grid, same origin, same metrics, and the box takes
+    // its size from the first of them.
     <div className="relative shrink-0 select-none whitespace-pre text-[11px] leading-[11px]" aria-hidden="true">
       <pre ref={dayRef} className="text-dim" />
       <pre ref={nightRef} className="absolute inset-0 text-land/70" />

@@ -170,7 +170,7 @@ const CAPITALS = [
   // States has exactly one named point, on its east coast: a squall line over
   // Kansas, Texas or Alabama has nothing within reach to light, and the same is
   // true of the Amazon, the Congo basin, the Indian plains, the Sichuan basin
-  // and northern Australia — which is to say, of most of the places this map
+  // and northern Australia, which is to say most of the places this map
   // exists to watch. The rule was working; there was nothing for it to pick.
   //
   // Tier 3, so a capital always wins the pixels when both are lit. Adding to

@@ -92,7 +92,7 @@ const STEPS = [
         Session is as much of a day as you have watched. Under Link the
         instrument reports on itself rather than on the weather: how long it took
         to place the last strikes, and how many detectors solved them. How well
-        each one was placed is on the map instead — a strike ringed by detectors
+        each one was placed is on the map instead: a strike ringed by detectors
         wears a whole sheaf, one heard from a single side wears a fan, and is
         placed the more loosely for it.
       </>
