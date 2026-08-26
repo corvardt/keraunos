@@ -214,13 +214,6 @@ export default function Settings({
         />
       </Group>
 
-      <Group title="Layout">
-        <Toggle label="Side panel" value={settings.sidebar} onChange={(v) => set("sidebar", v)} />
-        {/* Hiding the chrome takes the header with it, and the header is where
-            this panel is opened from. The map keeps a way back. */}
-        <Toggle label="Header and footer" value={settings.chrome} onChange={(v) => set("chrome", v)} />
-      </Group>
-
       <Group title="Screen">
         <Toggle label="Scanlines" value={settings.scanlines} onChange={(v) => set("scanlines", v)} />
         <Toggle label="Refresh sweep" value={settings.sweep} onChange={(v) => set("sweep", v)} />
@@ -247,6 +240,13 @@ export default function Settings({
             set("thunder", v);
           }}
         />
+      </Group>
+
+      <Group title="Layout">
+        <Toggle label="Side panel" value={settings.sidebar} onChange={(v) => set("sidebar", v)} />
+        {/* Hiding the chrome takes the header with it, and the header is where
+            this panel is opened from. The map keeps a way back. */}
+        <Toggle label="Header and footer" value={settings.chrome} onChange={(v) => set("chrome", v)} />
       </Group>
 
       {/* Which world, the field, the storm cells and the burn window are not
