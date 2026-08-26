@@ -878,7 +878,7 @@ function App() {
           onLeaveArchive={leaveArchive}
         />
       )}
-      <Crt scanlines={settings.scanlines} sweep={settings.sweep} />
+      <Crt scanlines={settings.scanlines} sweep={settings.sweep} drift={settings.drift} />
       {/* Unmounted rather than ignored while an archive is playing. Holding a
           socket open to drop everything that comes down it would take a share
           of the relay's one upstream link for a map that is not showing it. */}

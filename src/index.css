@@ -1,122 +1,44 @@
+/* The medium, before anything Tailwind emits that could be asked to override
+   it: palette, type, glass and decay, identical in every project on the domain.
+   Between the two, a rule in `@layer base` below still wins over `crt.css`, and
+   a utility still wins over both — which is the order this file needs. */
+@import './crt.css';
+
 @import 'tailwindcss/base';
 
 @import 'tailwindcss/components';
 
 @import 'tailwindcss/utilities';
 
-/* Served from this origin rather than fetched from Google: a stylesheet on a
-   third-party host blocks first paint on a round trip the page cannot start
-   until it has parsed the head, and there is nothing here worth telling Google
-   about. Only the two weights the interface uses, and only the ranges the place
-   names need; the unicode-range splits are Google's own, kept so a glyph outside
-   them still costs nothing. */
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/ibm-plex-mono-400-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
-    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-    U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('/fonts/ibm-plex-mono-400-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
-    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/ibm-plex-mono-600-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
-    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
-    U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
-@font-face {
-  font-family: 'IBM Plex Mono';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/ibm-plex-mono-600-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF,
-    U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
-    U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-
 @layer base {
-  /* ── Tube ──────────────────────────────────────────────────────────────────
-     Light emitted on black. White is reserved for lightning; nothing else in
-     the interface is ever allowed to reach it. */
+  /* ── The tube, extended ────────────────────────────────────────────────────
+     Additions to the shared palette, never replacements. The one token that is
+     replaced is `--c-land`, for a reason particular to this instrument. */
   :root,
   :root[data-theme='dark'] {
-    color-scheme: dark;
-
-    --c-void: #0a0a0b;
-    --c-panel: #0f0f11;
-    --c-line: #26262b;
-    /* Land is a dot matrix, not a fill: 1.8px marks carrying the whole of the
-       map's geography. It is held near 3.4:1 against the void in both media,
-       and matched between them, so neither reads as background texture. */
+    /* Land is a dot matrix here, not a fill: 1.8px marks carrying the whole of
+       the map's geography. It is held near 3.4:1 against the void in both
+       media, and matched between them, so neither reads as background texture.
+       A matrix and a fill at the same value do not read the same. */
     --c-land: #666670;
-    --c-dim: #7b7b81;
-    --c-text: #c8c8cc;
-    --c-strike: #ffffff;
 
-    --ink-hot: #ffffff;
-    --ink-rest: #c8c8cc;
-    --scan: rgba(255, 255, 255, 0.05);
-    --sweep: rgba(255, 255, 255, 0.028);
+    /* The tube's own glass, which the shared medium does not draw: the band a
+       vertical hold that never quite holds leaves behind, and the curvature. */
     --roll: rgba(255, 255, 255, 0.055);
     --roll-soft: rgba(255, 255, 255, 0.02);
-    --vignette: rgba(0, 0, 0, 0.62);
     --bezel: rgba(0, 0, 0, 0.72);
     --bezel-edge: rgba(255, 255, 255, 0.055);
-    --bloom: rgba(255, 255, 255, 0.14);
-    --bloom-hot: rgba(255, 255, 255, 0.3);
   }
 
-  /* ── Paper ─────────────────────────────────────────────────────────────────
-     The other instrument readout: ink deposited on a chart recorder's roll.
-     A tube cannot simply be inverted, so light mode changes medium instead.
-     Black takes over lightning's role; cool neutral stock, never cream. */
   :root[data-theme='light'] {
-    color-scheme: light;
-
-    --c-void: #dedee0;
-    --c-panel: #e7e7e9;
-    --c-line: #c2c2c6;
     --c-land: #76767f;
-    --c-dim: #626268;
-    --c-text: #2a2a2e;
-    --c-strike: #000000;
 
-    --ink-hot: #000000;
-    --ink-rest: #2a2a2e;
-    --scan: rgba(0, 0, 0, 0.045);
-    --sweep: rgba(0, 0, 0, 0.022);
     --roll: rgba(0, 0, 0, 0.04);
     --roll-soft: rgba(0, 0, 0, 0.015);
-    --vignette: rgba(0, 0, 0, 0.14);
     --bezel: rgba(0, 0, 0, 0.16);
     --bezel-edge: rgba(0, 0, 0, 0.07);
-    /* Ink bleeds into paper fibres rather than glowing. */
-    --bloom: rgba(0, 0, 0, 0.16);
-    --bloom-hot: rgba(0, 0, 0, 0.28);
   }
 
-  html,
-  body,
   #root {
     height: 100%;
   }
@@ -136,10 +58,10 @@
     overscroll-behavior-y: contain;
   }
 
+  /* The instrument reads a size smaller than the rest of the set: the map
+     carries the scale here, so the panel beside it gives way to it. */
   body {
     @apply bg-void text-text font-mono text-xs antialiased;
-    /* Digits must not jitter as readouts tick. */
-    font-variant-numeric: tabular-nums;
   }
 
   :focus-visible {

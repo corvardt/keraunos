@@ -330,6 +330,13 @@ export function applyPalette(theme, { phosphor, contrast, bloom }) {
     const halo = given ? recoloured(base.bloom[token], parse(colours.strike)) : base.bloom[token];
     root.style.setProperty(`--${token}`, scaleAlpha(halo, glow));
   }
+
+  // The browser chrome is part of the medium: it follows the ground the tube
+  // has just been set to rather than the system, which the reader is allowed to
+  // overrule. Here rather than in theme.js because a phosphor moves the ground
+  // as surely as the medium does, and this is the one function both go through.
+  const chrome = document.querySelector("meta[name=theme-color]");
+  if (chrome && colours.void) chrome.content = colours.void;
 }
 
 /**

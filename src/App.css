@@ -9,20 +9,9 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ── The decay rule ─────────────────────────────────────────────────────────
-   Anything that arrives comes in at full white and settles into the gray of
-   the interface. Applies to the canvas particles and to the feed alike. */
-@keyframes settle {
-  from {
-    color: var(--ink-hot);
-    text-shadow: 0 0 10px var(--bloom-hot);
-  }
-  to {
-    color: var(--ink-rest);
-    text-shadow: 0 0 6px var(--bloom);
-  }
-}
-
+/* The decay rule, `settle`, `breathe` and `seek` are the shared medium's; only
+   what is this instrument's own is below. A lamp is one of those: a strike
+   lands on the link indicator as an event rather than as an arrival of text. */
 @keyframes flash {
   from {
     background-color: var(--ink-hot);
@@ -31,26 +20,6 @@ a {
   to {
     background-color: var(--c-dim);
     box-shadow: 0 0 0 transparent;
-  }
-}
-
-@keyframes breathe {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.35;
-  }
-}
-
-@keyframes seek {
-  0%,
-  100% {
-    opacity: 0.25;
-  }
-  50% {
-    opacity: 1;
   }
 }
 
@@ -78,16 +47,8 @@ a {
   overflow: hidden;
 }
 
-.settle {
-  animation: settle 1.4s ease-out;
-}
-
 .flash {
   animation: flash 900ms ease-out;
-}
-
-.seek {
-  animation: seek 1.6s ease-in-out infinite;
 }
 
 /* The link indicator. A strike flashes it, and between strikes it keeps a slow
@@ -96,52 +57,6 @@ a {
   animation:
     flash 900ms ease-out,
     breathe 2.8s ease-in-out 900ms infinite;
-}
-
-/* ── Phosphor bloom ─────────────────────────────────────────────────────────
-   Lit pixels on a CRT bleed into the glass. Reserved for live values, never
-   for labels: the glow marks what is actually reading. */
-.glow {
-  text-shadow: 0 0 6px var(--bloom);
-}
-
-.glow-hot {
-  text-shadow: 0 0 10px var(--bloom-hot);
-}
-
-/* ── Screen ─────────────────────────────────────────────────────────────────
-   Raster lines, a shadow-mask tint, corner falloff and the slow refresh bar
-   that a long-persistence tube shows when it repaints. */
-.crt-scanlines {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    var(--scan) 0px,
-    var(--scan) 1px,
-    transparent 1px,
-    transparent 3px
-  );
-}
-
-.crt-vignette {
-  background: radial-gradient(125% 105% at 50% 50%, transparent 52%, var(--vignette) 100%);
-}
-
-@keyframes refresh-sweep {
-  from {
-    transform: translateY(-14vh);
-  }
-  to {
-    transform: translateY(104vh);
-  }
-}
-
-.crt-sweep {
-  height: 14vh;
-  background: linear-gradient(to bottom, transparent, var(--sweep), transparent);
-  animation: refresh-sweep 7.5s linear infinite;
-  /* Both bands run forever over the whole viewport. Promised to the compositor
-     so they move as a layer instead of repainting the glass beneath them. */
-  will-change: transform;
 }
 
 /* ── The tube ───────────────────────────────────────────────────────────────
@@ -186,17 +101,6 @@ a {
   );
   animation: tracking-roll 9s linear infinite;
   will-change: transform;
-}
-
-/* ── HUD frame ──────────────────────────────────────────────────────────────
-   Corner ticks instead of full borders: the frame reads as an instrument
-   bezel and leaves the edges of the map open. */
-.tick {
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  border-color: var(--c-land);
-  pointer-events: none;
 }
 
 @keyframes boot-line {
@@ -272,23 +176,6 @@ a {
   display: none;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: var(--c-line);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: var(--c-land);
-}
-
 /* The feed dissolves rather than stopping at a hard edge: the same decay,
    expressed spatially. */
 .feed-mask {
@@ -296,13 +183,12 @@ a {
   mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
 }
 
+/* Only this instrument's own. `settle`, `breathe`, `seek` and the sweep are
+   cancelled by the shared medium. */
 @media (prefers-reduced-motion: reduce) {
-  .settle,
   .flash,
-  .seek,
   .alive,
   .row,
-  .crt-sweep,
   .crt-roll,
   .boot-line,
   .boot-out,

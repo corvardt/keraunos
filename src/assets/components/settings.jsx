@@ -217,6 +217,12 @@ export default function Settings({
       <Group title="Screen">
         <Toggle label="Scanlines" value={settings.scanlines} onChange={(v) => set("scanlines", v)} />
         <Toggle label="Refresh sweep" value={settings.sweep} onChange={(v) => set("sweep", v)} />
+        <Toggle
+          label="Phosphor drift"
+          hint="Two very soft blooms wandering the glass, so the brightness across the page is never flat."
+          value={settings.drift}
+          onChange={(v) => set("drift", v)}
+        />
         <Toggle label="Strike shake" value={settings.shake} onChange={(v) => set("shake", v)} />
         {/* Turning it on is the gesture the browser needs before it will let a
             page make a sound, so the audio is started from the toggle itself

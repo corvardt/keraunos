@@ -10,8 +10,11 @@
          corners. -->
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#dedee0" media="(prefers-color-scheme: light)" />
+    <!-- One tag, not one per scheme: the reader's choice is a cookie that can
+         disagree with the system, and a media-gated tag cannot see it. The
+         inline script below sets it from the medium that actually won, and the
+         palette re-reads it from `--c-void` on every change after that. -->
+    <meta name="theme-color" content="#0a0a0b" />
     <meta name="description" content="Keraunos: live global lightning strike detection, streamed from the Blitzortung network." />
     <title>Keraunos</title>
 
@@ -58,6 +61,12 @@
         var m = document.cookie.match(/(?:^|;\s*)corvardt-theme=(dark|light)/);
         var t = m ? m[1] : matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
         document.documentElement.dataset.theme = t;
+        // The browser chrome is part of the medium. The stylesheet is not
+        // parsed yet at this point, so the two grounds are written out here
+        // rather than read back off the palette; a coating that moves the
+        // ground further corrects this on the first render.
+        document.querySelector('meta[name=theme-color]').content =
+          t === 'light' ? '#dedee0' : '#0a0a0b';
       })();
     </script>
   </head>
