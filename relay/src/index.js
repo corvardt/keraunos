@@ -368,7 +368,12 @@ export default {
     // front of it would hand that property back to whoever found the hostname.
     const allowed = (env.ALLOWED_ORIGINS ?? "")
       .split(",")
-      .map((origin) => origin.trim())
+      // A trailing slash is dropped rather than honoured. An `Origin` header is
+      // a scheme, a host and a port and never has a path on it, so a list
+      // written with one would silently match nothing and turn the whole relay
+      // off for that site. The setting is written by hand; this is the one
+      // typo in it that fails closed and says nothing.
+      .map((origin) => origin.trim().replace(/\/+$/, ""))
       .filter(Boolean);
     if (allowed.length) {
       const origin = request.headers.get("Origin");

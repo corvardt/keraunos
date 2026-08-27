@@ -18,6 +18,6 @@
   "vars": {
     // Who may hold the relay open. Empty answers anyone, which is what a local
     // `wrangler dev` wants; set it before this is reachable from the internet.
-    "ALLOWED_ORIGINS": "https://keraunos.corvardt.com"
+    "ALLOWED_ORIGINS": "https://keraunos.corvardt.com,https://steropes.corvardt.com/"
   }
 }
