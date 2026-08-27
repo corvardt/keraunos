@@ -43,6 +43,10 @@ const ACTIVE_MS = 6000; // how long a cell counts as still firing
 // they used to be one, and lengthening the first would have silently wrecked
 // the second.
 const STORM_WINDOW_MS = 12 * 60 * 1000;
+// The cadence the backfill is walked forward at when a session starts from the
+// relay's half hour. It is the same twenty seconds `storms.js` records a
+// centroid on, so a cell arrives with the trail it would have grown here.
+const SEED_STEP_MS = 20000;
 const STORM_EVERY_MS = 2000; // clustering cadence; storms don't move fast
 // How much is kept to rewind through and to burn from. An hour, rather than the
 // twelve minutes the clustering wants, because the two are answering different
@@ -398,6 +402,74 @@ function App() {
     } else {
       binCounts.current.set(key, { lon, lat, count: 1, last: Date.now() });
     }
+  }, []);
+
+  /**
+   * The half hour the relay was holding, absorbed on arrival.
+   *
+   * Not put through `handleDataReceived`, and that is the whole design of it.
+   * That door stamps a strike with the moment it arrived, queues it to be
+   * flashed on the map and counts it into the rate: fourteen thousand strikes
+   * through it would be one white frame, a rate reading of thirty thousand a
+   * minute, and every one of them dated to the same second. What is wanted
+   * instead is the state those strikes would have left behind, so they are
+   * filed where they would have ended up, at the times they actually happened.
+   *
+   * Three things are deliberately not seeded. The rate, the daily curve and the
+   * reach histogram are measurements of arrivals rather than of weather: the
+   * first two describe a feed nobody was listening to, and the third is built
+   * from station lists the backfill does not carry. They start empty and fill
+   * live, which is what they claim to be.
+   */
+  const absorb = useCallback((caught) => {
+    if (!caught.length) return;
+    // A reconnect brings the half hour again. Only what is newer than the last
+    // thing held is taken: everything downstream reads this history as a run in
+    // arrival order, and filling a hole in the middle of it would break the
+    // window every one of those passes is a binary search for.
+    const from = history.current.length ? history.current[history.current.length - 1].t : -Infinity;
+    const strikes = caught.filter((strike) => strike.at > from);
+    if (!strikes.length) return;
+
+    for (const strike of strikes) {
+      // `t` and `at` are the same instant here. The relay knows when it heard
+      // about a strike and could have carried both, but its clock is not this
+      // one, and the flash's own time is the honest column to fill.
+      history.current.push({ lon: strike.lon, lat: strike.lat, t: strike.at, at: strike.at, gap: null });
+      const lon = Math.floor(strike.lon / BIN_SIZE) * BIN_SIZE;
+      const lat = Math.floor(strike.lat / BIN_SIZE) * BIN_SIZE;
+      const key = `${lon},${lat}`;
+      const cell = binCounts.current.get(key);
+      // Aged by when the strike fell, so a cell that stopped twenty minutes ago
+      // is drawn as far through its burn as it would have been had the tab been
+      // open all along, and the flush pass releases it on time.
+      if (cell) {
+        cell.count++;
+        if (strike.at > cell.last) cell.last = strike.at;
+      } else {
+        binCounts.current.set(key, { lon, lat, count: 1, last: strike.at });
+      }
+    }
+    total.current += strikes.length;
+
+    // Storm cells, walked forward rather than detected once.
+    //
+    // A single pass over the whole window would find the cells and know nothing
+    // about them: a heading is regressed over a trail that `trackStorms` builds
+    // one centroid at a time, so a cell detected in one go has no track, no
+    // speed and no surge, which is most of what the rings are for. Stepping the
+    // same window across the half hour at the cadence the live pass uses gives
+    // the tracker the observations it would have made, and costs a few tens of
+    // milliseconds once.
+    const now = Date.now();
+    for (let at = strikes[0].at + STORM_WINDOW_MS; at <= now; at += SEED_STEP_MS) {
+      const window = history.current.slice(
+        since(history.current, at - STORM_WINDOW_MS),
+        since(history.current, at)
+      );
+      tracked.current = trackStorms(tracked.current, detectStorms(window, at, STORM_WINDOW_MS), at);
+    }
+    setStorms(tracked.current);
   }, []);
 
   useEffect(() => {
@@ -888,7 +960,7 @@ function App() {
       {/* Unmounted rather than ignored while an archive is playing. Holding a
           socket open to drop everything that comes down it would take a share
           of the relay's one upstream link for a map that is not showing it. */}
-      {!archive && <Seeker onDataReceived={handleDataReceived} onStatus={setStatus} />}
+      {!archive && <Seeker onDataReceived={handleDataReceived} onBackfill={absorb} onStatus={setStatus} />}
       {settings.chrome && (
         <Navbar
           phase={status.phase}

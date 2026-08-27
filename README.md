@@ -168,8 +168,9 @@ who has asked their system for reduced motion.
 An hour, if an hour fits. The rewind track is as long as the history actually
 held: up to 120,000 strikes are retained, so at the quiet end of the world's
 rate the full hour is comfortable, and at the peak the ceiling binds first and
-the window is shorter. The track grows as the session runs, and shows what it
-has rather than what it wishes it had.
+the window is shorter. A session opens on the half hour the relay was holding
+and the track grows to the hour from there, showing what it has rather than
+what it wishes it had.
 
 Setting the clock down starts it running forward again at life size, rather than
 freezing a frame: what you want from a map of a storm is to watch the storm
@@ -211,9 +212,18 @@ hardware that volunteers buy, power and host.
 
 `relay/` is that server. It is a single Cloudflare Durable Object holding one
 upstream connection however many people are watching, fanning the frames out
-untouched. Nothing is decoded there, nothing is stored, and no strike outlives
-the moment it is passed on. The instrument is still built entirely in your own
-tab, from a feed that now arrives by way of one socket instead of thousands.
+untouched.
+
+It also keeps the last half hour, in memory and nowhere else: three numbers a
+strike, where and when, about 160 KB of it, handed to a visitor as one binary
+frame before the live feed starts. Without it a new tab is an empty map that
+takes twelve minutes to find a storm cell and ten more to say where it is
+going, which is most of what this instrument does and all of it withheld from
+anybody who did not stay. Nothing about a reader is stored, or could be: the
+relay knows nothing about anybody watching, the half hour is the same public
+lightning for everyone, and it is gone the moment the object is evicted. The
+instrument is still built entirely in your own tab, from a feed that now
+arrives by way of one socket instead of thousands.
 
 ## Running it yourself
 

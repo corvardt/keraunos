@@ -2,6 +2,8 @@ import { memo, useEffect } from "react";
 import { usedStations } from "../../lib/fix.js";
 import { record } from "../../lib/stations.js";
 import { createFilter } from "../../lib/repeat.js";
+import { unpack } from "../../lib/backfill.js";
+import { decode } from "../../lib/lzw.js";
 
 // Our own relay rather than Blitzortung directly.
 //
@@ -17,33 +19,13 @@ const RECONNECT_MS = 3000; // first retry; doubles from here
 const MAX_RECONNECT_MS = 30000; // ceiling on the backoff
 const GIVE_UP_AFTER = 4; // failed attempts before the feed is reported down
 
-// blitzortung streams LZW-compressed JSON frames
-function decode(b) {
-  let e = {};
-  let d = Array.from(b);
-  let c = d[0];
-  let f = c;
-  let g = [c];
-  let h = 256;
-  let o = h;
-  for (let i = 1; i < d.length; i++) {
-    let a = d[i].charCodeAt ? d[i].charCodeAt(0) : d[i];
-    a = h > a ? String.fromCharCode(a) : e[a] || f + c;
-    g.push(a);
-    c = a[0];
-    e[o] = f + c;
-    o++;
-    f = a;
-  }
-  return g.join("");
-}
-
 /**
  * Headless component: owns the websocket and pushes strikes upward.
- * `onDataReceived` and `onStatus` must be referentially stable, or the effect
- * tears the socket down and reconnects on every parent render.
+ * `onDataReceived`, `onBackfill` and `onStatus` must be referentially stable,
+ * or the effect tears the socket down and reconnects on every parent render.
+ * `onBackfill` gets the relay's half hour, once, before any live strike.
  */
-function Seeker({ onDataReceived, onStatus }) {
+function Seeker({ onDataReceived, onBackfill, onStatus }) {
   useEffect(() => {
     let socket = null;
     let retry = null;
@@ -92,8 +74,20 @@ function Seeker({ onDataReceived, onStatus }) {
       };
 
       ws.onmessage = (event) => {
-        // The relay, telling us about itself. Never a strike.
+        // The relay rather than the feed: its own state, or the half hour it
+        // was holding. Never a live strike, which arrives as text.
         if (typeof event.data !== "string") {
+          // Half an hour of strikes, if the relay had one to hand over. Told
+          // from the relay's own state by the bytes it starts with: both are
+          // binary, and one of them is not JSON.
+          const caught = unpack(event.data);
+          if (caught) {
+            // Marked as seen, so a strike that is both in the backfill and in
+            // the first frames off the wire is drawn once.
+            for (const strike of caught) fresh(strike.at, strike.lon, strike.lat);
+            onBackfill?.(caught);
+            return;
+          }
           try {
             const link = JSON.parse(new TextDecoder().decode(event.data));
             host = link.node ?? null;
@@ -111,8 +105,11 @@ function Seeker({ onDataReceived, onStatus }) {
           const { time, delay, lon, lat, sig, mcg } = JSON.parse(decode(event.data));
           // Reported twice is not struck twice. Dropped here, before anything
           // downstream has been told, so the map, the feed, the rate, the
-          // storms and the thunder all count it once.
-          if (!fresh(time, lon, lat)) return;
+          // storms and the thunder all count it once. Keyed on the millisecond
+          // rather than the nanosecond, because that is the resolution the
+          // backfill carries and the same strike has to key the same way
+          // whichever of the two doors it came in by.
+          if (!fresh(Math.round(time / 1e6), lon, lat)) return;
           const date = new Date(time / 1000000);
           // UTC, matching the footer clock. Local time would be the viewer's,
           // which says nothing useful about a strike over Java.
@@ -188,7 +185,7 @@ function Seeker({ onDataReceived, onStatus }) {
         socket.close();
       }
     };
-  }, [onDataReceived, onStatus]);
+  }, [onDataReceived, onBackfill, onStatus]);
 
   return null;
 }

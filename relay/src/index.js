@@ -18,6 +18,13 @@
 // delay from strike to browser is several seconds, and which is the figure the
 // panel reports. It is not a cost worth splitting the object for.
 
+// Reached across the project rather than copied in. The relay is deployed on
+// its own, but the wire format and the decoder are the same two files the
+// browser uses, and a format written out twice is a format that drifts.
+import { decode } from "../../src/lib/lzw.js";
+import { pack } from "../../src/lib/backfill.js";
+import { createFilter } from "../../src/lib/repeat.js";
+
 const HOSTS = ["ws1", "ws7", "ws8"];
 const HELLO = JSON.stringify({ a: 111 }); // the subscription the feed expects
 
@@ -31,6 +38,17 @@ const MAX_RECONNECT_MS = 30000;
 // wakes itself to check on its own link.
 const KEEPALIVE_MS = 10 * 60 * 1000;
 
+// What a visitor is handed on arrival. Thirty minutes is what the instrument
+// needs to be running rather than accumulating: see `backfill.js`.
+const HISTORY_MS = 30 * 60 * 1000;
+// A ceiling, for the nights the sky is busy. At the eight strikes a second this
+// feed usually runs, half an hour is about fourteen thousand; this is room for
+// four times that before the oldest are dropped early.
+const MAX_HISTORY = 60000;
+// Trimming is a filter over the whole window, so it is done on a slack rather
+// than on every strike.
+const TRIM_EVERY = 256;
+
 export class Feed {
   constructor(state) {
     this.state = state;
@@ -38,6 +56,18 @@ export class Feed {
     this.node = null;
     this.turn = Math.floor(Math.random() * HOSTS.length);
     this.failures = 0;
+    // The half hour, in memory only.
+    //
+    // ponytail: an eviction empties this and the next visitor is handed
+    // whatever has accumulated since. Persisting it would be a batched write
+    // every ten seconds, and it would buy less than it looks: this object is
+    // only ever evicted after the readers have gone, and by the time somebody
+    // comes back the strikes it would have restored are older than the window
+    // and get dropped on the way out anyway. Add it if the object turns out to
+    // be evicted with an audience attached.
+    this.history = [];
+    this.since = 0;
+    this.fresh = createFilter();
   }
 
   async fetch(request) {
@@ -52,6 +82,7 @@ export class Feed {
     this.state.acceptWebSocket(server);
     await this.ensure();
     this.tell(server);
+    this.catchUp(server);
     return new Response(null, { status: 101, webSocket: client });
   }
 
@@ -81,11 +112,15 @@ export class Feed {
     this.failures = 0;
     this.announce();
 
-    // Verbatim, and deliberately. Nothing here decodes a frame: the browser
-    // already knows how, the frames are compressed, and unpacking them to send
-    // them on would multiply the bytes leaving here by several times for the
-    // sake of work that was already being done at the other end.
-    socket.addEventListener("message", (event) => this.broadcast(event.data));
+    // Passed on verbatim, and deliberately: the frames are compressed, the
+    // browser already knows how to read them, and unpacking them to send them
+    // on would multiply the bytes leaving here for work being done at the other
+    // end anyway. The copy kept for the backfill is read rather than rewritten,
+    // and what goes out to a live reader is still the frame that came in.
+    socket.addEventListener("message", (event) => {
+      this.keep(event.data);
+      this.broadcast(event.data);
+    });
 
     const gone = () => {
       if (this.up !== socket) return; // a link already replaced is not news
@@ -126,6 +161,76 @@ export class Feed {
     }
     if (await this.ensure()) {
       await this.state.storage.setAlarm(Date.now() + KEEPALIVE_MS);
+    }
+  }
+
+  /**
+   * One frame, filed for the visitor who has not arrived yet.
+   *
+   * Three fields of it. Which stations heard a strike is most of the frame and
+   * none of the value here: it is a fact about the network at that second, the
+   * browser reads it into a registry as the strike goes past, and a strike
+   * being handed over half an hour late has nothing to add to it. Position and
+   * time are what draw a map.
+   */
+  keep(frame) {
+    if (typeof frame !== "string") return;
+    let strike;
+    try {
+      strike = JSON.parse(decode(frame));
+    } catch {
+      return; // a frame we cannot read is not a strike we can keep
+    }
+    if (!Number.isFinite(strike.lat) || !Number.isFinite(strike.lon)) return;
+    // The feed reports a strike more than once. A live reader filters its own
+    // copy; without this the backfill would hand every visitor the repeats as
+    // well, and they would arrive too close together for that filter's window
+    // to be the thing that caught them.
+    // Whole milliseconds, which is the resolution the wire format carries and
+    // therefore the resolution the browser will key its own copy on. Two
+    // strikes in the same millisecond at the same six decimals are one strike.
+    const at = Math.round(strike.time / 1e6);
+    if (!this.fresh(at, strike.lon, strike.lat)) return;
+    this.history.push({ at, lon: strike.lon, lat: strike.lat });
+    if (++this.since < TRIM_EVERY) return;
+    this.since = 0;
+    this.trim();
+  }
+
+  /** Drops what has fallen out of the window, and the excess of a busy night. */
+  trim() {
+    const cutoff = Date.now() - HISTORY_MS;
+    // Strikes are filed in arrival order, so the window is a suffix and the
+    // filter is only ever walking to the first one that is still inside it.
+    if (this.history.length && this.history[0].at < cutoff) {
+      this.history = this.history.filter((strike) => strike.at >= cutoff);
+    }
+    if (this.history.length > MAX_HISTORY) {
+      this.history = this.history.slice(-MAX_HISTORY);
+    }
+  }
+
+  /**
+   * The half hour, to one reader who has just arrived.
+   *
+   * Sent as bytes, which is also how this object talks about itself, and told
+   * apart from that by the four bytes it starts with rather than by its shape.
+   * Sent before anything live, so the browser has somewhere to put the first
+   * strike off the wire.
+   */
+  catchUp(reader) {
+    this.trim();
+    if (!this.history.length) return;
+    try {
+      // Sorted, because the ring is in the order the frames turned up and that
+      // is not the order the strikes happened in: the feed reports a strike
+      // anything from two to twelve seconds late, so arrivals overtake each
+      // other by seconds. Everything at the other end reads this as a run in
+      // time order, and the format has no room for an offset before its own
+      // anchor. Nearly-sorted already, and done once per visitor.
+      reader.send(pack([...this.history].sort((a, b) => a.at - b.at)));
+    } catch {
+      /* gone before it could be caught up */
     }
   }
 
