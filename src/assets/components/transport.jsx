@@ -145,60 +145,102 @@ function Transport({ from, roll, shape, at: instant, pace, onSeek, onPace }) {
       }
     : { "aria-hidden": true };
 
+  // The scale, in fifths of an hour of roll. Minor ticks every five minutes,
+  // named every fifteen: enough to find a moment by, few enough that the row
+  // reads as a ruler rather than as a second histogram.
+  const ticks = [];
+  for (let i = 0; i <= 12; i++) ticks.push({ at: i / 12, major: i % 3 === 0 });
+
   return (
     <div
       data-tour="transport"
-      // Centred and long. It used to sit in the right-hand corner at 260px,
-      // which was the right size for a control that was mostly a promise: there
-      // was nothing behind it for the first minutes of a session and little to
-      // read on it after. It now opens on an hour of weather and carries
-      // the shape of it, so it is given the width that makes that shape legible
-      // and the position of the thing you are meant to reach for.
-      className="pointer-events-auto absolute inset-x-3 bottom-3 flex items-center gap-3 sm:left-1/2 sm:right-auto sm:w-[min(720px,62vw)] sm:-translate-x-1/2"
+      // Centred and long, and now two rows: the roll, and the readouts that
+      // belong to it. It used to sit in the right-hand corner at 260px, which
+      // was the right size for a control that was mostly a promise. It opens on
+      // an hour of weather and carries the shape of it, so it is given the width
+      // that makes the shape legible and the position of the thing you are
+      // meant to reach for.
+      className="pointer-events-auto absolute inset-x-3 bottom-3 sm:left-1/2 sm:right-auto sm:w-[min(860px,68vw)] sm:-translate-x-1/2"
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
-      {armed ? (
-        <button
-          type="button"
-          onClick={() => onSeek(0)}
-          title="Return to the live feed"
-          className={`w-16 shrink-0 text-left text-xs uppercase tracking-label tabular-nums transition-colors touch:-ml-1.5 touch:px-1.5 touch:py-3 ${
-            behind ? "text-dim hover:text-text active:text-text" : "text-text glow"
-          }`}
-        >
-          {label()}
-        </button>
-      ) : (
-        // Named rather than counted down: what it is going to be is the useful
-        // thing to say, and how many seconds until a control you have not used
-        // yet starts working is not something anyone is waiting on.
-        <span
-          className="w-16 shrink-0 text-left text-xs uppercase tracking-label text-dim"
-          title="The last twelve minutes, playable once there is enough behind you to rewind into"
-        >
-          rewind
-        </span>
-      )}
+      {/* The readouts, over the roll they describe: where the clock is standing
+          on the left, how fast it is running on the right. Both are labels in
+          the one idiom the rest of the instrument uses, and only the position
+          blooms, because only the position is a live value. */}
+      <div className="mb-1.5 flex items-baseline justify-between gap-4">
+        {armed ? (
+          <button
+            type="button"
+            onClick={() => onSeek(0)}
+            title="Return to the live feed"
+            className={`shrink-0 text-2xs uppercase tracking-label tabular-nums transition-colors touch:-ml-1.5 touch:px-1.5 touch:py-2 ${
+              behind ? "text-dim hover:text-text focus-visible:text-text active:text-text" : "text-text glow"
+            }`}
+          >
+            {label()}
+          </button>
+        ) : (
+          // Named rather than counted down: what it is going to be is the useful
+          // thing to say, and how many seconds until a control you have not used
+          // yet starts working is not something anyone is waiting on.
+          <span
+            className="shrink-0 text-2xs uppercase tracking-label text-dim"
+            title="The retained window, playable once there is enough behind you to rewind into"
+          >
+            rewind
+          </span>
+        )}
 
-      {/* Taller under a finger than under a cursor. A 24px strip is a generous
-          target for a mouse and a coin toss for a thumb, and the mark it
-          carries is a hairline either way: what grows is the box the drag is
-          picked up in, not anything drawn. */}
+        {/* Three stops rather than one button cycling through them. The strip is
+            wide enough now to show the whole switch, and a switch you can read
+            the positions of is one you can use without pressing it first. Held
+            in place while the clock is live: a control that comes and goes takes
+            the width of the roll with it, and near the live end, where a click
+            can land either side of the threshold, that made the whole thing jump
+            sideways every time it crossed. */}
+        <div
+          className={`flex shrink-0 items-baseline gap-2.5 text-2xs uppercase tracking-label tabular-nums ${
+            armed && behind > 0 ? "" : "invisible"
+          }`}
+          aria-hidden={armed && behind > 0 ? undefined : true}
+        >
+          <span className="text-line">speed</span>
+          {PACES.map((rate) => (
+            <button
+              key={rate}
+              type="button"
+              onClick={() => onPace(rate)}
+              tabIndex={armed && behind > 0 ? undefined : -1}
+              aria-pressed={rate === pace}
+              title={rate === 1 ? "Life size: the gap to the present holds" : `${rate} times life size`}
+              className={`transition-colors touch:px-1 touch:py-2 ${
+                rate === pace
+                  ? "text-text"
+                  : "text-dim hover:text-text focus-visible:text-text active:text-text"
+              }`}
+            >
+              ×{rate}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* The roll. Bars above the line, scale below it, the way a chart recorder
+          lays out paper: what was drawn on top, what it is measured against
+          underneath. The whole block is the drag target, not just the line. */}
       <div
         {...handles}
-        className={`group relative h-9 flex-1 touch-none touch:h-12 ${armed ? "cursor-ew-resize" : ""}`}
+        className={`group relative h-10 touch-none touch:h-12 ${armed ? "cursor-ew-resize" : ""}`}
       >
-        {/* The window, as a shape. One weight throughout, and that is the
-            correction rather than the shortcut: carrying the played part
-            brighter, as the hairline below does, broke the histogram into two
+        {/* The window, as a shape. One weight throughout: carrying the played
+            part brighter, as the hairline does, broke the histogram into two
             blocks at the mark and read as the same curve drawn twice at two
-            exposures. Position is the line's job and the mark's. This is a
-            reading, and a reading does not change because you have watched
-            part of it. Hidden from a screen reader, which is given the same
-            window as a position in seconds. */}
+            exposures. Position is the line's job and the mark's. Hidden from a
+            screen reader, which is given the same window as a position in
+            seconds. */}
         {armed && shape.length > 0 && (
-          <span className="absolute inset-x-0 bottom-1/2 flex h-4 items-end gap-px" aria-hidden="true">
+          <span className="absolute inset-x-0 top-0 flex h-4 items-end gap-px" aria-hidden="true">
             {shape.map((height, index) => (
               <span
                 key={index}
@@ -212,50 +254,65 @@ function Transport({ from, roll, shape, at: instant, pace, onSeek, onPace }) {
           </span>
         )}
 
-        {/* Hairline, drawn only where there is window. The roll is a fixed
-            hour and a session holds less than that until it has run for one, so
-            the line starts where the strikes do: the bare end is how much roll
-            has yet to be paid out, which is a reading rather than an absence.
-            The played part is carried at reading weight over it. */}
+        {/* Hairline, drawn only where there is window. The roll is a fixed hour
+            and a session holds less than that until it has run for one, so the
+            line starts where the strikes do: the bare end is roll not yet paid
+            out, which is a reading rather than an absence. The played part is
+            carried at reading weight over it. */}
         <span
-          className="absolute top-1/2 right-0 h-px -translate-y-1/2 bg-line"
+          className="absolute top-4 right-0 h-px bg-line"
           style={{ width: `${Math.min(1, span / roll) * 100}%` }}
         />
         <span
-          className="absolute top-1/2 h-px -translate-y-1/2 bg-dim"
+          className="absolute top-4 h-px bg-dim"
           style={{ left: `${begins * 100}%`, width: `${Math.max(0, Math.min(1, filled) - begins) * 100}%` }}
         />
+
+        {/* The scale. Ticks hang below the line and the named ones carry the
+            minute they stand for, so a moment can be found on the roll before
+            the clock is set down on it rather than after. */}
+        <span className="absolute inset-x-0 top-[17px] block h-2" aria-hidden="true">
+          {ticks.map((tick) => (
+            <span
+              key={tick.at}
+              className={`absolute top-0 w-px ${tick.major ? "h-2 bg-dim" : "h-1 bg-line"}`}
+              style={{ left: `${tick.at * 100}%` }}
+            />
+          ))}
+        </span>
         <span
-          className={`absolute top-1/2 h-5 w-px -translate-y-1/2 ${behind ? "bg-text glow" : "bg-dim"}`}
+          className="absolute inset-x-0 top-[22px] hidden h-3 text-2xs uppercase tracking-label text-dim sm:block"
+          aria-hidden="true"
+        >
+          {ticks
+            .filter((tick) => tick.major)
+            .map((tick, index, majors) => (
+              <span
+                key={tick.at}
+                className="absolute top-0 whitespace-nowrap"
+                // The ends are hung off their own edge rather than centred on
+                // it: a label centred on the last tick is half outside the roll.
+                style={
+                  index === 0
+                    ? { left: 0 }
+                    : index === majors.length - 1
+                      ? { right: 0 }
+                      : { left: `${tick.at * 100}%`, transform: "translateX(-50%)" }
+                }
+              >
+                {tick.at === 1 ? "now" : `\u2212${Math.round((1 - tick.at) * roll) / 60000}m`}
+              </span>
+            ))}
+        </span>
+
+        {/* Where the clock is standing. The one thing here that blooms, and the
+            only mark that crosses the line: the bars are what happened, the
+            scale is what it is measured against, and this is you. */}
+        <span
+          className={`absolute top-2 h-3 w-px ${behind ? "bg-text glow" : "bg-dim"}`}
           style={{ left: across }}
         />
       </div>
-
-      {/* Shown only once the clock is down, and its width held in reserve
-          before then. Live, there is no speed to set: the world runs at one and
-          the control would be a switch with nothing on the other side of it.
-          But a control that comes and goes takes the track's width with it, and
-          near the live end, where a click can land either side of the
-          threshold, that made the whole strip and everything drawn on it jump
-          sideways every time it crossed. So it holds its place while it has
-          nothing to say. The label at the other end is fixed for the same
-          reason: "live" and "−12:40" are not the same number of characters.
-
-          Cycled rather than laid out as three, because this is a switch with
-          three positions and three buttons would be most of the strip. */}
-      <button
-        type="button"
-        onClick={() => onPace(PACES[(PACES.indexOf(pace) + 1) % PACES.length])}
-        title="How fast the replay runs: life size, eight times, thirty times"
-        aria-label={`Replay speed, ${pace} times life size. Click to change.`}
-        aria-hidden={armed && behind > 0 ? undefined : true}
-        tabIndex={armed && behind > 0 ? undefined : -1}
-        className={`w-10 shrink-0 text-right text-xs uppercase tracking-label tabular-nums transition-colors touch:-mr-1.5 touch:px-1.5 touch:py-3 ${
-          armed && behind > 0 ? "text-dim hover:text-text active:text-text" : "invisible"
-        }`}
-      >
-        ×{pace}
-      </button>
     </div>
   );
 }
