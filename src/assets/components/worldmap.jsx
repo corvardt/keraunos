@@ -1390,7 +1390,8 @@ const WorldMap = ({
   onConfig,
   replay,
   history,
-  span,
+  from,
+  roll,
   shape,
   pace,
   onSeek,
@@ -4240,9 +4241,10 @@ const WorldMap = ({
         aria-hidden={!flat}
       >
         <Transport
-          span={span}
+          from={from}
+          roll={roll}
           shape={shape}
-          behind={replay ? Date.now() - replay.at : 0}
+          at={replay ? replay.at : null}
           pace={pace}
           onSeek={onSeek}
           onPace={onPace}

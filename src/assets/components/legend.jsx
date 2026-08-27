@@ -501,9 +501,9 @@ export default function Legend({ onClose }) {
           <span className="text-text">&rarr;</span> once focused, in steps of a hundredth of the
           track and a tenth with <span className="text-text">shift</span>, and{" "}
           <span className="text-text">home</span> and <span className="text-text">end</span> for the
-          two ends of it. A fraction rather than a fixed count of seconds, because the track is as
-          long as the window behind you: it opens on the half hour the relay was holding, and grows
-          to the hour as the session runs.
+          two ends of it. A fraction of the track rather than a fixed count of seconds, the track
+          being a fixed hour: it carries the half hour the relay was holding when the session
+          opened, and fills the rest of itself as the session runs.
         </Entry>
       </Group>
 

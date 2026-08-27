@@ -60,8 +60,8 @@ const SETTLE_MS = 200;
 // How many bars the transport's window is drawn as. Fixed rather than one per
 // minute: the window it rides grows from half an hour to a full one, and a
 // strip whose bars kept getting narrower would be reporting the retention
-// rather than the weather. Seventy-two over half an hour is a bar for every
-// twenty-five seconds, which is about as fine as a bar can be and still be a
+// rather than the weather. Seventy-two over the retained hour is a bar for
+// every fifty seconds, which is about as fine as a bar can be and still be a
 // bar at the width the strip is drawn.
 const SHAPE_BARS = 72;
 const STORM_EVERY_MS = 2000; // clustering cadence; storms don't move fast
@@ -796,9 +796,13 @@ function App() {
     [replayInstant, replayBins, pace]
   );
 
-  // How far back there is anything to see. A session opens on whatever the
-  // relay was holding and the window grows from there to the hour.
-  const [span, setSpan] = useState(0);
+  // The far end of what is held: the oldest strike still retained, as an
+  // instant rather than as a duration. A session opens on whatever the relay
+  // was holding and the window grows from there to the hour. Passed as the
+  // moment it is, so the transport can measure the window against the same
+  // clock tick it measures the replay against; handing it a duration measured
+  // two seconds ago is what made the mark lurch.
+  const [from, setFrom] = useState(0);
   // The same window as a curve: how hard the world was firing, minute by
   // minute, so the strip under the map is something to read rather than a bare
   // line to drag along. Counted here because this is where the strikes are, and
@@ -811,12 +815,16 @@ function App() {
       const oldest = history.current[0]?.t;
       const now = Date.now();
       const held = oldest ? Math.min(HISTORY_MS, now - oldest) : 0;
-      setSpan(held);
+      setFrom(held ? now - held : 0);
       if (held <= 0) return setShape(EMPTY);
+      // Bucketed over the full retention rather than over what is held, so a
+      // bar is always the same number of seconds wide and sits at the same
+      // place on the roll from one recount to the next. The part of the hour
+      // nothing has been kept for reads as zero, which is the truth about it.
       const bars = new Array(SHAPE_BARS).fill(0);
-      const from = now - held;
+      const edge = now - HISTORY_MS;
       for (const strike of history.current) {
-        const bar = Math.floor(((strike.t - from) / held) * SHAPE_BARS);
+        const bar = Math.floor(((strike.t - edge) / HISTORY_MS) * SHAPE_BARS);
         if (bar >= 0 && bar < SHAPE_BARS) bars[bar]++;
       }
       // Against its own peak: this is where the half hour was busy, not how
@@ -882,7 +890,7 @@ function App() {
     setDay(null);
     setReach(null);
     setStats(NO_STATS);
-    setSpan(0);
+    setFrom(0);
     setShape(EMPTY);
     setReplayAt(null);
     setSelection(null);
@@ -1098,7 +1106,8 @@ function App() {
             // contents change several times a second and none of those changes
             // is a reason to render anything.
             history={history}
-            span={span}
+            from={from}
+            roll={HISTORY_MS}
             shape={shape}
             pace={pace}
             onSeek={seek}

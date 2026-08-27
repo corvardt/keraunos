@@ -18,10 +18,12 @@ const PACES = [1, 8, 30];
  * end. Dragging anywhere on it sets the clock down at that moment and lets it
  * run forward again from there, at life size, until it catches up.
  *
- * The track opens on whatever the relay was holding, half an hour of it, and
- * grows to the hour as the session runs. There is nothing to scrub to before
- * that, and pretending otherwise would be the only dishonest thing a transport
- * could do.
+ * The track is an hour of roll, always, because an hour is what the map keeps.
+ * A session opens holding the half hour the relay handed over and fills the
+ * rest of the ruler as it runs, so the line is drawn only where there are
+ * strikes behind it and the bare end is roll not yet paid out. There is nothing
+ * to scrub to before that, and pretending otherwise would be the only dishonest
+ * thing a transport could do.
  *
  * Which is why it is drawn from the first frame and armed later. The unarmed
  * state used to be the first minutes of every session and is now the exception
@@ -45,17 +47,35 @@ const PACES = [1, 8, 30];
  * one, and at the instant it arms both are full, so the mark changes job
  * without moving.
  */
-function Transport({ span, shape, behind, pace, onSeek, onPace }) {
+function Transport({ from, roll, shape, at: instant, pace, onSeek, onPace }) {
   const trackRef = useRef(null);
   const dragging = useRef(false);
+
+  // The window and the position in it, measured here and off one clock.
+  //
+  // Both used to arrive as durations worked out by the parent: `span` on a
+  // two-second timer, `behind` at whatever moment the map happened to render.
+  // A stepped denominator under a continuous numerator is a mark that lurches
+  // twice a second, and at life size, where the replayed clock and the present
+  // move together and the gap between them never changes, the lurch was the
+  // only thing moving: the label read the same figure for a minute while the
+  // mark walked several pixels to the right. What moves is the ends of the
+  // window, so those are what is passed, and the arithmetic happens where it is
+  // drawn, at the rate it is drawn.
+  const now = Date.now();
+  const span = from ? Math.max(0, now - from) : 0;
+  const behind = instant ? Math.max(0, now - instant) : 0;
   const armed = span >= ARM_MS;
 
   const at = (event) => {
     const rect = trackRef.current?.getBoundingClientRect();
     if (!rect || rect.width <= 0) return;
     const fraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    // Left is oldest, right is now: the direction a roll comes off a drum.
-    onSeek((1 - fraction) * span);
+    // Left is the oldest the roll can reach, right is now: the direction a roll
+    // comes off a drum. Clamped to what is actually held, so the empty end of
+    // the roll parks you at the far edge of the window rather than at a moment
+    // there is nothing to draw.
+    onSeek(Math.min(span, (1 - fraction) * roll));
   };
 
   const label = () => {
@@ -65,8 +85,22 @@ function Transport({ span, shape, behind, pace, onSeek, onPace }) {
     return `−${minutes}:${String(seconds % 60).padStart(2, "0")}`;
   };
 
-  const filled = armed ? (span > 0 ? 1 - behind / span : 1) : span / ARM_MS;
+  // Against the whole roll, not against what is held.
+  //
+  // It used to be a fraction of the window, which made the mark's position mean
+  // "how far back you are as a share of what there is" and moved it whenever
+  // the window grew, which is every two seconds for the first hour of a
+  // session. At life size the replayed clock keeps pace with the present, so
+  // the gap never changes and the mark should not move at all: the label said
+  // so and the mark disagreed, sliding right about a pixel a second under a
+  // figure that had not changed in minutes. An hour of roll is a fixed ruler.
+  // Time moves along it, the window's far end fills in behind, and where you
+  // are standing stays where you are standing.
+  const filled = armed ? 1 - behind / roll : span / ARM_MS;
   const across = `${Math.max(0, Math.min(1, filled)) * 100}%`;
+  // Where the roll begins: the rest of the hour has not been paid out yet, and
+  // nothing is drawn over it, the played line included.
+  const begins = armed ? Math.max(0, 1 - span / roll) : 0;
 
   // Everything the track needs to be a control, and nothing while it is only a
   // promise of one: an inert strip that still took focus and answered to the
@@ -100,7 +134,7 @@ function Transport({ span, shape, behind, pace, onSeek, onPace }) {
           // fixed step would have left the arrow keys apparently doing nothing
           // at one end and jumping at the other. A hundredth moves the mark by
           // about two pixels wherever the window happens to be.
-          const step = Math.max(2000, span / (event.shiftKey ? 10 : 100));
+          const step = Math.max(2000, roll / (event.shiftKey ? 10 : 100));
           if (event.key === "ArrowLeft") onSeek(Math.min(span, behind + step));
           else if (event.key === "ArrowRight") onSeek(Math.max(0, behind - step));
           else if (event.key === "Home") onSeek(span);
@@ -178,12 +212,18 @@ function Transport({ span, shape, behind, pace, onSeek, onPace }) {
           </span>
         )}
 
-        {/* Hairline, with the played part carried at reading weight. The hit
-            area is the full height above; the mark is only what you see. */}
-        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-line" />
+        {/* Hairline, drawn only where there is window. The roll is a fixed
+            hour and a session holds less than that until it has run for one, so
+            the line starts where the strikes do: the bare end is how much roll
+            has yet to be paid out, which is a reading rather than an absence.
+            The played part is carried at reading weight over it. */}
         <span
-          className="absolute top-1/2 left-0 h-px -translate-y-1/2 bg-dim"
-          style={{ width: across }}
+          className="absolute top-1/2 right-0 h-px -translate-y-1/2 bg-line"
+          style={{ width: `${Math.min(1, span / roll) * 100}%` }}
+        />
+        <span
+          className="absolute top-1/2 h-px -translate-y-1/2 bg-dim"
+          style={{ left: `${begins * 100}%`, width: `${Math.max(0, Math.min(1, filled) - begins) * 100}%` }}
         />
         <span
           className={`absolute top-1/2 h-5 w-px -translate-y-1/2 ${behind ? "bg-text glow" : "bg-dim"}`}

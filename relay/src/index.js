@@ -22,7 +22,7 @@
 // its own, but the wire format and the decoder are the same two files the
 // browser uses, and a format written out twice is a format that drifts.
 import { decode } from "../../src/lib/lzw.js";
-import { pack } from "../../src/lib/backfill.js";
+import { pack, unpack } from "../../src/lib/backfill.js";
 import { createFilter } from "../../src/lib/repeat.js";
 
 const HOSTS = ["ws1", "ws7", "ws8"];
@@ -49,6 +49,25 @@ const MAX_HISTORY = 60000;
 // than on every strike.
 const TRIM_EVERY = 256;
 
+// The half hour, written down.
+//
+// Memory alone survives a great deal and not a deploy: the object is replaced,
+// its ring goes with it, and every visitor for the next half hour is handed a
+// window that is shorter than the one before it. Storage outlives that, because
+// it belongs to the object's name rather than to the instance holding it.
+//
+// Written in five-minute buckets rather than as one blob, and only the two the
+// strikes are currently landing in. Rewriting the whole window every ten
+// seconds would be four times the bytes for the same information, and a bucket
+// is small enough to sit well inside a value's size limit however busy the sky
+// is. Two of them, because the feed reports a strike up to twelve seconds late
+// and one arriving just after a bucket rolls over belongs to the one before it.
+const KEY = "h:";
+const SAVE_EVERY_MS = 10000;
+const BUCKET_MS = 5 * 60 * 1000;
+// Buckets kept: the window, the one being filled, and one of slack.
+const BUCKETS = Math.ceil(HISTORY_MS / BUCKET_MS) + 2;
+
 export class Feed {
   constructor(state) {
     this.state = state;
@@ -56,18 +75,15 @@ export class Feed {
     this.node = null;
     this.turn = Math.floor(Math.random() * HOSTS.length);
     this.failures = 0;
-    // The half hour, in memory only.
-    //
-    // ponytail: an eviction empties this and the next visitor is handed
-    // whatever has accumulated since. Persisting it would be a batched write
-    // every ten seconds, and it would buy less than it looks: this object is
-    // only ever evicted after the readers have gone, and by the time somebody
-    // comes back the strikes it would have restored are older than the window
-    // and get dropped on the way out anyway. Add it if the object turns out to
-    // be evicted with an audience attached.
     this.history = [];
     this.since = 0;
+    this.saved = 0;
     this.fresh = createFilter();
+    // Before anything can be served from it. A reader arriving in the first
+    // moments of a new instance is exactly the reader this is for, and handing
+    // them an empty window while the read was still in flight would waste the
+    // whole of it.
+    this.state.blockConcurrencyWhile(() => this.restore());
   }
 
   async fetch(request) {
@@ -192,9 +208,60 @@ export class Feed {
     const at = Math.round(strike.time / 1e6);
     if (!this.fresh(at, strike.lon, strike.lat)) return;
     this.history.push({ at, lon: strike.lon, lat: strike.lat });
+    const now = Date.now();
+    if (now - this.saved >= SAVE_EVERY_MS) this.save(now);
     if (++this.since < TRIM_EVERY) return;
     this.since = 0;
     this.trim();
+  }
+
+  /**
+   * The window, as the last instance of this object left it.
+   *
+   * Order is not assumed: the buckets come back in key order, which is time
+   * order, but the strikes inside one are in the order they arrived, and the
+   * feed does not deliver them in the order they happened. Sorted once here so
+   * that everything downstream can take the run as it finds it.
+   */
+  async restore() {
+    try {
+      const stored = await this.state.storage.list({ prefix: KEY });
+      for (const value of stored.values()) {
+        const part = unpack(value);
+        if (part) for (const strike of part) this.history.push(strike);
+      }
+      this.history.sort((a, b) => a.at - b.at);
+      // Re-seeded, so a strike restored from storage and then reported again by
+      // the feed is still only handed over once.
+      for (const strike of this.history) this.fresh(strike.at, strike.lon, strike.lat);
+      this.trim();
+    } catch {
+      // A window that cannot be read is a window this instance does not have.
+      // It refills in half an hour, which is the same place a deploy left it
+      // before any of this existed.
+      this.history = [];
+    }
+  }
+
+  /**
+   * The buckets the strikes are currently landing in, written down.
+   *
+   * Fire and forget: a write that fails costs this instance nothing it still
+   * needs, and holding a frame up to wait for one would put storage latency in
+   * front of the feed for every reader.
+   */
+  save(now) {
+    this.saved = now;
+    const bucket = Math.floor(now / BUCKET_MS);
+    const from = (bucket - 1) * BUCKET_MS;
+    const recent = this.history.filter((strike) => strike.at >= from);
+    const entries = {};
+    entries[KEY + (bucket - 1)] = pack(recent.filter((strike) => strike.at < bucket * BUCKET_MS));
+    entries[KEY + bucket] = pack(recent.filter((strike) => strike.at >= bucket * BUCKET_MS));
+    this.state.storage.put(entries).catch(() => {});
+    // One bucket beyond the window, dropped as it falls out. Cheaper than
+    // listing the store to find what has expired, and there is only ever one.
+    this.state.storage.delete(KEY + (bucket - BUCKETS)).catch(() => {});
   }
 
   /** Drops what has fallen out of the window, and the excess of a busy night. */
