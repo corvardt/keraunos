@@ -191,7 +191,11 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry mark={ring} term="Ping">
           The arrival marker: a ring thrown outward as a strike lands, so an arrival anywhere on
-          the map catches the eye without needing a colour.
+          the map catches the eye without needing a colour. Zoomed in far enough for it to mean
+          something, it stops being a flourish and becomes the sound: the ring then leaves at 343
+          metres a second and keeps going for as long as thunder carries, twenty-five kilometres
+          and a minute and a quarter, fading as the air takes it apart. It outlives the flash that
+          threw it, which is the whole of what it has to say.
         </Entry>
         <Entry mark={bolt} term="Bolt">
           Drawn when one 1° cell takes 3 or more strikes within 2.5 seconds. Heavier and twice the

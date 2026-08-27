@@ -4,6 +4,7 @@ import { landAt, LAND_RES } from "../../lib/land.js";
 import { readMedium } from "../../lib/theme.js";
 import { motion, forecast, surge } from "../../lib/storms.js";
 import { PERSISTENCE, DENSITY } from "../../lib/settings.js";
+import { SPEED_KMS, MAX_KM as THUNDER_MAX_KM } from "../../lib/thunder.js";
 import {
   LAT_LIMIT,
   MAX_K,
@@ -86,7 +87,19 @@ function gridGap(width) {
 const GRID_FALLOFF = 0.75;
 const EARTH_RADIUS_KM = 6371;
 const RAD = Math.PI / 180;
-const RING_MS = 720; // the detection ping thrown on arrival
+const RING_MS = 720; // the arrival ping, where the sound front is too small to read
+// How long the sound is followed for: as far as it can still be heard, which is
+// the same twenty-five kilometres the countdown and the synthesiser stop at, and
+// at 343 metres a second that is a minute and a quarter. The front outlives the
+// mark that threw it, which is the whole of what it has to say: the flash is
+// over and the sound is still going.
+const FRONT_LIFE_MS = (THUNDER_MAX_KM / SPEED_KMS) * 1000;
+// Below this the front would never grow past a few pixels before it has gone as
+// far as it can be heard, which is a wave nobody can see expanding and a worse
+// arrival marker than the flourish it replaces. Measured at its full reach, so
+// the switch happens where the front becomes legible rather than at a zoom
+// somebody picked.
+const FRONT_MIN_PX = 6;
 const FLASH_MS = 180; // the initial overbright moment
 const GRATICULE_STEP = 30; // degrees between scope reference lines
 const BIN_SIZE = 1; // must match the binning in App.jsx
@@ -3931,19 +3944,77 @@ const WorldMap = ({
       ctx.strokeStyle = palette.strike;
       ctx.lineWidth = 1;
 
+      // How many pixels a kilometre is worth at a given spot, measured off the
+      // projection rather than derived from the zoom: the map is drawn in four
+      // projections and on a sphere, and only one of them has a scale that can
+      // be read off a single number. A twentieth of a degree east is about five
+      // kilometres and small enough that the local scale is the answer.
+      const perKmAt = (lon, lat, x) => {
+        const east = projection([lon + 0.05, lat]);
+        if (!east || !isFinite(east[0])) return 0;
+        const dx = Math.abs(east[0] - x);
+        // The date line, on a flat map: the neighbour has wrapped to the far
+        // side of the world and the distance between them is the whole tube.
+        if (dx > width / 2) return 0;
+        const km = 0.05 * KM_PER_DEG * Math.cos(lat * RAD);
+        return km > 0 ? dx / km : 0;
+      };
+
+      // Decided once for the frame, off the zoom rather than off the
+      // projection: whether a front is legible at all is a property of the
+      // scale, the same for every strike on the tube, and this is the one
+      // reading of the scale that needs no projection call and cannot come back
+      // null behind a globe. At the equator, where a degree is longest and the
+      // pixels per kilometre fewest, so the switch is never made on a scale
+      // that turns out not to carry it further north.
+      const perKmAtEquator = ((width / 360) * (viewRef.current?.k ?? 1)) / KM_PER_DEG;
+      const sounding = SPEED_KMS * (FRONT_LIFE_MS / 1000) * perKmAtEquator >= FRONT_MIN_PX;
+
       // A strike, at an age. The same arithmetic serves live and replay: what
-      // separates them is only which clock the age was measured against.
-      const drawMark = (x, y, age, life, weight) => {
-        // The ping: a ring that leaves fast and slows as it fades, so the eye
-        // catches an arrival anywhere on the map without needing an accent hue.
-        const ring = age / RING_MS;
-        if (ring < 1) {
-          const eased = 1 - Math.pow(1 - ring, 3);
-          ctx.globalAlpha = (1 - ring) * (1 - ring) * 0.5;
-          ctx.beginPath();
-          ctx.arc(x, y, 1.5 + eased * 15, 0, Math.PI * 2);
-          ctx.stroke();
+      // separates them is only which clock the age was measured against. A mark
+      // whose `life` has run out is past its flash and drawn for its sound
+      // alone, which outlasts it by a minute.
+      const drawMark = (x, y, age, life, weight, perKm = 0) => {
+        // The sound.
+        //
+        // The ring used to be a flourish: out fast, slowing, gone in under a
+        // second, drawn so the eye would catch an arrival anywhere on the tube.
+        // It is the same ring, given the one speed it could honestly have. What
+        // expands now is the thunder, at 343 metres a second from the moment of
+        // the flash, out to the twenty-five kilometres past which there is
+        // nothing left to hear. Zoomed in on a storm that is the ring somebody
+        // standing under it would be counting out, at the speed they would count
+        // it: five seconds to the first mile and a half.
+        //
+        // Fading as it goes rather than as the mark does, because what takes a
+        // sound apart over that distance is the air it is crossing and not the
+        // brightness of the flash behind it.
+        //
+        // The flourish is kept for the scales where the front is smaller than
+        // the mark that threw it. Half a planet across, twenty-five kilometres
+        // is under a pixel, and a ring nobody can see is not an arrival marker.
+        const travelled = SPEED_KMS * (age / 1000);
+        if (perKm > 0 && SPEED_KMS * (FRONT_LIFE_MS / 1000) * perKm >= FRONT_MIN_PX) {
+          if (travelled <= THUNDER_MAX_KM) {
+            const left = 1 - travelled / THUNDER_MAX_KM;
+            ctx.globalAlpha = left * left * 0.45 * weight;
+            ctx.beginPath();
+            ctx.arc(x, y, 1.5 + travelled * perKm, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        } else {
+          const ring = age / RING_MS;
+          if (ring < 1) {
+            const eased = 1 - Math.pow(1 - ring, 3);
+            ctx.globalAlpha = (1 - ring) * (1 - ring) * 0.5;
+            ctx.beginPath();
+            ctx.arc(x, y, 1.5 + eased * 15, 0, Math.PI * 2);
+            ctx.stroke();
+          }
         }
+
+        // Everything below is the flash, which is over.
+        if (life <= 0) return;
 
         // Halation: a wide dim disc under the core. Additive compositing turns
         // it into a bloom without touching the (very expensive) shadow blur.
@@ -3986,9 +4057,11 @@ const WorldMap = ({
         // Strikes are appended in arrival order, so the lit window is a
         // contiguous slice and can be found rather than scanned: a persistence
         // window is a few dozen strikes out of the twenty-five thousand held.
+        // Widened where the fronts are being drawn, since a strike whose flash
+        // has decayed is still throwing sound for another minute.
         let lo = 0;
         let hi = retained.length;
-        const from = at - persistenceMs;
+        const from = at - (sounding ? Math.max(persistenceMs, FRONT_LIFE_MS) : persistenceMs);
         while (lo < hi) {
           const mid = (lo + hi) >> 1;
           if (retained[mid].t < from) lo = mid + 1;
@@ -4000,10 +4073,10 @@ const WorldMap = ({
           // The rest of the slice has not happened yet at this instant.
           if (age < 0) break;
           const life = 1 - age / persistenceMs;
-          if (life <= 0) continue;
+          if (life <= 0 && !(sounding && age < FRONT_LIFE_MS)) continue;
           const xy = projection([strike.lon, strike.lat]);
           if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
-          drawMark(xy[0], xy[1], age, life, 1);
+          drawMark(xy[0], xy[1], age, life, 1, sounding ? perKmAt(strike.lon, strike.lat, xy[0]) : 0);
         }
         ctx.globalCompositeOperation = "source-over";
         ctx.globalAlpha = 1;
@@ -4015,7 +4088,10 @@ const WorldMap = ({
       for (const p of particles.current) {
         const age = now - p.t;
         const life = 1 - age / persistenceMs;
-        if (life <= 0) continue;
+        // Kept past its own decay while the sound it threw is still travelling,
+        // and only while that is being drawn: at scales where the front is not
+        // legible this is the persistence window it always was.
+        if (life <= 0 && !(sounding && age < FRONT_LIFE_MS)) continue;
         alive.push(p);
 
         const xy = projection([p.lon, p.lat]);
@@ -4038,7 +4114,7 @@ const WorldMap = ({
           }
         }
 
-        drawMark(x, y, age, life, p.weight ?? 1);
+        drawMark(x, y, age, life, p.weight ?? 1, sounding ? perKmAt(p.lon, p.lat, x) : 0);
       }
       particles.current = alive;
 

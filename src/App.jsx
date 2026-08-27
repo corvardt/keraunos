@@ -25,7 +25,7 @@ import { createRate } from "./lib/rate.js";
 import { createReach } from "./lib/reach.js";
 import { saveStrikes, saveFrame } from "./lib/save.js";
 import { parseArchive, createPlayer, MAX_BYTES as ARCHIVE_MAX_BYTES } from "./lib/archive.js";
-import { roll, hush, MAX_KM as THUNDER_MAX_KM } from "./lib/thunder.js";
+import { roll, hush, MAX_KM as THUNDER_MAX_KM, SPEED_KMS } from "./lib/thunder.js";
 import { fixSpreadKm } from "./lib/fix.js";
 import { clock } from "./lib/lag.js";
 import geoData from "./lib/world.json";
@@ -84,15 +84,6 @@ const REGION_MIN = 3; // strikes a cell needs before it is worth geocoding
 // while the socket keeps delivering, and the backlog would otherwise grow for
 // as long as the tab is left alone and then land in one frame on return.
 const MAX_QUEUE = 800;
-// Thunder. Sound covers about a third of a kilometre a second, which is the one
-// piece of physics a lightning map can hand back to the person reading it: the
-// flash is already here, the sound is still coming, and the gap is a distance
-// you can check against your own window. Past 25km it is rarely audible at all,
-// so the count is not offered. The range comes from the synthesiser that plays
-// it, so the figure the panel counts down to and the one the ear waits for are
-// the same figure.
-const SPEED_OF_SOUND_KMS = 0.343;
-
 // Replay runs at life size on a tenth-second beat: fine enough that a strike
 // fades smoothly, coarse enough that re-deriving the window ten times a second
 // is the cheapest thing on the frame. Within this of the present there is
@@ -412,7 +403,7 @@ function App() {
       // seconds behind and the sound has been travelling for all of them, so
       // played from arrival every bang would land a mile and a half late.
       if (km <= THUNDER_MAX_KM) {
-        roll(km, km / SPEED_OF_SOUND_KMS - (arrived - flash) / 1000);
+        roll(km, km / SPEED_KMS - (arrived - flash) / 1000);
       }
     }
     const lon = Math.floor(data.lon / BIN_SIZE) * BIN_SIZE;
@@ -463,11 +454,14 @@ function App() {
    * instead is the state those strikes would have left behind, so they are
    * filed where they would have ended up, at the times they actually happened.
    *
-   * Three things are deliberately not seeded. The rate, the daily curve and the
-   * reach histogram are measurements of arrivals rather than of weather: the
-   * first two describe a feed nobody was listening to, and the third is built
-   * from station lists the backfill does not carry. They start empty and fill
-   * live, which is what they claim to be.
+   * Four things are deliberately not seeded. The rate, the session count, the
+   * daily curve and the reach histogram are measurements of arrivals rather
+   * than of weather: the first three describe a feed nobody was listening to,
+   * and the last is built from station lists the backfill does not carry. They
+   * start empty and fill live, which is what they claim to be. The count in
+   * particular has to: "detected" is what this session has watched arrive, and
+   * a session that opens claiming twenty thousand is reporting the sky rather
+   * than itself.
    */
   const absorb = useCallback((caught) => {
     if (!caught.length) return;
@@ -498,7 +492,6 @@ function App() {
         binCounts.current.set(key, { lon, lat, count: 1, last: strike.at });
       }
     }
-    total.current += strikes.length;
 
     // Storm cells, walked forward rather than detected once: a few tens of
     // milliseconds, and the difference between rings and rings that know where
@@ -668,7 +661,7 @@ function App() {
         // still ahead of us. Beyond THUNDER_MAX_KM there is nothing to hear.
         if (km > THUNDER_MAX_KM) continue;
         const flash = strike.at ?? strike.t;
-        const heardAt = flash + (km / SPEED_OF_SOUND_KMS) * 1000;
+        const heardAt = flash + (km / SPEED_KMS) * 1000;
         if (heardAt <= now) continue;
         if (!pending || heardAt < pending.at) {
           // The same arrival worked from each end of where the strike might
@@ -679,8 +672,8 @@ function App() {
           pending = {
             at: heardAt,
             km,
-            early: spread === null ? null : flash + (Math.max(0, km - spread) / SPEED_OF_SOUND_KMS) * 1000,
-            late: spread === null ? null : flash + ((km + spread) / SPEED_OF_SOUND_KMS) * 1000,
+            early: spread === null ? null : flash + (Math.max(0, km - spread) / SPEED_KMS) * 1000,
+            late: spread === null ? null : flash + ((km + spread) / SPEED_KMS) * 1000,
           };
         }
       }

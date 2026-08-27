@@ -25,6 +25,14 @@
 
 import { context } from "./audio.js";
 
+// The one number this all rests on: 343 metres a second, which is dry air at
+// 20C. Colder air is slower, 337 at ten degrees and 331 at freezing, and over
+// ten kilometres that is half a second, which is inside the error the network's
+// own fix already carries. It lives here because the panel counts down to it,
+// the synthesiser plays at it, and the map now draws the front expanding at it:
+// three readings of the same physics, and they have to agree.
+export const SPEED_KMS = 0.343;
+
 // Matches the panel's countdown, and for the same reason: past about this the
 // sound has been absorbed to nothing on the way, and offering a rumble for a
 // strike nobody could hear would be inventing weather.
