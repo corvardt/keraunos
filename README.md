@@ -25,7 +25,7 @@ Open it and watch. If you want to drive it, this is the whole of it:
 | **Point** | The map reads out the place under the pointer, its coordinates, and the strike count for that 1° cell |
 | **Pick** | Click the map, a feed row, or a ranked place to narrow everything to it; click a storm cell to narrow to the cell rather than the country. Click again or press `esc` to clear |
 | **Move** | Drag to pan, wheel or pinch to zoom in to about 200 km across. The region names along the top of the map jump straight there |
-| **Rewind** | The track along the bottom is a fixed hour of roll, drawn where there is window behind it: it opens holding the relay's last half hour and fills as the session runs. Its bars are how busy each slice was. Drag anywhere on it to set the clock down at that moment; at ×8 or ×30 it runs forward until it catches up and hands back to live, and at life size it keeps pace with the present instead |
+| **Rewind** | The track along the bottom is an hour of roll, and the relay hands it over full at the start of a session rather than making you wait for it. Its bars are how busy each slice was. Drag anywhere on it to set the clock down at that moment; at ×8 or ×30 it runs forward until it catches up and hands back to live, and at life size it keeps pace with the present instead |
 | **Here** | Asks the browser for your location (only when pressed), frames the map on it, and reads out how far away the nearest strike is and how long until its thunder. Session only: not stored, not sent anywhere |
 | **Link** | Zoomed in, the address carries the view as `#lon/lat/zoom`, so a view can be handed to someone |
 | **Save** | Configuration holds two exports: the retained strikes as CSV, and the frame as drawn, rewound or live, as a PNG |
@@ -168,9 +168,10 @@ who has asked their system for reduced motion.
 An hour, if an hour fits. The rewind track is as long as the history actually
 held: up to 120,000 strikes are retained, so at the quiet end of the world's
 rate the full hour is comfortable, and at the peak the ceiling binds first and
-the window is shorter. A session opens on the half hour the relay was holding
-and the track grows to the hour from there, showing what it has rather than
-what it wishes it had.
+the window is shorter. A session opens on the hour the relay was holding, so
+the track is normally full from the first frame; a relay with less than an hour
+to give leaves the far end of it bare, showing what it has rather than what it
+wishes it had.
 
 Setting the clock down starts it running forward again, rather than freezing a
 frame: what you want from a map of a storm is to watch the storm move. Life size
@@ -223,16 +224,16 @@ hardware that volunteers buy, power and host.
 upstream connection however many people are watching, fanning the frames out
 untouched.
 
-It also keeps the last half hour: three numbers a strike, where and when, about
-160 KB of it, handed to a visitor as one binary frame before the live feed
-starts. Without it a new tab is an empty map that takes twelve minutes to find a
+It also keeps the last hour: three numbers a strike, where and when, a few
+hundred kilobytes of it, handed to a visitor as one binary frame before the live
+feed starts. Without it a new tab is an empty map that takes twelve minutes to find a
 storm cell and ten more to say where it is going, which is most of what this
 instrument does and all of it withheld from anybody who did not stay. It is held
 in memory and written down every ten seconds, in five-minute buckets, so that a
 deploy or an eviction costs the next visitor nothing: a restarted relay reads
 its own window back and carries on. Nothing about a reader is stored, or could
-be: the relay knows nothing about anybody watching, and the half hour is the
-same public lightning for everyone. The instrument is still built entirely in
+be: the relay knows nothing about anybody watching, and the hour is the same
+public lightning for everyone. The instrument is still built entirely in
 your own tab, from a feed that now arrives by way of one socket instead of
 thousands.
 

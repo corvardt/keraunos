@@ -5,6 +5,11 @@
   "compatibility_date": "2025-10-01",
   "observability": { "enabled": true },
 
+  // Every minute, to wake the object if it has been replaced or reclaimed. The
+  // link it holds is what fills the window a visitor is handed, and nothing
+  // else notices quickly that it has stopped.
+  "triggers": { "crons": ["* * * * *"] },
+
   // One class, one instance, holding one socket to Blitzortung.
   "durable_objects": {
     "bindings": [{ "name": "FEED", "class_name": "Feed" }]

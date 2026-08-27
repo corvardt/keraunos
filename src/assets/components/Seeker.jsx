@@ -23,7 +23,7 @@ const GIVE_UP_AFTER = 4; // failed attempts before the feed is reported down
  * Headless component: owns the websocket and pushes strikes upward.
  * `onDataReceived`, `onBackfill` and `onStatus` must be referentially stable,
  * or the effect tears the socket down and reconnects on every parent render.
- * `onBackfill` gets the relay's half hour, once, before any live strike.
+ * `onBackfill` gets the relay's window, once, before any live strike.
  */
 function Seeker({ onDataReceived, onBackfill, onStatus }) {
   useEffect(() => {
@@ -74,10 +74,10 @@ function Seeker({ onDataReceived, onBackfill, onStatus }) {
       };
 
       ws.onmessage = (event) => {
-        // The relay rather than the feed: its own state, or the half hour it
-        // was holding. Never a live strike, which arrives as text.
+        // The relay rather than the feed: its own state, or the window it was
+        // holding. Never a live strike, which arrives as text.
         if (typeof event.data !== "string") {
-          // Half an hour of strikes, if the relay had one to hand over. Told
+          // The retained window, if the relay had one to hand over. Told
           // from the relay's own state by the bytes it starts with: both are
           // binary, and one of them is not JSON.
           const caught = unpack(event.data);

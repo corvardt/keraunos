@@ -1,8 +1,8 @@
 // Blitzortung streams LZW-compressed JSON frames. Their decoder, unchanged.
 //
 // It lives here rather than in the socket that reads it because the relay reads
-// them too now: it keeps half an hour of strikes so a visitor arrives at a map
-// that is already running, and it cannot keep what it cannot read.
+// them too now: it keeps an hour of strikes so a visitor arrives at a map that
+// is already running, and it cannot keep what it cannot read.
 export function decode(b) {
   let e = {};
   let d = Array.from(b);

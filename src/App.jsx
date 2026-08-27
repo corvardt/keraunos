@@ -44,7 +44,7 @@ const ACTIVE_MS = 6000; // how long a cell counts as still firing
 // the second.
 const STORM_WINDOW_MS = 12 * 60 * 1000;
 // The cadence the backfill is walked forward at when a session starts from the
-// relay's half hour. It is the same twenty seconds `storms.js` records a
+// relay's hour. It is the same twenty seconds `storms.js` records a
 // centroid on, so a cell arrives with the trail it would have grown here.
 const SEED_STEP_MS = 20000;
 // The run-up a rewound instant is walked from before its cells are drawn. It is
@@ -58,9 +58,9 @@ const WARM_MS = 25 * 60 * 1000;
 // that letting go and having the rings appear reads as the same gesture.
 const SETTLE_MS = 200;
 // How many bars the transport's window is drawn as. Fixed rather than one per
-// minute: the window it rides grows from half an hour to a full one, and a
-// strip whose bars kept getting narrower would be reporting the retention
-// rather than the weather. Seventy-two over the retained hour is a bar for
+// minute: a session that starts with less than the full hour would otherwise
+// draw narrower bars than one that has it all, which would be reporting the
+// retention rather than the weather. Seventy-two over the retained hour is a bar for
 // every fifty seconds, which is about as fine as a bar can be and still be a
 // bar at the width the strip is drawn.
 const SHAPE_BARS = 72;
@@ -215,8 +215,8 @@ function App() {
   // is exact and the loop's interpolation carries no render latency.
   const replayStamp = useRef(performance.now());
   // How fast the clock runs once it has been set down. Life size is the reading
-  // and the default; the other two are for a window that is now half an hour
-  // long on arrival, which at life size is half an hour of watching. Kept
+  // and the default; the other two are for a window that is now an hour long
+  // on arrival, which at life size is an hour of watching. Kept
   // across a return to live, because somebody who wanted the sped-up view once
   // wants it again the next time they pull on the strip.
   const [pace, setPace] = useState(1);
@@ -437,7 +437,7 @@ function App() {
    * else. Walking the same window forward at the cadence the trail is sampled
    * on gives the tracker the observations it would have made had somebody been
    * watching, which is what both callers here need: the session that starts
-   * from the relay's half hour, and the rewind, which has to show the cells as
+   * from the relay's hour, and the rewind, which has to show the cells as
    * they stood at a moment nobody was looking at them.
    */
   const walk = useCallback((from, to, seed = []) => {
@@ -453,7 +453,7 @@ function App() {
   }, []);
 
   /**
-   * The half hour the relay was holding, absorbed on arrival.
+   * The hour the relay was holding, absorbed on arrival.
    *
    * Not put through `handleDataReceived`, and that is the whole design of it.
    * That door stamps a strike with the moment it arrived, queues it to be
@@ -471,7 +471,7 @@ function App() {
    */
   const absorb = useCallback((caught) => {
     if (!caught.length) return;
-    // A reconnect brings the half hour again. Only what is newer than the last
+    // A reconnect brings the window again. Only what is newer than the last
     // thing held is taken: everything downstream reads this history as a run in
     // arrival order, and filling a hole in the middle of it would break the
     // window every one of those passes is a binary search for.
@@ -827,8 +827,8 @@ function App() {
         const bar = Math.floor(((strike.t - edge) / HISTORY_MS) * SHAPE_BARS);
         if (bar >= 0 && bar < SHAPE_BARS) bars[bar]++;
       }
-      // Against its own peak: this is where the half hour was busy, not how
-      // busy it was against any other half hour. The rate readout is the one
+      // Against its own peak: this is where the hour was busy, not how busy it
+      // was against any other hour. The rate readout is the one
       // that carries a number.
       const peak = Math.max(...bars);
       setShape(peak ? bars.map((count) => count / peak) : EMPTY);

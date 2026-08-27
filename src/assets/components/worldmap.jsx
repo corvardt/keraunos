@@ -3979,8 +3979,8 @@ const WorldMap = ({
         // Run forward at the speed the transport is set to, so a mark decays
         // over the same fraction of its life the state tick is advancing
         // through: at thirty times, a flash that lasts a fifth of a second of
-        // window is gone within a frame, which is what watching half an hour in
-        // a minute actually looks like.
+        // window is gone within a frame, which is what watching an hour in two
+        // minutes actually looks like.
         const at = rewound.at + (now - rewound.stamp) * (rewound.pace ?? 1);
         const retained = history?.current ?? [];
         // Strikes are appended in arrival order, so the lit window is a

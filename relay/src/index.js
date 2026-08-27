@@ -35,16 +35,22 @@ const MAX_RECONNECT_MS = 30000;
 // keep this object in memory rather than letting it sleep, and they only do so
 // for about fifteen minutes at a stretch. After that the object can be evicted
 // and its upstream goes with it, silently, in the middle of the night. So it
-// wakes itself to check on its own link.
+// wakes itself to check on its own link, and now that the link is held whether
+// or not anybody is watching, this alarm is the only thing that notices.
 const KEEPALIVE_MS = 10 * 60 * 1000;
 
-// What a visitor is handed on arrival. Thirty minutes is what the instrument
-// needs to be running rather than accumulating: see `backfill.js`.
-const HISTORY_MS = 30 * 60 * 1000;
-// A ceiling, for the nights the sky is busy. At the eight strikes a second this
-// feed usually runs, half an hour is about fourteen thousand; this is room for
-// four times that before the oldest are dropped early.
-const MAX_HISTORY = 60000;
+// What a visitor is handed on arrival: the hour the browser keeps, which is the
+// only figure that is not a judgement call. Half an hour was the answer while
+// the link was dropped for an empty room, because half an hour was the most a
+// quiet site could reliably have collected; held continuously, the relay always
+// has the full hour, and anything older than that the browser throws away on
+// its first trim. See `backfill.js`.
+const HISTORY_MS = 60 * 60 * 1000;
+// A ceiling, for the nights the sky is busy, and the same one the browser sets
+// on its own history: at the eight strikes a second this feed usually runs an
+// hour is about twenty-nine thousand, so this is room for four times that
+// before the oldest are dropped early.
+const MAX_HISTORY = 120000;
 // Trimming is a filter over the whole window, so it is done on a slack rather
 // than on every strike.
 const TRIM_EVERY = 256;
@@ -56,15 +62,16 @@ const TRIM_EVERY = 256;
 // window that is shorter than the one before it. Storage outlives that, because
 // it belongs to the object's name rather than to the instance holding it.
 //
-// Written in five-minute buckets rather than as one blob, and only the two the
+// Written in short buckets rather than as one blob, and only the two the
 // strikes are currently landing in. Rewriting the whole window every ten
-// seconds would be four times the bytes for the same information, and a bucket
-// is small enough to sit well inside a value's size limit however busy the sky
-// is. Two of them, because the feed reports a strike up to twelve seconds late
-// and one arriving just after a bucket rolls over belongs to the one before it.
+// seconds would be dozens of times the bytes for the same information. Two
+// minutes a bucket, so that even a sky firing at thirty a second leaves a value
+// well inside any of the size limits this store has had. Two buckets, because
+// the feed reports a strike up to twelve seconds late and one arriving just
+// after a bucket rolls over belongs to the one before it.
 const KEY = "h:";
 const SAVE_EVERY_MS = 10000;
-const BUCKET_MS = 5 * 60 * 1000;
+const BUCKET_MS = 2 * 60 * 1000;
 // Buckets kept: the window, the one being filled, and one of slack.
 const BUCKETS = Math.ceil(HISTORY_MS / BUCKET_MS) + 2;
 
@@ -87,6 +94,16 @@ export class Feed {
   }
 
   async fetch(request) {
+    // The nudge, from the schedule. An object with nothing attached to it is
+    // evicted, and the two moments that leaves a hole in the window are a
+    // deploy, which replaces the object outright, and an eviction in the
+    // middle of a quiet night: in both cases nothing here runs again until
+    // something asks it to, and the alarm is ten minutes away. So something
+    // asks it to, once a minute.
+    if (new URL(request.url).pathname === "/wake") {
+      await this.ensure();
+      return new Response(null, { status: 204 });
+    }
     if ((request.headers.get("Upgrade") ?? "").toLowerCase() !== "websocket") {
       return new Response("this endpoint is a websocket", { status: 426 });
     }
@@ -167,14 +184,23 @@ export class Feed {
     return this.state.storage.setAlarm(Date.now() + wait * (0.8 + Math.random() * 0.4));
   }
 
+  /**
+   * The link, checked on whether or not anybody is watching.
+   *
+   * It used to be let go the moment the last reader left, on the grounds that
+   * holding a volunteer's socket open for an empty room was rude. What that
+   * actually bought was a hole: the window this object exists to hand a visitor
+   * is only as long as the last unbroken stretch of listening, so a site that
+   * is quiet overnight greeted its first reader of the morning with the empty
+   * map the whole thing was built to avoid. An hour of history cannot be
+   * collected after somebody arrives.
+   *
+   * So it is held: one connection, continuously, which is the arrangement
+   * Blitzortung asks a project to keep in the first place. It costs about a
+   * gigabyte a day of theirs, measured at 718 KB a minute, against the
+   * thousands of connections this relay exists to replace.
+   */
   async alarm() {
-    // Nobody is listening: let the link go rather than hold a volunteer's
-    // socket open for an empty room. The next reader brings it back, one
-    // connection later.
-    if (this.state.getWebSockets().length === 0) {
-      this.drop();
-      return;
-    }
     if (await this.ensure()) {
       await this.state.storage.setAlarm(Date.now() + KEEPALIVE_MS);
     }
@@ -226,10 +252,26 @@ export class Feed {
   async restore() {
     try {
       const stored = await this.state.storage.list({ prefix: KEY });
-      for (const value of stored.values()) {
+      const cutoff = Date.now() - HISTORY_MS;
+      // Buckets holding nothing still inside the window are swept as they are
+      // read. The alarm's own delete only knows about the bucket that has just
+      // fallen off the end, which is right while the bucket length holds still
+      // and leaves orphans behind the day it changes. This is the one place
+      // that sees every key there is, so it is the one place that can tell.
+      const stale = [];
+      for (const [key, value] of stored) {
         const part = unpack(value);
-        if (part) for (const strike of part) this.history.push(strike);
+        let kept = false;
+        if (part) {
+          for (const strike of part) {
+            if (strike.at < cutoff) continue;
+            this.history.push(strike);
+            kept = true;
+          }
+        }
+        if (!kept) stale.push(key);
       }
+      if (stale.length) this.state.storage.delete(stale).catch(() => {});
       this.history.sort((a, b) => a.at - b.at);
       // Re-seeded, so a strike restored from storage and then reported again by
       // the feed is still only handed over once.
@@ -278,7 +320,7 @@ export class Feed {
   }
 
   /**
-   * The half hour, to one reader who has just arrived.
+   * The hour, to one reader who has just arrived.
    *
    * Sent as bytes, which is also how this object talks about itself, and told
    * apart from that by the four bytes it starts with rather than by its shape.
@@ -334,30 +376,29 @@ export class Feed {
     for (const reader of this.state.getWebSockets()) this.tell(reader);
   }
 
-  drop() {
-    if (!this.up) return;
-    const socket = this.up;
-    this.up = null;
-    this.node = null;
-    try {
-      socket.close();
-    } catch {
-      /* already gone */
-    }
-  }
+  // A reader leaving is no longer news: the link is held for the visitor who
+  // has not arrived yet, and the window is only worth handing over because it
+  // was being collected while nobody was there to see it. Kept as the handlers
+  // the runtime expects, and empty on purpose.
+  webSocketClose() {}
 
-  webSocketClose(reader) {
-    // The closing socket may still be listed, so it is excluded by identity
-    // rather than by reading a ready state off it.
-    if (this.state.getWebSockets().every((other) => other === reader)) this.drop();
-  }
-
-  webSocketError(reader) {
-    this.webSocketClose(reader);
-  }
+  webSocketError() {}
 }
 
+const world = (env) => env.FEED.get(env.FEED.idFromName("world"));
+
 export default {
+  // Once a minute, whether or not anybody is watching. This is what makes the
+  // link continuous rather than merely undropped: holding the socket keeps the
+  // object alive, but nothing keeps it alive across the moment it is replaced
+  // or reclaimed, and the window is only worth handing over if it has no holes
+  // in it. A deploy used to cost up to the ten minutes until the keepalive
+  // alarm; measured at ninety seconds on the last one, which is ninety seconds
+  // of weather nobody can get back.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(world(env).fetch("https://relay.invalid/wake"));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname !== "/feed") return new Response("not here", { status: 404 });
@@ -383,6 +424,6 @@ export default {
     }
 
     // One object, named, for everybody: the whole point is a single upstream.
-    return env.FEED.get(env.FEED.idFromName("world")).fetch(request);
+    return world(env).fetch(request);
   },
 };

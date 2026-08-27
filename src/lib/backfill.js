@@ -1,4 +1,4 @@
-// The half hour that happened before you got here.
+// The hour that happened before you got here.
 //
 // Everything this instrument shows is accumulated: the map is empty on arrival
 // and fills as the sky works, which means the first five minutes of a visit are
@@ -6,15 +6,19 @@
 // twelve minutes of strikes before they exist at all, and a heading needs ten
 // more than that, so the one thing this map does that a dot plot does not was
 // unavailable to anybody who did not stay. The relay is already holding the
-// feed for everybody; holding the last half hour of it costs a quarter of a
-// megabyte and hands a visitor a running instrument in the time it takes to
-// open a socket.
+// feed for everybody; holding the last hour of it costs a few hundred kilobytes
+// and hands a visitor a running instrument in the time it takes to open a
+// socket.
 //
-// Thirty minutes and not an hour, because the value is not linear in the
-// window. Twelve minutes is where cells appear, twenty-five is the window a
-// heading is regressed over, six is what a surge is read from, and twenty is
-// two of the three burn bands. Thirty covers all of that. The second half hour
-// buys the third burn band and a longer rewind track for the same weight again.
+// An hour because that is what the browser keeps, and there is no judgement
+// left in the figure: anything older is dropped on the first trim. The value of
+// the window is not linear in its length, and the interesting thresholds are
+// all inside the first half of it: twelve minutes is where cells appear,
+// twenty-five is the window a heading is regressed over, six is what a surge is
+// read from, twenty is two of the three burn bands. The second half hour buys
+// the third burn band and a rewind track that is full on arrival rather than
+// half drawn, which is worth the bytes only because the relay now holds its
+// link continuously and therefore always has the hour to give.
 //
 // This file is the wire format, and it is imported by both ends: the relay
 // packs, the browser unpacks. One definition, because a format described twice

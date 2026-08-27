@@ -5,9 +5,9 @@ import { memo, useRef } from "react";
 const ARM_MS = 30000;
 
 // The speeds the clock can be set running at. Life size is the reading; the
-// other two exist because the window is now half an hour on arrival, and half
-// an hour at life size is half an hour of watching. Thirty puts the whole of it
-// under a minute, which is the pace a storm's own movement reads at.
+// other two exist because the window is now an hour on arrival, and an hour at
+// life size is an hour of watching. Thirty puts the whole of it under two
+// minutes, which is the pace a storm's own movement reads at.
 const PACES = [1, 8, 30];
 
 /**
@@ -19,11 +19,11 @@ const PACES = [1, 8, 30];
  * run forward again from there, at life size, until it catches up.
  *
  * The track is an hour of roll, always, because an hour is what the map keeps.
- * A session opens holding the half hour the relay handed over and fills the
- * rest of the ruler as it runs, so the line is drawn only where there are
- * strikes behind it and the bare end is roll not yet paid out. There is nothing
- * to scrub to before that, and pretending otherwise would be the only dishonest
- * thing a transport could do.
+ * A session opens holding the hour the relay handed over, so the ruler is
+ * normally full from the first frame; a relay with less than an hour to give
+ * leaves the far end bare, and the line is drawn only where there are strikes
+ * behind it. There is nothing to scrub to before that, and pretending otherwise
+ * would be the only dishonest thing a transport could do.
  *
  * Which is why it is drawn from the first frame and armed later. The unarmed
  * state used to be the first minutes of every session and is now the exception
@@ -39,8 +39,8 @@ const PACES = [1, 8, 30];
  *
  * What it carries is the window itself: a few dozen bars, each as tall as its
  * slice of the window was busy. A bare line says only that there is somewhere
- * to drag to. This says where in the last half hour the sky was working, which
- * is the question somebody reaching for it already has.
+ * to drag to. This says where in the last hour the sky was working, which is
+ * the question somebody reaching for it already has.
  *
  * The two meanings of that fill meet at 100%. Filling, it is how much of the
  * arming window has arrived; armed, it is where the clock sits in the retained
@@ -151,7 +151,7 @@ function Transport({ from, roll, shape, at: instant, pace, onSeek, onPace }) {
       // Centred and long. It used to sit in the right-hand corner at 260px,
       // which was the right size for a control that was mostly a promise: there
       // was nothing behind it for the first minutes of a session and little to
-      // read on it after. It now opens on half an hour of weather and carries
+      // read on it after. It now opens on an hour of weather and carries
       // the shape of it, so it is given the width that makes that shape legible
       // and the position of the thing you are meant to reach for.
       className="pointer-events-auto absolute inset-x-3 bottom-3 flex items-center gap-3 sm:left-1/2 sm:right-auto sm:w-[min(720px,62vw)] sm:-translate-x-1/2"

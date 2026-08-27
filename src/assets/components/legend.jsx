@@ -502,8 +502,8 @@ export default function Legend({ onClose }) {
           track and a tenth with <span className="text-text">shift</span>, and{" "}
           <span className="text-text">home</span> and <span className="text-text">end</span> for the
           two ends of it. A fraction of the track rather than a fixed count of seconds, the track
-          being a fixed hour: it carries the half hour the relay was holding when the session
-          opened, and fills the rest of itself as the session runs.
+          being a fixed hour: it carries the hour the relay was holding when the session opened,
+          and fills in from the left if the relay had less than that to give.
         </Entry>
       </Group>
 
