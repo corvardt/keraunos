@@ -27,6 +27,7 @@ import { saveStrikes, saveFrame } from "./lib/save.js";
 import { parseArchive, createPlayer, MAX_BYTES as ARCHIVE_MAX_BYTES } from "./lib/archive.js";
 import { roll, hush, MAX_KM as THUNDER_MAX_KM } from "./lib/thunder.js";
 import { fixSpreadKm } from "./lib/fix.js";
+import { clock } from "./lib/lag.js";
 import geoData from "./lib/world.json";
 
 const FEED_LENGTH = 60; // strikes listed in the recent feed
@@ -306,6 +307,9 @@ function App() {
   // The map drains this itself on every animation frame, so strikes light up
   // the instant they land rather than waiting for the next flush.
   const strikeQueue = useRef([]);
+  // Held for the session, because it is a running measurement of the trip a
+  // frame makes to get here and one strike says nothing about that.
+  const struckAt = useRef(clock());
 
   // What the thunder needs to know, held where the socket callback can reach
   // it. That callback is deliberately stable, because it is what holds the
@@ -352,10 +356,12 @@ function App() {
     // Push only. Trimming here would re-copy the whole array on every
     // message; the clustering pass below enforces both bounds instead.
     // `t` is when we heard about it; `at` is when it happened. The network runs
-    // about five seconds behind, and for anything counted in seconds (thunder,
-    // above all) the difference is the whole measurement.
+    // several seconds behind, and for anything counted in seconds (thunder,
+    // above all) the difference is the whole measurement. Read off the strike's
+    // own timestamp rather than off `delay`, which stops counting before the
+    // frame leaves the network and so hides the trip here: see `lag.js`.
     const arrived = Date.now();
-    const flash = arrived - (Number(data.delay) || 0) * 1000;
+    const flash = struckAt.current(Number(data.time), arrived) ?? arrived - (Number(data.delay) || 0) * 1000;
     // `gap` rides along because the countdown needs it: it is the only thing in
     // the frame that says how far out the position may be, and therefore how
     // wide the band on the arrival has to be.

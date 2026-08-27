@@ -1,6 +1,7 @@
 import { memo, useEffect } from "react";
 import { usedStations } from "../../lib/fix.js";
 import { record } from "../../lib/stations.js";
+import { createFilter } from "../../lib/repeat.js";
 
 // Our own relay rather than Blitzortung directly.
 //
@@ -48,6 +49,9 @@ function Seeker({ onDataReceived, onStatus }) {
     let retry = null;
     let cancelled = false;
     let failures = 0;
+    // Held across reconnects, not per socket: the relay's link can drop and
+    // come back inside the seconds a repeat takes to arrive.
+    const fresh = createFilter();
 
     // Which upstream node the relay is on, as it reports it. Choosing between
     // them is the relay's business now: it is the only client, so spreading
@@ -105,6 +109,10 @@ function Seeker({ onDataReceived, onStatus }) {
 
         try {
           const { time, delay, lon, lat, sig, mcg } = JSON.parse(decode(event.data));
+          // Reported twice is not struck twice. Dropped here, before anything
+          // downstream has been told, so the map, the feed, the rate, the
+          // storms and the thunder all count it once.
+          if (!fresh(time, lon, lat)) return;
           const date = new Date(time / 1000000);
           // UTC, matching the footer clock. Local time would be the viewer's,
           // which says nothing useful about a strike over Java.
@@ -122,6 +130,10 @@ function Seeker({ onDataReceived, onStatus }) {
           const used = usedStations(sig);
           onDataReceived?.({
             formattedTime,
+            // The strike's own moment, in milliseconds. `delay` is what the
+            // network reports about itself and is worth showing; this is what
+            // the countdown is measured from.
+            time: time / 1e6,
             delay,
             lon,
             lat,
