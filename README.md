@@ -25,7 +25,7 @@ Open it and watch. If you want to drive it, this is the whole of it:
 | **Point** | The map reads out the place under the pointer, its coordinates, and the strike count for that 1° cell |
 | **Pick** | Click the map, a feed row, or a ranked place to narrow everything to it; click a storm cell to narrow to the cell rather than the country. Click again or press `esc` to clear |
 | **Move** | Drag to pan, wheel or pinch to zoom in to about 200 km across. The region names along the top of the map jump straight there |
-| **Rewind** | The track along the bottom holds up to the last hour. Drag anywhere on it to set the clock down at that moment; it then runs forward at life size until it catches up and hands back to live |
+| **Rewind** | The track along the bottom opens on the relay's last half hour and grows to the hour. Its bars are how busy each slice of the window was. Drag anywhere on it to set the clock down at that moment; it then runs forward until it catches up and hands back to live, at life size or at ×8 or ×30 |
 | **Here** | Asks the browser for your location (only when pressed), frames the map on it, and reads out how far away the nearest strike is and how long until its thunder. Session only: not stored, not sent anywhere |
 | **Link** | Zoomed in, the address carries the view as `#lon/lat/zoom`, so a view can be handed to someone |
 | **Save** | Configuration holds two exports: the retained strikes as CSV, and the frame as drawn, rewound or live, as a PNG |
@@ -172,12 +172,19 @@ the window is shorter. A session opens on the half hour the relay was holding
 and the track grows to the hour from there, showing what it has rather than
 what it wishes it had.
 
-Setting the clock down starts it running forward again at life size, rather than
-freezing a frame: what you want from a map of a storm is to watch the storm
-move. Three things are not replayed: storm rings, which are tracked forward
-strike by strike and cannot be rebuilt from a single instant; bolts and the
-chassis knock, because an event does not happen twice; and nothing is lost
-behind you, so returning to live finds the present already there.
+Setting the clock down starts it running forward again, rather than freezing a
+frame: what you want from a map of a storm is to watch the storm move. Life size
+is the reading, and half an hour of it takes half an hour, so the speed switch
+beside the track offers ×8 and ×30; the whole window under a minute is about the
+pace a cell's own movement reads at.
+
+Storm rings are replayed too, which they were not before. A track cannot be read
+off an instant, so the tracker is walked across the window to the moment being
+shown, at the twenty-second cadence it samples a centroid on: a running replay
+advances it a step at a time, and a scrub pays one forty-millisecond walk when
+it settles. Bolts and the chassis knock are still not replayed, because an event
+does not happen twice, and nothing is lost behind you, so returning to live
+finds the present already there.
 
 ### Place names
 

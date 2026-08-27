@@ -47,6 +47,23 @@ const STORM_WINDOW_MS = 12 * 60 * 1000;
 // relay's half hour. It is the same twenty seconds `storms.js` records a
 // centroid on, so a cell arrives with the trail it would have grown here.
 const SEED_STEP_MS = 20000;
+// The run-up a rewound instant is walked from before its cells are drawn. It is
+// the window `storms.js` regresses a heading over, which is the longest thing a
+// cell has to have been watched for before it can say anything beyond being
+// there.
+const WARM_MS = 25 * 60 * 1000;
+// How long a scrub has to stop moving before the cells at that instant are
+// walked out. Long enough that a drag across the window pays for one instant
+// rather than for every twentieth of a second it passed through, short enough
+// that letting go and having the rings appear reads as the same gesture.
+const SETTLE_MS = 200;
+// How many bars the transport's window is drawn as. Fixed rather than one per
+// minute: the window it rides grows from half an hour to a full one, and a
+// strip whose bars kept getting narrower would be reporting the retention
+// rather than the weather. Seventy-two over half an hour is a bar for every
+// twenty-five seconds, which is about as fine as a bar can be and still be a
+// bar at the width the strip is drawn.
+const SHAPE_BARS = 72;
 const STORM_EVERY_MS = 2000; // clustering cadence; storms don't move fast
 // How much is kept to rewind through and to burn from. An hour, rather than the
 // twelve minutes the clustering wants, because the two are answering different
@@ -197,6 +214,12 @@ function App() {
   // beside the instant rather than when the map happens to render, so the pair
   // is exact and the loop's interpolation carries no render latency.
   const replayStamp = useRef(performance.now());
+  // How fast the clock runs once it has been set down. Life size is the reading
+  // and the default; the other two are for a window that is now half an hour
+  // long on arrival, which at life size is half an hour of watching. Kept
+  // across a return to live, because somebody who wanted the sped-up view once
+  // wants it again the next time they pull on the strip.
+  const [pace, setPace] = useState(1);
 
   // Picking the same thing twice is how you let go of it. Identity is the
   // place *and* the cell, not the place alone: two storms over Brazil are both
@@ -405,6 +428,31 @@ function App() {
   }, []);
 
   /**
+   * The tracker, run across a stretch of the retained window.
+   *
+   * A storm cell is not a thing an instant contains. `detectStorms` finds the
+   * clusters in a window, but where a cell is going, how fast, and whether it
+   * is winding up are all read off a trail that `trackStorms` grows one
+   * centroid at a time, so a cell found in a single pass has a ring and nothing
+   * else. Walking the same window forward at the cadence the trail is sampled
+   * on gives the tracker the observations it would have made had somebody been
+   * watching, which is what both callers here need: the session that starts
+   * from the relay's half hour, and the rewind, which has to show the cells as
+   * they stood at a moment nobody was looking at them.
+   */
+  const walk = useCallback((from, to, seed = []) => {
+    let tracked = seed;
+    for (let at = from; at <= to; at += SEED_STEP_MS) {
+      const window = history.current.slice(
+        since(history.current, at - STORM_WINDOW_MS),
+        since(history.current, at)
+      );
+      tracked = trackStorms(tracked, detectStorms(window, at, STORM_WINDOW_MS), at);
+    }
+    return tracked;
+  }, []);
+
+  /**
    * The half hour the relay was holding, absorbed on arrival.
    *
    * Not put through `handleDataReceived`, and that is the whole design of it.
@@ -452,25 +500,12 @@ function App() {
     }
     total.current += strikes.length;
 
-    // Storm cells, walked forward rather than detected once.
-    //
-    // A single pass over the whole window would find the cells and know nothing
-    // about them: a heading is regressed over a trail that `trackStorms` builds
-    // one centroid at a time, so a cell detected in one go has no track, no
-    // speed and no surge, which is most of what the rings are for. Stepping the
-    // same window across the half hour at the cadence the live pass uses gives
-    // the tracker the observations it would have made, and costs a few tens of
-    // milliseconds once.
-    const now = Date.now();
-    for (let at = strikes[0].at + STORM_WINDOW_MS; at <= now; at += SEED_STEP_MS) {
-      const window = history.current.slice(
-        since(history.current, at - STORM_WINDOW_MS),
-        since(history.current, at)
-      );
-      tracked.current = trackStorms(tracked.current, detectStorms(window, at, STORM_WINDOW_MS), at);
-    }
+    // Storm cells, walked forward rather than detected once: a few tens of
+    // milliseconds, and the difference between rings and rings that know where
+    // they are going.
+    tracked.current = walk(strikes[0].at + STORM_WINDOW_MS, Date.now(), tracked.current);
     setStorms(tracked.current);
-  }, []);
+  }, [walk]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -665,7 +700,7 @@ function App() {
     let last = Date.now();
     const id = setInterval(() => {
       const now = Date.now();
-      const elapsed = now - last;
+      const elapsed = (now - last) * pace;
       last = now;
       replayStamp.current = performance.now();
       setReplayAt((at) => {
@@ -676,7 +711,7 @@ function App() {
       });
     }, REPLAY_TICK_MS);
     return () => clearInterval(id);
-  }, [replayAt !== null]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [replayAt !== null, pace]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // What the map was showing at that instant, derived on two clocks for the
   // same reason the live map runs on two: the marks decay visibly and want the
@@ -712,18 +747,83 @@ function App() {
   // against a clock it carries itself: deciding it here would quantise every
   // arrival to the playback tick, and an arrival is the one thing on this map
   // that has to land exactly when it lands.
+  // Storm cells as they stood at the moment being replayed.
+  //
+  // Rebuilt rather than remembered. Keeping a snapshot of the tracked cells at
+  // every step of the window would be the obvious way and the expensive one:
+  // each cell carries a trail, there are hundreds of cells over a busy planet,
+  // and an hour of snapshots is tens of megabytes held against the chance that
+  // somebody scrubs. Walking the tracker instead costs nothing until they do.
+  //
+  // Quantised to the trail's own cadence, so a replay running forward is one
+  // step of work per twenty seconds of window rather than a rebuild per frame.
+  // A jump is the expensive case and is the one a scrub makes ninety of, so it
+  // waits for the drag to settle and shows nothing in the meantime: rings from
+  // where the drag started, drawn over the sky where it is now, would be the
+  // stale reading this used to refuse to make.
+  const replayTrack = useRef({ at: 0, storms: EMPTY });
+  const [replayStorms, setReplayStorms] = useState(EMPTY);
+  const replayStep = replayAt === null ? null : Math.round(replayAt / SEED_STEP_MS) * SEED_STEP_MS;
+  useEffect(() => {
+    if (replayStep === null) {
+      replayTrack.current = { at: 0, storms: EMPTY };
+      setReplayStorms(EMPTY);
+      return undefined;
+    }
+    const prior = replayTrack.current;
+    // Carried forward from the last derivation, where the clock has only moved
+    // on by a step or two: the tracker is already warm and this is the same
+    // work the live pass does twice a second.
+    if (prior.storms.length && replayStep > prior.at && replayStep - prior.at <= WARM_MS) {
+      const storms = walk(prior.at + SEED_STEP_MS, replayStep, prior.storms);
+      replayTrack.current = { at: replayStep, storms };
+      setReplayStorms(storms);
+      return undefined;
+    }
+    setReplayStorms(EMPTY);
+    const id = setTimeout(() => {
+      // Cold: the whole run-up, which is what a heading needs and what costs
+      // forty milliseconds.
+      const storms = walk(replayStep - WARM_MS, replayStep, []);
+      replayTrack.current = { at: replayStep, storms };
+      setReplayStorms(storms);
+    }, SETTLE_MS);
+    return () => clearTimeout(id);
+  }, [replayStep, walk]);
+
   const replay = useMemo(
-    () => (replayInstant === null ? null : { at: replayInstant, stamp: replayStamp.current, bins: replayBins }),
-    [replayInstant, replayBins]
+    () => (replayInstant === null ? null : { at: replayInstant, stamp: replayStamp.current, pace, bins: replayBins }),
+    [replayInstant, replayBins, pace]
   );
 
-  // How far back there is anything to see. The window fills as the session
-  // runs, so the track grows for the first twelve minutes and then holds.
+  // How far back there is anything to see. A session opens on whatever the
+  // relay was holding and the window grows from there to the hour.
   const [span, setSpan] = useState(0);
+  // The same window as a curve: how hard the world was firing, minute by
+  // minute, so the strip under the map is something to read rather than a bare
+  // line to drag along. Counted here because this is where the strikes are, and
+  // on the same slow beat as the span for the same reason: it is a shape, and a
+  // shape that moved twice a second would be a distraction rather than a
+  // reading.
+  const [shape, setShape] = useState(EMPTY);
   useEffect(() => {
     const id = setInterval(() => {
       const oldest = history.current[0]?.t;
-      setSpan(oldest ? Math.min(HISTORY_MS, Date.now() - oldest) : 0);
+      const now = Date.now();
+      const held = oldest ? Math.min(HISTORY_MS, now - oldest) : 0;
+      setSpan(held);
+      if (held <= 0) return setShape(EMPTY);
+      const bars = new Array(SHAPE_BARS).fill(0);
+      const from = now - held;
+      for (const strike of history.current) {
+        const bar = Math.floor(((strike.t - from) / held) * SHAPE_BARS);
+        if (bar >= 0 && bar < SHAPE_BARS) bars[bar]++;
+      }
+      // Against its own peak: this is where the half hour was busy, not how
+      // busy it was against any other half hour. The rate readout is the one
+      // that carries a number.
+      const peak = Math.max(...bars);
+      setShape(peak ? bars.map((count) => count / peak) : EMPTY);
     }, 2000);
     return () => clearInterval(id);
   }, []);
@@ -783,6 +883,7 @@ function App() {
     setReach(null);
     setStats(NO_STATS);
     setSpan(0);
+    setShape(EMPTY);
     setReplayAt(null);
     setSelection(null);
     setFocus(null);
@@ -984,12 +1085,13 @@ function App() {
             // that starts.
             unfolding={unfolding}
             // Rewound, the map is drawn from the window rather than from the
-            // live accumulation. Storm cells are the one thing not replayed:
-            // they are tracked forward, strike by strike, and a track cannot be
-            // reconstructed from an instant, so rather than show stale rings
-            // over a past sky, it shows none.
+            // live accumulation, cells included. They used to be the one thing
+            // left out: a track cannot be read off an instant, and stale rings
+            // over a past sky would have been worse than none. What changed is
+            // that the window now arrives with the session, so the tracker can
+            // be walked across it and asked what it would have seen.
             bins={replay ? replay.bins : bins}
-            storms={replay ? EMPTY : storms}
+            storms={replay ? replayStorms : storms}
             replay={replay}
             // The retained window itself, so the loop can pick the lit strikes
             // per frame. A ref rather than state, like the strike queue: its
@@ -997,7 +1099,10 @@ function App() {
             // is a reason to render anything.
             history={history}
             span={span}
+            shape={shape}
+            pace={pace}
             onSeek={seek}
+            onPace={setPace}
             strikeQueue={strikeQueue}
             tube={tube}
             theme={theme}

@@ -120,11 +120,12 @@ const STEPS = [
     side: "above",
     body: (
       <>
-        The track along the bottom holds the last twelve minutes, and fills
-        toward the half a minute it needs before there is anything worth pulling
-        on. After that, set the clock down anywhere on it and the map runs
-        forward from that moment at life size, until it catches up and hands back
-        to live. Nothing pauses while you are back there: the window keeps
+        The track along the bottom opens on the last half hour, handed over by
+        the relay as the session starts, and grows to the hour from there. Its
+        bars are how busy each slice of that window was. Set the clock down
+        anywhere on it and the map runs forward from that moment until it
+        catches up and hands back to live, at life size or at the ×8 and ×30
+        beside it. Nothing pauses while you are back there: the window keeps
         filling behind you, so returning finds the present already arrived.
       </>
     ),

@@ -4,6 +4,12 @@ import { memo, useRef } from "react";
 // second of window under the finger, and a drag that lands wherever it likes.
 const ARM_MS = 30000;
 
+// The speeds the clock can be set running at. Life size is the reading; the
+// other two exist because the window is now half an hour on arrival, and half
+// an hour at life size is half an hour of watching. Thirty puts the whole of it
+// under a minute, which is the pace a storm's own movement reads at.
+const PACES = [1, 8, 30];
+
 /**
  * The roll.
  *
@@ -12,26 +18,34 @@ const ARM_MS = 30000;
  * end. Dragging anywhere on it sets the clock down at that moment and lets it
  * run forward again from there, at life size, until it catches up.
  *
- * The track grows for the first twelve minutes of a session and then holds,
- * because that is how much the map keeps. There is nothing to scrub to before
- * you arrived, and pretending otherwise would be the only dishonest thing a
- * transport could do.
+ * The track opens on whatever the relay was holding, half an hour of it, and
+ * grows to the hour as the session runs. There is nothing to scrub to before
+ * that, and pretending otherwise would be the only dishonest thing a transport
+ * could do.
  *
- * Which is why it is drawn from the first frame and armed later. It used to be
- * absent until there were thirty seconds behind it, and then it simply
- * appeared: on a map nobody was watching the corner of, in the one moment the
- * weather had their attention. A control learned by being noticed arriving is
- * a control most people never learn they have. So the strip is there from the
- * start, inert and dim, with the hairline filling toward the moment it starts
- * working: the reading is that something is accumulating and will shortly be
- * worth pulling on, which is exactly what is happening.
+ * Which is why it is drawn from the first frame and armed later. The unarmed
+ * state used to be the first minutes of every session and is now the exception
+ * rather than the rule: a reader with a relay behind them arrives with the
+ * strip already working. It is kept for the sessions that do not, an archive
+ * being read in or a relay with nothing to hand over, and the reasoning is
+ * unchanged. It used to be absent until there were thirty seconds behind it,
+ * and then it simply appeared: on a map nobody was watching the corner of, in
+ * the one moment the weather had their attention. A control learned by being
+ * noticed arriving is a control most people never learn they have. So the strip
+ * is there from the start, inert and dim, with the hairline filling toward the
+ * moment it starts working.
+ *
+ * What it carries is the window itself: a few dozen bars, each as tall as its
+ * slice of the window was busy. A bare line says only that there is somewhere
+ * to drag to. This says where in the last half hour the sky was working, which
+ * is the question somebody reaching for it already has.
  *
  * The two meanings of that fill meet at 100%. Filling, it is how much of the
  * arming window has arrived; armed, it is where the clock sits in the retained
  * one, and at the instant it arms both are full, so the mark changes job
  * without moving.
  */
-function Transport({ span, behind, onSeek }) {
+function Transport({ span, shape, behind, pace, onSeek, onPace }) {
   const trackRef = useRef(null);
   const dragging = useRef(false);
   const armed = span >= ARM_MS;
@@ -100,7 +114,13 @@ function Transport({ span, behind, onSeek }) {
   return (
     <div
       data-tour="transport"
-      className="pointer-events-auto absolute inset-x-3 bottom-3 flex items-center gap-2.5 sm:left-auto sm:right-3 sm:w-[260px]"
+      // Centred and long. It used to sit in the right-hand corner at 260px,
+      // which was the right size for a control that was mostly a promise: there
+      // was nothing behind it for the first minutes of a session and little to
+      // read on it after. It now opens on half an hour of weather and carries
+      // the shape of it, so it is given the width that makes that shape legible
+      // and the position of the thing you are meant to reach for.
+      className="pointer-events-auto absolute inset-x-3 bottom-3 flex items-center gap-3 sm:left-1/2 sm:right-auto sm:w-[min(720px,62vw)] sm:-translate-x-1/2"
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
@@ -109,7 +129,7 @@ function Transport({ span, behind, onSeek }) {
           type="button"
           onClick={() => onSeek(0)}
           title="Return to the live feed"
-          className={`shrink-0 text-2xs uppercase tracking-label transition-colors touch:-ml-1.5 touch:px-1.5 touch:py-3 ${
+          className={`shrink-0 text-xs uppercase tracking-label tabular-nums transition-colors touch:-ml-1.5 touch:px-1.5 touch:py-3 ${
             behind ? "text-dim hover:text-text active:text-text" : "text-text glow"
           }`}
         >
@@ -120,7 +140,7 @@ function Transport({ span, behind, onSeek }) {
         // thing to say, and how many seconds until a control you have not used
         // yet starts working is not something anyone is waiting on.
         <span
-          className="shrink-0 text-2xs uppercase tracking-label text-dim"
+          className="shrink-0 text-xs uppercase tracking-label text-dim"
           title="The last twelve minutes, playable once there is enough behind you to rewind into"
         >
           rewind
@@ -133,8 +153,31 @@ function Transport({ span, behind, onSeek }) {
           picked up in, not anything drawn. */}
       <div
         {...handles}
-        className={`group relative h-6 flex-1 touch-none touch:h-11 ${armed ? "cursor-ew-resize" : ""}`}
+        className={`group relative h-9 flex-1 touch-none touch:h-12 ${armed ? "cursor-ew-resize" : ""}`}
       >
+        {/* The window, as a shape. One weight throughout, and that is the
+            correction rather than the shortcut: carrying the played part
+            brighter, as the hairline below does, broke the histogram into two
+            blocks at the mark and read as the same curve drawn twice at two
+            exposures. Position is the line's job and the mark's. This is a
+            reading, and a reading does not change because you have watched
+            part of it. Hidden from a screen reader, which is given the same
+            window as a position in seconds. */}
+        {armed && shape.length > 0 && (
+          <span className="absolute inset-x-0 bottom-1/2 flex h-4 items-end gap-px" aria-hidden="true">
+            {shape.map((height, index) => (
+              <span
+                key={index}
+                className="flex-1 bg-line"
+                // A minimum on anything at all, because a slice with strikes in
+                // it and a slice with none are different readings and a
+                // hundredth of the peak would draw as neither.
+                style={{ height: height > 0 ? `${Math.max(height * 100, 10)}%` : 0 }}
+              />
+            ))}
+          </span>
+        )}
+
         {/* Hairline, with the played part carried at reading weight. The hit
             area is the full height above; the mark is only what you see. */}
         <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-line" />
@@ -143,10 +186,27 @@ function Transport({ span, behind, onSeek }) {
           style={{ width: across }}
         />
         <span
-          className={`absolute top-1/2 h-2.5 w-px -translate-y-1/2 ${behind ? "bg-text glow" : "bg-dim"}`}
+          className={`absolute top-1/2 h-5 w-px -translate-y-1/2 ${behind ? "bg-text glow" : "bg-dim"}`}
           style={{ left: across }}
         />
       </div>
+
+      {/* Only once the clock is down. Live, there is no speed to set: the world
+          runs at one and the control would be a switch with nothing on the
+          other side of it. Cycled rather than laid out as three, because three
+          buttons is most of a 260px strip and this is a switch with three
+          positions. */}
+      {armed && behind > 0 && (
+        <button
+          type="button"
+          onClick={() => onPace(PACES[(PACES.indexOf(pace) + 1) % PACES.length])}
+          title="How fast the replay runs: life size, eight times, thirty times"
+          aria-label={`Replay speed, ${pace} times life size. Click to change.`}
+          className="shrink-0 text-xs uppercase tracking-label tabular-nums text-dim transition-colors hover:text-text active:text-text touch:-mr-1.5 touch:px-1.5 touch:py-3"
+        >
+          ×{pace}
+        </button>
+      )}
     </div>
   );
 }
