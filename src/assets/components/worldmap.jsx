@@ -3877,7 +3877,16 @@ const WorldMap = ({
       //
       // Under the strike pass and over everything else, at a weight where a
       // single thread is barely there and the sheaf is what you see.
-      if (settings.stations) {
+      //
+      // Live only, on the same ground as the bolts: a thread is thrown by an
+      // arrival, and the arrivals still landing while the clock is set down
+      // belong to a present the map is not drawing. Left running, the sheaves
+      // went on being thrown at the positions of strikes that were not there,
+      // which read as the network having lost track of the weather rather than
+      // as two clocks being shown at once. The strikes on a rewound map cannot
+      // carry threads of their own: which detectors placed one is a fact about
+      // that second, read as the strike goes past and kept only as a count.
+      if (settings.stations && !replayRef.current) {
         const network = stations();
         // Half the world in screen pixels: a thread wider than this is a
         // detector on the far side of the date line, and the line to it would

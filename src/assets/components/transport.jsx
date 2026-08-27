@@ -163,7 +163,7 @@ function Transport({ from, roll, shape, at: instant, pace, onSeek, onPace }) {
           type="button"
           onClick={() => onSeek(0)}
           title="Return to the live feed"
-          className={`shrink-0 text-xs uppercase tracking-label tabular-nums transition-colors touch:-ml-1.5 touch:px-1.5 touch:py-3 ${
+          className={`w-16 shrink-0 text-left text-xs uppercase tracking-label tabular-nums transition-colors touch:-ml-1.5 touch:px-1.5 touch:py-3 ${
             behind ? "text-dim hover:text-text active:text-text" : "text-text glow"
           }`}
         >
@@ -174,7 +174,7 @@ function Transport({ from, roll, shape, at: instant, pace, onSeek, onPace }) {
         // thing to say, and how many seconds until a control you have not used
         // yet starts working is not something anyone is waiting on.
         <span
-          className="shrink-0 text-xs uppercase tracking-label text-dim"
+          className="w-16 shrink-0 text-left text-xs uppercase tracking-label text-dim"
           title="The last twelve minutes, playable once there is enough behind you to rewind into"
         >
           rewind
@@ -231,22 +231,31 @@ function Transport({ from, roll, shape, at: instant, pace, onSeek, onPace }) {
         />
       </div>
 
-      {/* Only once the clock is down. Live, there is no speed to set: the world
-          runs at one and the control would be a switch with nothing on the
-          other side of it. Cycled rather than laid out as three, because three
-          buttons is most of a 260px strip and this is a switch with three
-          positions. */}
-      {armed && behind > 0 && (
-        <button
-          type="button"
-          onClick={() => onPace(PACES[(PACES.indexOf(pace) + 1) % PACES.length])}
-          title="How fast the replay runs: life size, eight times, thirty times"
-          aria-label={`Replay speed, ${pace} times life size. Click to change.`}
-          className="shrink-0 text-xs uppercase tracking-label tabular-nums text-dim transition-colors hover:text-text active:text-text touch:-mr-1.5 touch:px-1.5 touch:py-3"
-        >
-          ×{pace}
-        </button>
-      )}
+      {/* Shown only once the clock is down, and its width held in reserve
+          before then. Live, there is no speed to set: the world runs at one and
+          the control would be a switch with nothing on the other side of it.
+          But a control that comes and goes takes the track's width with it, and
+          near the live end, where a click can land either side of the
+          threshold, that made the whole strip and everything drawn on it jump
+          sideways every time it crossed. So it holds its place while it has
+          nothing to say. The label at the other end is fixed for the same
+          reason: "live" and "−12:40" are not the same number of characters.
+
+          Cycled rather than laid out as three, because this is a switch with
+          three positions and three buttons would be most of the strip. */}
+      <button
+        type="button"
+        onClick={() => onPace(PACES[(PACES.indexOf(pace) + 1) % PACES.length])}
+        title="How fast the replay runs: life size, eight times, thirty times"
+        aria-label={`Replay speed, ${pace} times life size. Click to change.`}
+        aria-hidden={armed && behind > 0 ? undefined : true}
+        tabIndex={armed && behind > 0 ? undefined : -1}
+        className={`w-10 shrink-0 text-right text-xs uppercase tracking-label tabular-nums transition-colors touch:-mr-1.5 touch:px-1.5 touch:py-3 ${
+          armed && behind > 0 ? "text-dim hover:text-text active:text-text" : "invisible"
+        }`}
+      >
+        ×{pace}
+      </button>
     </div>
   );
 }
