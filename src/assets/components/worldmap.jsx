@@ -235,6 +235,7 @@ const LINK_MS = 900;
 const LINK_ALPHA = 0.16;
 
 const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
+const RESIZE_SETTLE_MS = 120; // quiet time before a resize is acted on
 // The same wait again, on top of the settle that produced the view: the land
 // matrix costs this page some of its own milliseconds, the cloud field costs
 // somebody else a request, so it wants one more beat of proof that the map has
@@ -301,15 +302,37 @@ function coord(value, axis) {
 
 function useElementSize(ref) {
   const [size, setSize] = useState({ width: 0, height: 0 });
+  // The last size handed out, so the observer can compare without the effect
+  // depending on it and tearing itself down on every resize.
+  const held = useRef(size);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Coalesced, because the fold between map and panel is dragged by a finger:
+    // a size per frame is every layer on the tube torn down and rebuilt per
+    // frame, which on a phone is the whole canvas budget spent in a second and
+    // a tab the browser kills rather than a frame it drops. The first
+    // measurement is not delayed - there is nothing on the tube yet to protect,
+    // and the boot readout is waiting on it.
+    let id = 0;
+    const apply = (next) => {
+      held.current = next;
+      setSize(next);
+    };
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect;
-      setSize({ width: Math.round(width), height: Math.round(height) });
+      const next = { width: Math.round(width), height: Math.round(height) };
+      const prev = held.current;
+      if (prev.width === next.width && prev.height === next.height) return;
+      clearTimeout(id);
+      if (!prev.width || !prev.height) apply(next);
+      else id = setTimeout(() => apply(next), RESIZE_SETTLE_MS);
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      clearTimeout(id);
+      observer.disconnect();
+    };
   }, [ref]);
   return size;
 }
@@ -1273,8 +1296,14 @@ const WorldMap = ({
         ? ""
         : `#${centre[0].toFixed(2)}/${centre[1].toFixed(2)}/${settled.k.toFixed(2)}`;
     if (hash === window.location.hash) return;
-    // The whole world is the default, and a default does not need saying.
-    window.history.replaceState(null, "", hash || window.location.pathname + window.location.search);
+    // On its own timer as well, because the tube's size is in this: dragging
+    // the fold moves the centre of the map without touching the view, and a
+    // history write per step of the drag is what the browser throttles.
+    const id = setTimeout(() => {
+      // The whole world is the default, and a default does not need saying.
+      window.history.replaceState(null, "", hash || window.location.pathname + window.location.search);
+    }, SETTLE_MS);
+    return () => clearTimeout(id);
   }, [layerProjection, settled, width, height]);
 
   // Chaining the outline is a one-off ~17ms, and left alone it is paid inside
