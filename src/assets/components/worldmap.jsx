@@ -94,6 +94,11 @@ const FRONT_LIFE_MS = (THUNDER_MAX_KM / SPEED_KMS) * 1000;
 // somebody picked.
 const FRONT_MIN_PX = 6;
 const FLASH_MS = 180; // the initial overbright moment
+// Ceilings on the two marks that assert a position, in pixels on the glass. The
+// arithmetic below them would reach 13 and 5.3 at the instant of arrival; these
+// take a third off that peak and leave everything after it alone.
+const HALO_MAX_PX = 9;
+const CORE_MAX_PX = 3.8;
 const GRATICULE_STEP = 30; // degrees between scope reference lines
 const BIN_SIZE = 1; // must match the binning in App.jsx
 const MIN_BURN = 3; // strikes a cell needs before it leaves a mark
@@ -3435,16 +3440,26 @@ const WorldMap = ({
         // The weight of the fix rides on the two marks that assert a position,
         // and not on the ping or the bolt: those announce that something
         // arrived, which is certain however poorly the network placed it.
+        //
+        // Both marks are capped rather than left to their arithmetic. Only the
+        // first fifth of a second reaches the ceiling, where the arrival flash
+        // and a full life are added to the resting size at once, and it is
+        // exactly the moment a strike the network heard from every side draws
+        // at full weight as well. Uncapped that lands as a blot the size of a
+        // storm cell, and on additive glass a cluster of them closes to a
+        // single white patch: the mark stops saying where and starts saying
+        // roughly over there. What is capped is the peak alone. A mark at rest,
+        // which is most of what is on the tube at any moment, is untouched.
         const flash = Math.max(0, 1 - age / FLASH_MS);
         ctx.globalAlpha = (life * 0.09 + flash * 0.12) * weight;
         ctx.beginPath();
-        ctx.arc(x, y, 3.5 + life * 4.5 + flash * 5, 0, Math.PI * 2);
+        ctx.arc(x, y, Math.min(HALO_MAX_PX, 3.5 + life * 4.5 + flash * 5), 0, Math.PI * 2);
         ctx.fill();
 
         // The core: overbright for a beat, then settling into the slow decay.
         ctx.globalAlpha = Math.min(1, life * life + flash * 0.7) * weight;
         ctx.beginPath();
-        ctx.arc(x, y, 1.1 + life * 2.2 + flash * 2, 0, Math.PI * 2);
+        ctx.arc(x, y, Math.min(CORE_MAX_PX, 1.1 + life * 2.2 + flash * 2), 0, Math.PI * 2);
         ctx.fill();
       };
 

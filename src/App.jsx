@@ -52,6 +52,14 @@ const SEED_STEP_MS = 20000;
 // cell has to have been watched for before it can say anything beyond being
 // there.
 const WARM_MS = 25 * 60 * 1000;
+// How long one slice of the seeding walk is allowed to hold the main thread.
+// Short enough to fit inside a frame with the render, so the map keeps drawing
+// while the hour behind it is being caught up on.
+const SEED_BUDGET_MS = 8;
+// Idle time if the browser offers it, the next turn of the loop if not. Either
+// way the point is the same: leave the frame that is being drawn alone.
+const idle = (fn) =>
+  typeof requestIdleCallback === "function" ? requestIdleCallback(fn) : setTimeout(fn, 0);
 // How long a scrub has to stop moving before the cells at that instant are
 // walked out. Long enough that a drag across the window pays for one instant
 // rather than for every twentieth of a second it passed through, short enough
@@ -328,6 +336,15 @@ function App() {
   // Held for the session, because it is a running measurement of the trip a
   // frame makes to get here and one strike says nothing about that.
   const struckAt = useRef(clock());
+  // True while the backfill's tracker walk is still being carried across idle
+  // frames. The clustering pass below stands down for as long as it is: both
+  // write the tracked cells, and a pass landing mid-walk would replace a
+  // half-built set of trails with a set that has none.
+  const seeding = useRef(false);
+  // Whether the clock is set down, where the passes that run on a timer can see
+  // it: they close over the interval they were started with and cannot read the
+  // state itself.
+  const rewound = useRef(false);
 
   // What the thunder needs to know, held where the socket callback can reach
   // it. That callback is deliberately stable, because it is what holds the
@@ -493,11 +510,36 @@ function App() {
       }
     }
 
-    // Storm cells, walked forward rather than detected once: a few tens of
-    // milliseconds, and the difference between rings and rings that know where
-    // they are going.
-    tracked.current = walk(strikes[0].at + STORM_WINDOW_MS, Date.now(), tracked.current);
-    setStorms(tracked.current);
+    // Storm cells, walked forward rather than detected once, which is the
+    // difference between rings and rings that know where they are going.
+    //
+    // Sliced, because it is the one expensive thing here and it lands at the
+    // worst possible moment. Measured on an hour of an ordinary sky: seeding
+    // the strikes above costs six milliseconds, and walking the tracker across
+    // them costs a hundred and thirty, which the browser reports as a hundred
+    // and fifty millisecond task, in the second the map is first being looked
+    // at. Nothing is faster about doing it in pieces; what changes is that no
+    // single piece is long enough to drop a frame.
+    //
+    // The cells are handed over after each slice rather than at the end, so
+    // what a reader sees is the map filling in over a few frames rather than
+    // arriving whole after a stall.
+    const to = Date.now();
+    let at = strikes[0].at + STORM_WINDOW_MS;
+    seeding.current = true;
+    const slice = () => {
+      const until = performance.now() + SEED_BUDGET_MS;
+      // At least one step, whatever the budget says: a slice that walks nothing
+      // is a loop that never ends.
+      do {
+        tracked.current = walk(at, at, tracked.current);
+        at += SEED_STEP_MS;
+      } while (at <= to && performance.now() < until);
+      setStorms(tracked.current);
+      if (at <= to) idle(slice);
+      else seeding.current = false;
+    };
+    idle(slice);
   }, [walk]);
 
   useEffect(() => {
@@ -622,9 +664,23 @@ function App() {
   // rather than with the twice-a-second flush.
   useEffect(() => {
     const id = setInterval(() => {
+      if (seeding.current) return;
       const now = Date.now();
       const cutoff = now - HISTORY_MS;
-      const stale = history.current.length && history.current[0].t < cutoff;
+      // Not while the clock is set down.
+      //
+      // The window slides forward whether or not anybody is watching the front
+      // of it, so a reader parked at the far end of the roll was having the
+      // strikes taken out from under the mark they were looking at: at life
+      // size the replayed clock keeps pace with the present, the gap holds, and
+      // the oldest end of the window is exactly where they are standing. What
+      // they saw was strikes vanishing off a map that was not moving.
+      //
+      // The count is still capped, because that is a memory ceiling rather than
+      // a window, and it drops the oldest, which is the same end. A rewind long
+      // enough to reach it is a rewind that has been held past an hour, and by
+      // then what it is standing on has aged out of the roll anyway.
+      const stale = rewound.current ? false : history.current.length && history.current[0].t < cutoff;
       const over = history.current.length > MAX_HISTORY;
       if (stale || over) {
         // Strikes are appended in time order, so the window is a suffix.
@@ -829,6 +885,10 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    rewound.current = replayAt !== null;
+  }, [replayAt]);
+
   const seek = useCallback((behindMs) => {
     replayStamp.current = performance.now();
     setReplayAt(behindMs <= REPLAY_LEAD_MS ? null : Date.now() - behindMs);
@@ -868,6 +928,7 @@ function App() {
     pending.current = [];
     history.current = [];
     tracked.current = [];
+    seeding.current = false;
     feedQueue.current = [];
     strikeQueue.current = [];
     binCounts.current.clear();
