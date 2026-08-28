@@ -1,6 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { indexFeatures, findFeature, distanceKm } from "../../lib/geo.js";
-import { landAt, LAND_RES } from "../../lib/land.js";
+import { distanceKm } from "../../lib/geo.js";
 import { readMedium } from "../../lib/theme.js";
 import { motion, forecast, surge } from "../../lib/storms.js";
 import { PERSISTENCE, DENSITY } from "../../lib/settings.js";
@@ -12,7 +11,6 @@ import {
   clampView,
   fitProjection,
   viewForBounds,
-  visibleBounds,
   zoomAbout,
   zoomed,
 } from "../../lib/view.js";
@@ -21,64 +19,13 @@ import { unfoldProjection, cosCentre } from "../../lib/unfold.js";
 import { globeProjection, globeRadius, pointed, rotationFor, turned } from "../../lib/globe.js";
 import { paintStars, STAR_STEP } from "../../lib/stars.js";
 import capitals from "../../lib/capitals.js";
-import frontiers from "../../lib/frontiers.js";
+import outlines from "../../lib/frontiers.js";
 import { fixQuality } from "../../lib/fix.js";
 import { stations } from "../../lib/stations.js";
 import { tick } from "../../lib/click.js";
 import { FIELDS, momentFor } from "../../lib/sources.js";
 import Transport from "./transport.jsx";
 import { Ticks } from "./crt.jsx";
-import GeoData from "../../lib/world.json";
-
-// Dot spacing at world zoom, in pixels on the glass.
-//
-// This was a distance once, 175km, and a distance is the wrong unit for it.
-// What it lands as on screen depends on how many pixels the world was fitted
-// into, so one constant drew a 6px array on a desktop tube and a 1.5px one on a
-// phone, where the world is a quarter as wide. At that spacing the marks sit
-// closer together than they are across: the matrix stops reading as an array of
-// sensors and becomes a grey fill with the coastlines guessed out of it.
-//
-// So it is stated as what it has to be true of, which is the glass, and the
-// distance is derived from it per view. That is the direction the dependency
-// runs anyway: the array is a property of the display, not of the earth.
-const GRID_GAP_PX = 5.5;
-// The gap above is right on a desktop tube and too open on a phone. Stating it
-// on the glass fixed the marks at a readable size everywhere, but a phone still
-// has a quarter of the width to spend them across, so the same spacing buys a
-// much coarser outline: the array thins out until the coastline is being
-// guessed from a handful of dots rather than drawn by them. Tightened toward
-// this at narrow widths, and left alone once there is room for the stated gap.
-const GRID_GAP_TIGHT_PX = 2.9;
-const GRID_TIGHT_W = 420; // at or under this, the tight gap
-// How much tighter the globe runs the matrix than the flat map does.
-//
-// The sphere is drawn about two and a half times larger than the flat world, so
-// closing the gap all the way would mean this much again. It cannot be: the
-// globe repaints the matrix on every frame of a turn where the flat map only
-// stretches a bitmap to pan, and the repaint is what has to fit in the frame.
-// Measured on a 1500×950 tube, that repaint costs 4.2ms at the map's own
-// spacing, 7.4ms here, 13ms at twice, and at the full two and a half 25ms,
-// which is half a frame over budget and visibly a drag that stutters.
-//
-// So this is the last value that leaves most of the frame for everything else
-// in it, and it is worth about a third more dots along each axis than the map
-// gets, which is the difference between a coastline drawn and one guessed at.
-const GLOBE_GRID = 1.4;
-const GRID_LOOSE_W = 900; // at or over this, the stated one
-
-function gridGap(width) {
-  const t = (width - GRID_TIGHT_W) / (GRID_LOOSE_W - GRID_TIGHT_W);
-  const eased = Math.min(1, Math.max(0, t));
-  return GRID_GAP_TIGHT_PX + (GRID_GAP_PX - GRID_GAP_TIGHT_PX) * eased;
-}
-// How fast that spacing tightens as you close in. Dividing by k outright holds
-// the gap constant, which is right over an ocean and wrong once the whole tube
-// is land: a continent fills in as a solid field. At k^0.75 the gap instead
-// opens as k^0.25, roughly 5px to 14px across the zoom range, so the array
-// coarsens as you approach and stays legible as an array.
-const GRID_FALLOFF = 0.75;
-const EARTH_RADIUS_KM = 6371;
 const RAD = Math.PI / 180;
 const RING_MS = 720; // the arrival ping, where the sound front is too small to read
 // How long the sound is followed for: as far as it can still be heard, which is
@@ -171,26 +118,11 @@ const WHEEL_K = 0.0016; // wheel delta to zoom exponent
 // around it, and no further: past this the world is a marble in a black tube
 // and the readings on it stop being readable.
 const GLOBE_MIN_K = 0.55;
-// And how large. The ceiling is the land matrix rather than taste: the globe is
-// drawn from a matrix built for the whole flat world, so its cost goes with the
-// square of this while the flat map only ever builds the box on screen. At
-// three the matrix holds 83,000 dots against the world view's 9,000. See the
-// `grid` memo, where `globeK` sets the spacing.
-//
-// Set where the turn still reads as one. Measured, turning, on a 1400×828 tube:
-// 60fps to about two, 50 at three, 41 at four, against 31 and 26 for those last
-// two before the near-side cull and the two precomputed arrays that feed it
-// (see `gridVectors`, `gridDaylit`, and `minCos` in `paintLand`). What remains
-// at the stop is d3 projecting the dots that survive the cull, which is a real
-// cost for a real number of dots rather than work being wasted; going further
-// would mean doing the orthographic transform here instead of asking d3 for it.
+// And how large. Taste rather than cost, now that the world is an outline: the
+// planet is 7,600 segments at every zoom, where the dot matrix it replaced grew
+// with the square of this and held 83,000 marks at the stop. Set where the
+// planet still reads as one object rather than a wall of coastline.
 const GLOBE_MAX_K = 3;
-// Frontiers are an orientation aid, not geography, and they are held to the
-// band where they are one. Below, the map is a planet and a political overlay
-// is noise on it. Above, the boundary data gives out: it runs 62 km between
-// vertices at the median, a third of the tube at maximum zoom, and a river
-// border drawn as straight chords is worse than no border at all.
-const FRONTIER_FADE = [1.8, 3.2, 12, 18]; // k: appearing, full, holding, gone
 
 // ── The unfold ─────────────────────────────────────────────────────────────
 //
@@ -291,16 +223,6 @@ function daylit(lon, lat, sun) {
     0
   );
 }
-const FRONTIER_STEP_PX = 5; // dot spacing along a border
-
-function frontierFade(k) {
-  const [appear, full, hold, gone] = FRONTIER_FADE;
-  if (k <= appear || k >= gone) return 0;
-  if (k < full) return (k - appear) / (full - appear);
-  if (k <= hold) return 1;
-  return (gone - k) / (gone - hold);
-}
-
 // The weakest fix still draws at this much of full strength. High on purpose:
 // the difference should be felt across a storm rather than read off a single
 // mark, and a strike is never so poorly located as to be worth hiding.
@@ -352,114 +274,6 @@ const REGIONS = [
   { label: "s.america", bounds: [-84, -56, -33, 13] },
   { label: "oceania", bounds: [110, -48, 180, -5] },
 ];
-
-// Indexed once for the whole session; the grid is rebuilt often, this is not.
-let landIndex = null;
-
-// Land is a dot matrix rather than filled coastline: it reads as a sensor
-// array, and it leaves the strikes as the only solid marks on screen. Built
-// for the visible extent only, at a spacing that follows the zoom, so the
-// matrix stays the same density on screen however far in you go, and the cost
-// stays bounded however far in that is.
-// A handful of built matrices, kept by the view that produced them. Zooming out
-// clamps to the same bounds every time, so the world view is asked for over and
-// over across a session and is the one worth never building twice. Held by
-// reference and never mutated; a few thousand pairs each.
-const gridCache = new Map();
-const GRID_CACHE_MAX = 4;
-
-function buildGrid(bounds, stepKm) {
-  // Rounded, because a settle lands on floating-point bounds that differ in the
-  // last place from the identical view a minute ago, and a key that precise
-  // would never hit.
-  const key = `${bounds.map((n) => n.toFixed(3)).join(",")}@${stepKm.toFixed(3)}`;
-  const hit = gridCache.get(key);
-  if (hit) return hit;
-
-  const land = buildMatrix(bounds, stepKm);
-  // Oldest out first: Map iterates in insertion order.
-  if (gridCache.size >= GRID_CACHE_MAX) gridCache.delete(gridCache.keys().next().value);
-  gridCache.set(key, land);
-  return land;
-}
-
-// Float noise in the fit, and nothing else. `visibleBounds` clamps to the limit
-// with `Math.min`, so a box that reaches it lands within 3e-14° of it and never
-// past it; a tenth of a millimetre of tolerance separates that from any view a
-// reader could actually be at.
-const AT_LIMIT = 1e-9;
-
-/**
- * The same box, carried to the poles when it already reaches Mercator's limit.
- *
- * `LAT_LIMIT` is where the *flat* map stops, and `visibleBounds` clamps to it
- * because past it Mercator runs to infinity. The globe has no such edge: it is
- * a sphere, it draws the pole like any other point, and the land mask has had
- * the ground all along. So the caps were missing for no better reason than that
- * the matrix is built from a box the flat map defined, which cost the north of
- * Greenland and Ellesmere, and cost most of Antarctica, whose rows carry more
- * land than any row at the limit does.
- *
- * Conditioned on the box rather than on `spinning`, which is the version that
- * was tried first and is wrong in both directions. Zoomed into a city the
- * bounds are a degree across, and opening those to the poles would build the
- * whole planet to draw a suburb, so it cannot be unconditional. But keyed on
- * the mode, the caps appear and vanish on the first frame of every crossing:
- * the swap and the boot unfold both draw a sphere while `spinning` still says
- * otherwise, and the world would pop its poles on and off mid-move. The view
- * reaching the limit is the state every crossing actually runs in, and it is
- * the honest test either way: the pole is in frame, so build it.
- *
- * On the flat map at world zoom this does build dots that are then discarded:
- * they project past the top and bottom of the tube and `mark` culls them, as it
- * culls everything off-canvas. It is 4% more of the matrix by the cosine, and
- * only the land part of that, which is the price of the seam not existing.
- */
-function toThePoles([west, south, east, north]) {
-  return [
-    west,
-    south <= -LAT_LIMIT + AT_LIMIT ? -90 : south,
-    east,
-    north >= LAT_LIMIT - AT_LIMIT ? 90 : north,
-  ];
-}
-
-// Where the baked mask stops being the better answer.
-//
-// A mask cell is a quarter degree, 28 km at the equator. While the matrix is
-// sampled more coarsely than that, every dot falls in its own cell and the
-// table is simply the polygon answer with the work already done: measured over
-// the views this map sits at, the two matrices differ by at most 0.10% of their
-// dots. Sampled finer, several dots share a cell and the coastline quantises
-// into 28 km blocks, which is a visible fault rather than a saving.
-//
-// That handover lands where it should. The grid is built for the visible extent
-// only, so the far side of it, zoomed in past roughly k=10, is the end where
-// the polygons were never expensive: a city view asks 144 questions and takes
-// 0.2ms, against 21,333 and 33ms for the world.
-const MASK_MIN_DEG = LAND_RES;
-
-function buildMatrix([west, south, east, north], stepKm) {
-  const kmToDeg = (stepKm / (2 * Math.PI * EARTH_RADIUS_KM)) * 360;
-
-  // Latitude is the axis that steps at the stated gap; longitude only ever
-  // opens out from it by 1/cos, so this is the finer of the two and the one
-  // the handover has to be decided on.
-  const masked = kmToDeg >= MASK_MIN_DEG;
-  if (!masked) landIndex = landIndex || indexFeatures(GeoData.features);
-
-  const land = [];
-  for (let lat = south; lat <= north; lat += kmToDeg) {
-    const cosLat = Math.abs(Math.cos(lat * RAD));
-    const step = cosLat > 1e-6 ? kmToDeg / cosLat : 360;
-    for (let lon = west; lon <= east; lon += step) {
-      // Ocean points were previously drawn black on black; only land is kept.
-      const land_ = masked ? landAt(lon, lat) : findFeature(landIndex, lon, lat);
-      if (land_) land.push([lon, lat]);
-    }
-  }
-  return land;
-}
 
 // A jagged descent onto the strike point, tightening as it nears the ground.
 // Held as offsets from the strike, so the bolt survives the map moving under
@@ -550,7 +364,7 @@ function scaleCanvas(canvas, width, height) {
 }
 
 /**
- * Two layers over a land grid:
+ * Two layers over the world outline:
  *   history: every cell that has ever fired, dim, cumulative (the burn-in)
  *   live:    strikes from the last few seconds, white, decaying (the beam)
  *
@@ -600,12 +414,12 @@ function Cycle({ label, value, options, onChange, title }) {
  * and two painters drift apart in a week.
  *
  * `sphere` is everything the globe needs and the flat map has no use for: which
- * face of the planet a dot is on, and how much of the map's own treatment has
- * arrived yet. Absent, this is exactly the layer it has always been.
+ * face of the planet a vertex is on, and how much of the map's own treatment
+ * has arrived yet. Absent, this is exactly the layer it has always been.
  */
 function paintLand(
   ctx,
-  { projection, grid, vectors, lit: litFlags, palette, graticule, daylight, borders, theme, sunAt, width, height, frontierK, sphere }
+  { projection, palette, graticule, daylight, borders, theme, sunAt, width, height, sphere }
 ) {
   // Which side of the terminator gets shaded is a property of the medium,
   // not a colour choice. On a tube the lit hemisphere is lit: light is
@@ -622,13 +436,12 @@ function paintLand(
   // wash is still fully inverted, and closing it against the meridian actually
   // at the edge only moves the failure around.
   //
-  // So the globe does not attempt it. Night is carried by the dots for the
+  // So the globe does not attempt it. Night is carried by the outline for the
   // whole unfold and the wash begins at the flat map, where it has always
-  // worked. What that costs is night over open water, which has no dots to
+  // worked. What that costs is night over open water, which has no coast to
   // carry it: on the globe the terminator is a boundary in the brightness of
-  // the land, and the sea keeps its own counsel until the map arrives.
+  // the line, and the sea keeps its own counsel until the map arrives.
   const wash = daylight && !sphere ? 1 : 0;
-  const shade = sphere ? sphere.shade : 0;
 
   if (wash > 0) {
     const { points, nightEdge } = terminator(new Date(sunAt), LAT_LIMIT);
@@ -714,76 +527,96 @@ function paintLand(
     ctx.stroke();
   }
 
-  // A 1.8px mark at a fractional coordinate is antialiased across three
-  // device pixels, and a dot spread that thin loses most of the contrast the
-  // token was given. Snapped to the device grid instead, every dot lands at
-  // full weight, worth more here than any further lift of the colour.
+  // The outline is stroked in device pixels, one of them wide: the thinnest
+  // line the glass can draw, and on a retina tube half of a layout pixel. Asked
+  // for in layout pixels instead it would be rounded up to two rows and drawn
+  // twice as heavy. Mitred and uncapped, with nothing smoothed anywhere: the
+  // data is a polyline and it is drawn as one, corners and all.
   const dpr = density();
-  const dot = Math.max(2, Math.round(1.8 * dpr));
   const deviceW = width * dpr;
-  const deviceH = height * dpr;
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.lineWidth = 1;
+  ctx.lineJoin = "miter";
+  ctx.lineCap = "butt";
+  ctx.miterLimit = 3;
 
-  // Where a dot stops being on the map. The canvas is the answer on the globe:
-  // a sphere has no edge, and the poles are drawn like any other point. The
-  // flat map does have one, since Mercator stops at `LAT_LIMIT`, and the matrix
-  // is built past it, to the poles, so that the globe has its caps. Culled
-  // against the canvas alone those rows land in the band between the edge of
-  // the world and the edge of the tube: a couple of pixels of the fit's padding
-  // on a desktop, where the world nearly fills the height, and most of the
-  // screen on a phone, where a tall viewport fits the world by its width and
-  // leaves deep empty bands above and below it. That is where the dots were
-  // escaping to.
-  let left = -dot;
-  let top = -dot;
-  let right = deviceW + dot;
-  let bottom = deviceH + dot;
+  // Where the world stops. The globe has no edge: it is a sphere, and the
+  // projection has already refused the far side of it. The flat map does have
+  // one, since Mercator runs to infinity at the poles and the boundary data
+  // goes all the way there, so without this the last run of Antarctic coast
+  // before the limit reaches for a point a thousand tubes below the screen.
   if (!sphere) {
     const [westX] = projection([-180, 0]);
     const [eastX] = projection([180, 0]);
     const [, northY] = projection([0, LAT_LIMIT]);
     const [, southY] = projection([0, -LAT_LIMIT]);
-    left = Math.max(left, westX * dpr);
-    right = Math.min(right, eastX * dpr);
-    top = Math.max(top, northY * dpr);
-    bottom = Math.min(bottom, southY * dpr);
+    ctx.beginPath();
+    ctx.rect(westX * dpr, northY * dpr, (eastX - westX) * dpr, (southY - northY) * dpr);
+    ctx.clip();
   }
 
-  const mark = (x, y) => {
-    if (x < left || y < top || x > right || y > bottom) return;
-    ctx.fillRect(Math.round(x - dot / 2), Math.round(y - dot / 2), dot, dot);
+  // The globe at rest has no far side to draw. The projection refuses those
+  // points and `back` is zero, so the two far passes would be laid down at no
+  // weight at all. Sorted out of the work rather than out of the picture: half
+  // the planet is behind the planet, and asking each of those vertices whether
+  // it is also in daylight is half the trigonometry in a turn. The unfold is
+  // the caller that does want them, and it says so with a `back` above zero.
+  const hidden = sphere ? sphere.back <= 0 : false;
+  // A vertex on the near side has already been asked which side it is on, and
+  // the globe's own projection asks again before it will answer, since it is
+  // what culls the far side. Where the answer is known, the cull can be
+  // skipped and the sphere addressed directly.
+  const put = hidden && projection.plain ? projection.plain : projection;
+
+  // One walk over the lines, laying each segment into the path its first vertex
+  // belongs to, so a set of classes costs one pass rather than one each. Two
+  // things break a run: a point the projection refuses, and a segment that
+  // leaps the whole tube, which is the projection wrapping at the date line
+  // rather than a coast. `classOf` returning null drops the vertex outright.
+  const lay = (lines, into, classOf) => {
+    const pen = new Array(into.length).fill(null);
+    for (const line of lines) {
+      let previous = null;
+      for (const point of line) {
+        const cls = classOf(point);
+        const xy = cls === null ? null : put(point);
+        if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) {
+          previous = null;
+          continue;
+        }
+        const x = xy[0] * dpr;
+        const y = xy[1] * dpr;
+        if (previous && Math.abs(x - previous[0]) <= deviceW) {
+          const path = into[previous[2]];
+          const at = pen[previous[2]];
+          // The pen is already here whenever the last segment laid into this
+          // path ended where this one starts, which is the common case: a run
+          // of a hundred vertices is one moveTo and ninety-nine lines.
+          if (!at || at[0] !== previous[0] || at[1] !== previous[1]) {
+            path.moveTo(previous[0], previous[1]);
+          }
+          path.lineTo(x, y);
+          pen[previous[2]] = [x, y];
+        }
+        previous = [x, y, cls];
+      }
+    }
   };
 
-  ctx.fillStyle = palette.land;
-  if (!sphere) {
-    for (const point of grid) {
-      const xy = projection(point);
-      if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
-      mark(xy[0] * dpr, xy[1] * dpr);
-    }
-  } else {
-    // Sorted into passes rather than shaded a dot at a time: an alpha written
-    // per dot is four thousand state changes a frame, and the answer only ever
-    // takes four values.
+  let classOf = () => 0;
+  let passes = 1;
+  let weight = () => 1;
+  if (sphere) {
     const sun = subsolar(new Date(sunAt));
-    // The globe at rest has no far side to draw. The projection refuses those
-    // points and `back` is zero, so both of the far passes would be laid down
-    // at no weight at all. Sorted out of the work rather than out of the
-    // picture: half the planet is behind the planet, and asking whether each
-    // of those dots is also in daylight is half the trigonometry in a turn.
-    // The unfold is the caller that does want them, and it says so with a
-    // `back` above zero.
-    const hidden = sphere.back <= 0;
-    // And how much of that near side the glass can actually hold.
+    // How much of the near side the glass can actually hold.
     //
-    // A dot at angular distance θ from the middle of the disk lands `r·sinθ`
+    // A vertex at angular distance θ from the middle of the disk lands `r·sinθ`
     // from its centre, so nothing further out than the furthest corner of the
     // canvas can be seen. While the planet is smaller than the tube that is the
-    // whole hemisphere and this is the horizon, exactly as before; zoomed in it
-    // closes down, and at the far stop it throws away most of the world before
-    // asking any of it about daylight. The cull has to be the same shape as the
-    // one the projection makes, or dots go missing at the limb.
+    // whole hemisphere and this is the horizon; zoomed in it closes down. The
+    // cull has to be the same shape as the one the projection makes, or the
+    // coast goes missing at the limb.
     const corner = Math.max(
       Math.hypot(sphere.x, sphere.y),
       Math.hypot(width - sphere.x, sphere.y),
@@ -791,96 +624,42 @@ function paintLand(
       Math.hypot(width - sphere.x, height - sphere.y)
     );
     const minCos = hidden && sphere.r > corner ? Math.sqrt(1 - (corner / sphere.r) ** 2) : 0;
-    // A dot on the near side has already been asked which side it is on, and
-    // the globe's own projection asks again before it will answer, since it is
-    // what culls the far side. Where the answer is known, the cull can be
-    // skipped and the sphere addressed directly.
-    const put = hidden && projection.plain ? projection.plain : projection;
-    const passes = [[], [], [], []]; // near/far × day/night
-    // Where the planet is pointed, as the unit vector the dots are held as.
-    // Rotation is applied as [-centreLon, -centreLat], so the centre is its
-    // negative.
-    const cLon = -sphere.rotate[0] * RAD;
-    const cLat = -sphere.rotate[1] * RAD;
-    const cx = Math.cos(cLat) * Math.cos(cLon);
-    const cy = Math.cos(cLat) * Math.sin(cLon);
-    const cz = Math.sin(cLat);
-    for (let i = 0; i < grid.length; i++) {
-      const cos = vectors
-        ? vectors[i * 3] * cx + vectors[i * 3 + 1] * cy + vectors[i * 3 + 2] * cz
-        : cosCentre(grid[i][0], grid[i][1], sphere.rotate);
-      if (hidden && cos <= minCos) continue;
-      const point = grid[i];
-      const night = (litFlags ? litFlags[i] : daylit(point[0], point[1], sun)) ? 0 : 1;
-      passes[(cos > 0 ? 0 : 2) + night].push(point);
-    }
-    // A dot can only be taken away from, never added to, being already the
-    // full weight of its token, so which half of the world gets faded is a
+    // A line can only be taken away from, never added to, being already the
+    // full weight of its token, so which half of the world gives way is a
     // property of the medium, exactly as it is for the wash above and for the
-    // same reason. On a tube, fading a dot darkens it: night is the half that
-    // gives way. On paper, fading a dot lightens it toward the sheet, so
-    // dimming night there would make night the brighter half; daylight is the
-    // half that gives way instead, and an unmarked sheet goes on meaning day.
-    const faded = 1 - 0.45 * shade;
+    // same reason. On a tube, fading a line darkens it: night gives way. On
+    // paper, fading it lightens it toward the sheet, so dimming night there
+    // would make night the brighter half; daylight gives way instead, and an
+    // unmarked sheet goes on meaning day.
+    const faded = 1 - 0.45 * sphere.shade;
     const gives = (pass) => (lit ? pass % 2 === 1 : pass % 2 === 0);
-    for (let pass = 0; pass < 4; pass++) {
-      if (!passes[pass].length) continue;
-      ctx.globalAlpha = (pass < 2 ? 1 : sphere.back) * (gives(pass) ? faded : 1);
-      for (const point of passes[pass]) {
-        const xy = put(point);
-        if (!xy || !isFinite(xy[0]) || !isFinite(xy[1])) continue;
-        mark(xy[0] * dpr, xy[1] * dpr);
-      }
-    }
-    ctx.globalAlpha = 1;
+    passes = 4; // near/far × day/night
+    classOf = (point) => {
+      const cos = cosCentre(point[0], point[1], sphere.rotate);
+      if (hidden && cos <= minCos) return null;
+      return (cos > 0 ? 0 : 2) + (daylit(point[0], point[1], sun) ? 0 : 1);
+    };
+    weight = (pass) => (pass < 2 ? 1 : sphere.back) * (gives(pass) ? faded : 1);
   }
 
-  // Frontiers: the same matrix, run tighter and a step brighter, so a border
-  // reads as a denser row of the dots already there rather than as a line
-  // laid over them. Land is the field; this is a mark on it.
-  const fade = borders ? frontierFade(frontierK) : 0;
-  if (fade > 0) {
-    ctx.fillStyle = palette.dim;
-    ctx.globalAlpha = fade;
-    const step = FRONTIER_STEP_PX * dpr;
-    for (const path of frontiers()) {
-      // Distance walked since the last dot, carried from one segment into the
-      // next: spacing that restarts at every vertex drops a dot on every
-      // vertex, and a border is mostly vertices.
-      let carry = 0;
-      let previous = null;
-      for (const point of path) {
-        const xy = projection(point);
-        const next = xy && isFinite(xy[0]) && isFinite(xy[1]) ? [xy[0] * dpr, xy[1] * dpr] : null;
-        if (!next) {
-          previous = null;
-          continue;
-        }
-        if (previous) {
-          const dx = next[0] - previous[0];
-          const dy = next[1] - previous[1];
-          const span = Math.hypot(dx, dy);
-          // A segment that leaps the whole tube is the projection wrapping at
-          // the date line, not a border.
-          if (span > deviceW) {
-            previous = next;
-            carry = 0;
-            continue;
-          }
-          let walked = step - carry;
-          if (walked > span) carry += span;
-          else {
-            for (; walked <= span; walked += step) {
-              mark(previous[0] + (dx * walked) / span, previous[1] + (dy * walked) / span);
-            }
-            carry = span - (walked - step);
-          }
-        }
-        previous = next;
-      }
+  const draw = (lines, colour) => {
+    const paths = Array.from({ length: passes }, () => new Path2D());
+    lay(lines, paths, classOf);
+    ctx.strokeStyle = colour;
+    for (let pass = 0; pass < passes; pass++) {
+      ctx.globalAlpha = weight(pass);
+      ctx.stroke(paths[pass]);
     }
     ctx.globalAlpha = 1;
-  }
+  };
+
+  // Coast first and at the land token's full weight, frontiers over it and a
+  // step down: the shape of the world is the map, and the politics on it are a
+  // reading aid. Drawn from the shared edges rather than from country rings, so
+  // a border is stroked once and a coast is never stroked twice.
+  const { coast, inner } = outlines();
+  draw(coast, palette.land);
+  if (borders) draw(inner, palette.dim);
 
   ctx.restore();
 }
@@ -1458,16 +1237,15 @@ const WorldMap = ({
     window.history.replaceState(null, "", hash || window.location.pathname + window.location.search);
   }, [layerProjection, settled, width, height]);
 
-  // Chaining the frontiers is a one-off ~28ms, and left alone it is paid inside
-  // the first settle that draws them, which is to say while the map is being
-  // moved, the one moment a frame can be felt going missing. Paid up front
-  // instead, while the boot sequence is still running and nothing is animating.
+  // Chaining the outline is a one-off ~17ms, and left alone it is paid inside
+  // the first frame that draws it, which is the first frame of the unfold.
+  // Asked for here instead, at mount, before anything is animating.
   useEffect(() => {
     if (window.requestIdleCallback) {
-      const id = window.requestIdleCallback(() => frontiers());
+      const id = window.requestIdleCallback(() => outlines());
       return () => window.cancelIdleCallback(id);
     }
-    const id = setTimeout(frontiers, 400);
+    const id = setTimeout(outlines, 0);
     return () => clearTimeout(id);
   }, []);
 
@@ -1482,68 +1260,6 @@ const WorldMap = ({
     }, SETTLE_MS);
     return () => clearTimeout(id);
   }, [view]);
-
-  const grid = useMemo(() => {
-    if (!base || !layerProjection || !width || !height) return [];
-    // The gap asked for on the glass, converted to the distance that draws it.
-    // Mercator puts x = scale·λ with λ in radians, so a gap of one earth radius
-    // is a gap of `scale` pixels and the conversion is that ratio. `base` is
-    // the world at k = 1; the falloff below carries the zoom, exactly as it did
-    // when this was a fixed distance.
-    //
-    // The globe is drawn at a larger scale than the flat map, half a planet
-    // across the shorter side against a whole one across the tube, about two
-    // and a half times, so the same array lands that much more open on the
-    // sphere, and the coastline starts being guessed from too few marks.
-    //
-    // Not closed all the way, though, and this is the trade that decides it:
-    // the flat map does not repaint to pan, it stretches the bitmap it already
-    // has, while a rotation has no delta to be stretched through and the globe
-    // repaints every frame of a drag. Dots are therefore worth roughly six
-    // times more here than they are there, and matching the scale exactly costs
-    // the turn its frame rate. See GLOBE_GRID.
-    // The planet's own size is in here too. Pushed away it covers fewer pixels,
-    // so the same spacing in kilometres lands closer together on the glass,
-    // the array crowding into a smaller disk rather than staying the texture it
-    // was. Carried here, the gap on the glass is what stays fixed, which is
-    // what it is asked for in, and the marks that fall off the back of it are
-    // marks nobody could have resolved anyway.
-    const across = spinning ? GLOBE_GRID * globeK : 1;
-    const stepKm = (gridGap(width) / (base.scale() * across)) * EARTH_RADIUS_KM;
-    return buildGrid(
-      toThePoles(visibleBounds(layerProjection, width, height)),
-      stepKm / Math.pow(settled.k, GRID_FALLOFF)
-    );
-  }, [base, layerProjection, settled.k, spinning, globeK, width, height]);
-
-  /**
-   * The same dots as unit vectors on the sphere, three floats each.
-   *
-   * Which dots are on screen is the cosine of their angular distance from where
-   * the planet is pointed, and that is a dot product between two unit vectors,
-   * but only if the vectors already exist. Computed from lon/lat inside the
-   * frame it costs five trigonometric calls per dot per frame, which at the far
-   * zoom is three quarters of a million of them at sixty hertz, for an answer
-   * that is thrown away for most of the array.
-   *
-   * The dots do not move between settles and the viewer does, so this is built
-   * once with the matrix and read every frame. Only the globe wants it; the
-   * flat map has no such question and does not pay for it.
-   */
-  const gridVectors = useMemo(() => {
-    if (!spinning) return null;
-    const out = new Float64Array(grid.length * 3);
-    for (let i = 0; i < grid.length; i++) {
-      const lon = grid[i][0] * RAD;
-      const lat = grid[i][1] * RAD;
-      const cosLat = Math.cos(lat);
-      out[i * 3] = cosLat * Math.cos(lon);
-      out[i * 3 + 1] = cosLat * Math.sin(lon);
-      out[i * 3 + 2] = Math.sin(lat);
-    }
-    return out;
-  }, [grid, spinning]);
-
 
   // Its own slow clock, like the one the footer keeps: the sun moving is not a
   // reason to re-render anything but the layer it shades.
@@ -1561,28 +1277,6 @@ const WorldMap = ({
   // Read by the render loop the same way the live projection is, rather than
   // closed over: the loop must not be torn down and rebuilt to learn that the
   // sun moved a minute.
-  /**
-   * Which of those dots are in daylight, one byte each.
-   *
-   * The same argument as the vectors above, against a slower clock. Neither the
-   * dots nor the sun move between frames, since the terminator is on `sunAt`,
-   * which ticks once a minute, so asking each dot where the sun is, sixty times
-   * a second, is the same answer recomputed four thousand times over. It was a
-   * sixth of a turn's frame time at the far zoom.
-   */
-  const gridDaylit = useMemo(() => {
-    if (!spinning) return null;
-    const sun = subsolar(new Date(sunAt));
-    const out = new Uint8Array(grid.length);
-    for (let i = 0; i < grid.length; i++) {
-      out[i] = daylit(grid[i][0], grid[i][1], sun) ? 1 : 0;
-    }
-    return out;
-  }, [grid, spinning, sunAt]);
-
-  const gridRef = useRef(grid);
-  const gridVectorsRef = useRef(gridVectors);
-  const gridDaylitRef = useRef(gridDaylit);
   const sunRef = useRef(sunAt);
   const settingsRef = useRef(settings);
   const themeRef = useRef(theme);
@@ -1593,9 +1287,6 @@ const WorldMap = ({
   // picture.
   const binsRef = useRef(bins);
   const burnFullRef = useRef(burnFull);
-  gridRef.current = grid;
-  gridVectorsRef.current = gridVectors;
-  gridDaylitRef.current = gridDaylit;
   sunRef.current = sunAt;
   settingsRef.current = settings;
   themeRef.current = theme;
@@ -2202,7 +1893,6 @@ const WorldMap = ({
 
     paintLand(ctx, {
       projection: layerProjection,
-      grid,
       palette,
       graticule: settings.graticule,
       daylight: settings.daylight,
@@ -2211,7 +1901,6 @@ const WorldMap = ({
       sunAt,
       width,
       height,
-      frontierK: settled.k,
       sphere: null,
     });
 
@@ -2222,7 +1911,6 @@ const WorldMap = ({
     landSpare.current = landLayer.current?.canvas ?? null;
     landLayer.current = { canvas, view: settled };
   }, [
-    grid,
     layerProjection,
     palette,
     settings.graticule,
@@ -2651,9 +2339,6 @@ const WorldMap = ({
       drawSky(morphSphere(rotate), 1 - ramp(t, 0, FACING), now);
       paintLand(ctx, {
         projection: unfoldProjection(t, width, height, rotate),
-        grid: gridRef.current,
-        vectors: gridVectorsRef.current,
-        lit: gridDaylitRef.current,
         palette,
         graticule: settingsRef.current.graticule,
         daylight: settingsRef.current.daylight,
@@ -2662,9 +2347,6 @@ const WorldMap = ({
         sunAt: sunRef.current,
         width,
         height,
-        // The world is at k = 1 throughout, where borders have not appeared
-        // yet.
-        frontierK: 1,
         sphere: {
           rotate: [rotate[0] * (1 - t), rotate[1] * (1 - t)],
           back: ramp(t, 0, FACING),
@@ -2737,8 +2419,10 @@ const WorldMap = ({
       const config = settingsRef.current;
       // Where the planet is pointed. Every part of a signature below is
       // something that changes what the bitmap holds; the rotation is the one
-      // that changes on every frame of a drag and on none at rest.
-      const { lon, lat } = sphere;
+      // that changes on every frame of a drag and on none at rest. The radius
+      // is the other: it is what zoom means on a sphere, and a bitmap drawn at
+      // one size is the wrong picture at any other.
+      const { lon, lat, r } = sphere;
 
       drawSky(sphere, 1, now);
 
@@ -2759,15 +2443,13 @@ const WorldMap = ({
 
       globeBitmap(
         "land",
-        // The matrix itself is the first term, and by identity, exactly as the
-        // burn-in is below: it is the thing being drawn, and it is rebuilt on a
-        // settle of its own, a resize or a change of mode, which the rotation
-        // has nothing to say about. Left out, a planet nobody happens to be
-        // turning goes on showing a picture of a matrix that has been replaced.
+        // The outline itself is not a term: it is the same lines every frame of
+        // every session, taken from data that is bundled, so nothing about it
+        // can go stale between one turn and the next.
         [
-          gridRef.current,
           lon,
           lat,
+          r,
           sunRef.current,
           themeRef.current,
           palette,
@@ -2777,36 +2459,26 @@ const WorldMap = ({
         (context) =>
           paintLand(context, {
             projection: live,
-            grid: gridRef.current,
-            vectors: gridVectorsRef.current,
-            lit: gridDaylitRef.current,
             palette,
             graticule: config.graticule,
             daylight: config.daylight,
-            // Frontiers are held to a band of zoom the globe is below, exactly
-            // as the flat map at k = 1 is. Said here rather than left implied.
-            borders: false,
+            borders: config.frontiers,
             theme: themeRef.current,
             sunAt: sunRef.current,
             width,
             height,
-            frontierK: MIN_K,
             // The far side is already gone, the projection having refused it,
             // so there is nothing to fade it to. `shade` is full: on the globe
             // the terminator is a boundary in the brightness of the land, and
             // it is the only thing carrying it, since the night wash needs a
             // flat map to be closed against.
             sphere: { rotate: sphere.rotate, back: 0, shade: 1 },
-          }),
-        // An empty matrix is not a world with no land on it, it is a world that
-        // has not been built yet, unlike the burn-in below, where nothing to
-        // draw is a true answer about a quiet planet and worth keeping.
-        gridRef.current.length > 0
+          })
       );
 
       return globeBitmap(
         "history",
-        [lon, lat, binsRef.current, palette, config.bounds, config.capitals, burnFullRef.current],
+        [lon, lat, r, binsRef.current, palette, config.bounds, config.capitals, burnFullRef.current],
         (context) =>
           paintHistory(context, {
             projection: live,
@@ -2871,9 +2543,6 @@ const WorldMap = ({
 
       paintLand(ctx, {
         projection: morph,
-        grid: gridRef.current,
-        vectors: gridVectorsRef.current,
-        lit: gridDaylitRef.current,
         palette,
         graticule: settingsRef.current.graticule,
         daylight: settingsRef.current.daylight,
@@ -2882,7 +2551,6 @@ const WorldMap = ({
         sunAt: sunRef.current,
         width,
         height,
-        frontierK: MIN_K,
         sphere: {
           rotate: [rotate[0] * (1 - t), rotate[1] * (1 - t)],
           // Both read the same way whichever direction `t` is running: the far
@@ -3057,7 +2725,6 @@ const WorldMap = ({
         // is no field or no breathing and the hold stays exactly as it was.
         // Not conditioned on the medium: there is a sky on paper now too.
         sphere && !reduceMotion ? Math.floor(now / STAR_STEP) : null,
-        gridRef.current,
         binsRef.current,
         burnFullRef.current,
         stormsRef.current,

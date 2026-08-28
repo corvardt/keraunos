@@ -273,7 +273,12 @@ export default function Settings({
           value={settings.graticule}
           onChange={(v) => set("graticule", v)}
         />
-        <Toggle label="Frontiers" value={settings.frontiers} onChange={(v) => set("frontiers", v)} />
+        <Toggle
+          label="Frontiers"
+          hint="Interior borders. Off leaves the coastline alone."
+          value={settings.frontiers}
+          onChange={(v) => set("frontiers", v)}
+        />
         <Toggle label="Daylight" value={settings.daylight} onChange={(v) => set("daylight", v)} />
         <Toggle label="Capitals" value={settings.capitals} onChange={(v) => set("capitals", v)} />
         <Toggle
