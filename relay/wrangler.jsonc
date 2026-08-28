@@ -21,8 +21,10 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Feed"] }],
 
   "vars": {
-    // Who may hold the relay open. Empty answers anyone, which is what a local
-    // `wrangler dev` wants; set it before this is reachable from the internet.
+    // Who may hold the relay open. Empty refuses everyone, so that a wiped var
+    // or an unconfigured environment is a dead relay rather than an open one;
+    // a local `wrangler dev` that wants no list sets OPEN_RELAY=1 in
+    // `.dev.vars`.
     "ALLOWED_ORIGINS": "https://keraunos.corvardt.com,https://steropes.corvardt.com/"
   }
 }

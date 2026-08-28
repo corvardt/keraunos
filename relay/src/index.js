@@ -39,6 +39,13 @@ const MAX_RECONNECT_MS = 30000;
 // or not anybody is watching, this alarm is the only thing that notices.
 const KEEPALIVE_MS = 10 * 60 * 1000;
 
+// How long a link may say nothing before it is treated as dead rather than
+// quiet. A socket can stop delivering without ever closing: no `close`, no
+// `error`, just silence, and everything here that checks the link checks
+// whether it holds an object. The feed runs about eight strikes a second over
+// the whole planet, so two minutes of nothing is not a calm night.
+const SILENCE_MS = 2 * 60 * 1000;
+
 // What a visitor is handed on arrival: the hour the browser keeps, which is the
 // only figure that is not a judgement call. Half an hour was the answer while
 // the link was dropped for an empty room, because half an hour was the most a
@@ -82,6 +89,7 @@ export class Feed {
     this.node = null;
     this.turn = Math.floor(Math.random() * HOSTS.length);
     this.failures = 0;
+    this.heard = 0;
     this.history = [];
     this.since = 0;
     this.saved = 0;
@@ -121,6 +129,10 @@ export class Feed {
 
   /** Brings the single upstream link up, if it is not already. */
   async ensure() {
+    // Checked here rather than in the alarm, because this is what the
+    // once-a-minute wake calls and the alarm is ten minutes wide: a link that
+    // has gone silent is noticed in a minute either way.
+    if (this.up && Date.now() - this.heard > SILENCE_MS) this.drop();
     if (this.up) return true;
 
     const host = HOSTS[this.turn++ % HOSTS.length];
@@ -143,6 +155,8 @@ export class Feed {
     this.up = socket;
     this.node = host;
     this.failures = 0;
+    // A new link has not been silent, it has not spoken yet.
+    this.heard = Date.now();
     this.announce();
 
     // Passed on verbatim, and deliberately: the frames are compressed, the
@@ -151,6 +165,7 @@ export class Feed {
     // end anyway. The copy kept for the backfill is read rather than rewritten,
     // and what goes out to a live reader is still the frame that came in.
     socket.addEventListener("message", (event) => {
+      this.heard = Date.now();
       this.keep(event.data);
       this.broadcast(event.data);
     });
@@ -167,6 +182,25 @@ export class Feed {
 
     await this.state.storage.setAlarm(Date.now() + KEEPALIVE_MS);
     return true;
+  }
+
+  /**
+   * A link let go because it stopped talking rather than because it closed.
+   *
+   * Cleared here rather than waiting on the close event: the event may never
+   * arrive, which is the whole reason this exists, and `gone` already ignores a
+   * socket that is no longer the one being held, so a late one is harmless.
+   */
+  drop() {
+    const socket = this.up;
+    this.up = null;
+    this.node = null;
+    try {
+      socket.close(1000, "silent");
+    } catch {
+      /* already gone, which is the same answer */
+    }
+    this.announce();
   }
 
   /**
@@ -403,10 +437,12 @@ export default {
     const url = new URL(request.url);
     if (url.pathname !== "/feed") return new Response("not here", { status: 404 });
 
-    // Who may hold this open. Unset, it answers anyone, which is what a local
-    // `wrangler dev` wants and what a public deployment does not: this exists
-    // to keep one connection on a volunteer's server, and an open relay in
-    // front of it would hand that property back to whoever found the hostname.
+    // Who may hold this open. This exists to keep one connection on a
+    // volunteer's server, and an open relay in front of it would hand that
+    // property back to whoever found the hostname, so an unset list is read as
+    // a deployment that has not been configured rather than as permission. A
+    // local `wrangler dev` that wants the old behaviour says so, in one place
+    // that is hard to leave switched on by accident.
     const allowed = (env.ALLOWED_ORIGINS ?? "")
       .split(",")
       // A trailing slash is dropped rather than honoured. An `Origin` header is
@@ -416,6 +452,9 @@ export default {
       // typo in it that fails closed and says nothing.
       .map((origin) => origin.trim().replace(/\/+$/, ""))
       .filter(Boolean);
+    if (!allowed.length && env.OPEN_RELAY !== "1") {
+      return new Response("this relay has no origin list", { status: 503 });
+    }
     if (allowed.length) {
       const origin = request.headers.get("Origin");
       if (!origin || !allowed.includes(origin)) {
