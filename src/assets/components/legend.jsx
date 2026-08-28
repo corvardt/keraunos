@@ -507,9 +507,19 @@ export default function Legend({ onClose }) {
             <>
               <p>
                 Counted to the most distant station that helped place each strike, and split by
-                whether that path lay under a sunlit ionosphere or a dark one. Filled is daylight,
-                the line is darkness, drawn over each other because the reading is not either shape
-                but whether one sits further right than the other.
+                whether the middle of that path lay under a sunlit ionosphere or a dark one. Each
+                bar runs to the ninth strike in ten rather than the farthest of all, since the
+                farthest of all is one strike and one strike is not a propagation condition. The
+                tick inside a bar is the middle of the distribution, which is mostly a fact about
+                where the volunteers live: half the network is in Europe, and that sets how far a
+                typical strike has to carry before somebody hears it whatever the sky is doing.
+              </p>
+              <p>
+                Both bars are drawn on one scale, because the reading is not either length but the
+                difference between them. Neither is drawn until its own half has 200 strikes in it:
+                they fill on the weather&rsquo;s schedule rather than the clock&rsquo;s, so at an
+                hour when the world&rsquo;s lightning is all over the Americas the sunlit half is
+                ready long before the dark one.
               </p>
               <p>
                 Sunlight makes a lossy layer at 60 to 70 km that the sferic has to bounce off; after
@@ -521,7 +531,7 @@ export default function Legend({ onClose }) {
             </>
           }
         >
-          How far each strike was heard, by day and by night.
+          How far each strike was heard, by day and by night. Night should be the longer bar.
         </Entry>
         <Entry term="Nearest strike">
           How far away the closest strike of the last few minutes fell, once you have pressed{" "}

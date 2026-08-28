@@ -546,14 +546,22 @@ function App() {
    * instead is the state those strikes would have left behind, so they are
    * filed where they would have ended up, at the times they actually happened.
    *
-   * Four things are deliberately not seeded. The rate, the session count, the
-   * daily curve and the reach histogram are measurements of arrivals rather
-   * than of weather: the first three describe a feed nobody was listening to,
-   * and the last is built from station lists the backfill does not carry. They
-   * start empty and fill live, which is what they claim to be. The count in
-   * particular has to: "detected" is what this session has watched arrive, and
-   * a session that opens claiming twenty thousand is reporting the sky rather
-   * than itself.
+   * Three things are deliberately not seeded. The rate and the session count
+   * are measurements of arrivals rather than of weather, and describe a feed
+   * nobody was listening to; the count in particular has to start at nothing,
+   * because "detected" is what this session has watched arrive and a session
+   * that opens claiming twenty thousand is reporting the sky rather than
+   * itself. The reach histogram is built from station lists, and the backfill
+   * does not carry them.
+   *
+   * The daily curve is seeded, and used not to be, which was the wrong side of
+   * that line. It is filed under arrivals like the other two and it is not one:
+   * how hard the world was firing at twenty past two is true whether or not
+   * anybody had this tab open, and the reading it exists for is the planet's
+   * own daily cycle. Unseeded, that reading needed eight hours of an open tab
+   * to appear at all and the group was a heading over a wiggle. An hour is
+   * still not a day, but it is an hour of real weather on arrival, and the
+   * curve says how much of a day it has become.
    */
   const absorb = useCallback((caught) => {
     if (!caught.length) return;
@@ -570,6 +578,11 @@ function App() {
       // about a strike and could have carried both, but its clock is not this
       // one, and the flash's own time is the honest column to fill.
       history.current.push({ lon: strike.lon, lat: strike.lat, t: strike.at, at: strike.at, gap: null });
+      // Filed under the minute it actually happened in, which is what makes
+      // this weather rather than arrivals: the ring `day.js` keeps is addressed
+      // by absolute minute, so an hour of the past drops into the slots it
+      // belongs in with nothing special done to it.
+      day.current.record(1, strike.at);
       const lon = Math.floor(strike.lon / BIN_SIZE) * BIN_SIZE;
       const lat = Math.floor(strike.lat / BIN_SIZE) * BIN_SIZE;
       const key = `${lon},${lat}`;

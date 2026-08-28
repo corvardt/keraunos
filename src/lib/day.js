@@ -34,12 +34,19 @@ export function createDay() {
   // the length of a batch.
   const counts = new Int32Array(SPAN);
   const stamps = new Int32Array(SPAN).fill(-1);
-  // The first minute anything landed in. A session almost never begins on a
+  // The earliest minute anything landed in. A session almost never begins on a
   // minute boundary, so that minute holds only the part of itself that was
   // watched and reads low by the rest. That is the same defect as the minute in
   // progress, at the other end, and it has to go for the same reason. Left in,
   // every session opens on a ramp from nothing up to the true rate, which is a
   // picture of the tab being opened rather than of the weather.
+  //
+  // The earliest, not the first recorded, and the difference is the backfill:
+  // the relay's hour is filed after the session has already been running, so
+  // the minute that needs trimming arrives long after the one that would have
+  // claimed this. Taken as the first, it would trim a minute in the middle of
+  // the curve and leave the true edge drawn short, which is a hole where there
+  // was weather and a ramp where there was none.
   let first = null;
 
   // The reading is rebuilt only when the minute rolls over, and handed back by
@@ -59,7 +66,7 @@ export function createDay() {
         counts[slot] = 0;
       }
       counts[slot] += n;
-      if (first === null) first = minute;
+      if (first === null || minute < first) first = minute;
     },
 
     /**

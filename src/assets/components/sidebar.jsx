@@ -1,14 +1,10 @@
 import { memo, useEffect, useState } from "react";
-import { STEP_KM } from "../../lib/reach.js";
 
 const TRACE_W = 300;
 const TRACE_H = 34;
 // Taller than the 60s trace above it. That one is a heartbeat and is read as a
 // level; this one is a shape, and a day of weather has more in it to resolve.
 const DAY_H = 44;
-// Two distributions sharing an axis, so it needs the height the day trace needs
-// and not the height the gauge needs.
-const REACH_H = 40;
 
 /**
  * Whether the reader has a pointer that can hover at all.
@@ -209,13 +205,6 @@ function RateTrace({ samples }) {
   );
 }
 
-// One side of the reach reading, as a figure and a trailing gloss: the middle
-// of the distribution, and the tenth of it that carried furthest. Absent as a
-// dash rather than as a zero, because a half that has not filled yet has no
-// median, and a zero would be a claim that nothing was heard.
-const far = (side) => (side.median === null ? "—" : Math.round(side.median).toLocaleString("en-US"));
-const unit = (side) =>
-  side.tail === null ? "" : `km · ${(Math.round(side.tail / 100) / 10).toFixed(1)}k far`;
 
 // How long the session has been running, in the coarsest form that is still
 // true: minutes until there is an hour, hours after that. A day trace labelled
@@ -279,63 +268,101 @@ function DayTrace({ day }) {
 }
 
 /**
- * The two reach distributions, drawn over each other.
+ * The two reach readings, as two bars on one scale.
  *
- * Over each other rather than side by side, because the reading is not either
- * shape: it is whether one of them is further right than the other, and two
- * charts with their own axes is the one arrangement that makes that comparison
- * hard. Each is scaled to its own peak for the same reason: the question is
- * where the mass sits, and the two bins fill at whatever rate the weather
- * offers, so the taller of them is only a fact about the hour.
+ * This was a pair of histograms drawn over each other, and it was the hardest
+ * thing in the panel to read. The shapes were honest and almost nobody could
+ * get an answer out of them: two overlapping curves at 40px, one filled and one
+ * stroked, each scaled to its own peak, asking the eye to judge which had more
+ * mass further right. That is a comparison of areas, and an eye is bad at
+ * areas.
  *
- * Day is the filled shape and night is the line, which is the pairing the day
- * trace above already uses: the fill is context and the line is the thing being
- * read. Night gets the line because night is the interesting half.
+ * The question is only ever "does the sferic get further at night", and the eye
+ * is very good indeed at comparing two lengths that start at the same place. So
+ * the distributions are gone and what is left is the figure each of them was
+ * being read for.
+ *
+ * The bar runs to the ninetieth percentile, because that is where the waveguide
+ * shows: the median is mostly a fact about where the volunteers live, since
+ * half the network is in Europe, and that sets how far a typical strike has to
+ * carry before somebody hears it whatever the sky is doing. The median is kept
+ * as a tick inside the bar rather than dropped, so the middle and the far end
+ * are still both on screen and it is visible when they move apart.
+ *
+ * Both bars share one scale, which is the whole point: scaled to themselves
+ * they would always be the same length and the reading would be gone.
  */
-function ReachTrace({ reach }) {
-  // Drawn as far out as anything was actually heard, not as far as the bins go.
-  // Almost all of a session sits inside the first few thousand kilometres, and
-  // an axis running to half the planet would be mostly a picture of the empty
-  // part of it.
-  const { span } = reach;
-  if (span < 3) return null;
-
-  const shape = (counts, total) => {
-    if (!total) return null;
-    const peak = Math.max(...Array.from({ length: span }, (unused, i) => counts[i]));
-    if (!peak) return null;
-    const step = TRACE_W / (span - 1);
-    return Array.from({ length: span }, (unused, i) => [
-      i * step,
-      REACH_H - (counts[i] / peak) * (REACH_H - 2) - 1,
-    ]);
-  };
-
-  const path = (points) =>
-    points.map(([px, py], i) => `${i ? "L" : "M"}${px.toFixed(1)} ${py.toFixed(1)}`).join(" ");
-
-  const lit = shape(reach.day.counts, reach.day.n);
-  const dark = shape(reach.night.counts, reach.night.n);
+function ReachBars({ reach }) {
+  const sides = [
+    { key: "day", label: "Day", side: reach.day },
+    { key: "night", label: "Night", side: reach.night },
+  ];
+  // The furthest either half got, so the two are drawn against each other.
+  const full = Math.max(reach.day.tail ?? 0, reach.night.tail ?? 0);
+  if (!full) return null;
 
   return (
-    <svg
-      viewBox={`0 0 ${TRACE_W} ${REACH_H}`}
-      preserveAspectRatio="none"
-      className="h-[40px] w-full"
-      role="img"
-      aria-label={`How far strikes were heard, over paths in daylight against paths in darkness, out to ${Math.round((span * STEP_KM) / 1000)} thousand kilometres`}
-    >
-      {lit && <path d={`${path(lit)} L${TRACE_W} ${REACH_H} L0 ${REACH_H} Z`} className="fill-line" />}
-      {dark && (
-        <path
-          d={path(dark)}
-          className="stroke-text"
-          fill="none"
-          strokeWidth="1"
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
-    </svg>
+    <div className="mt-2 space-y-1.5">
+      {sides.map(({ key, label, side }) => (
+        <div key={key} className="flex items-center gap-2">
+          <span className="w-10 shrink-0 text-2xs uppercase tracking-label text-dim">{label}</span>
+          {/* A half that has not filled yet draws no bar at all. A short one
+              would be a claim that the sferic did not get far, where the truth
+              is that nothing has been counted. */}
+          <span className="relative h-2 flex-1 bg-line">
+            {side.tail !== null && (
+              <>
+                <span
+                  className="absolute inset-y-0 left-0 bg-land"
+                  style={{ width: `${(side.tail / full) * 100}%` }}
+                />
+                {/* The middle of the distribution, held inside its own bar. */}
+                <span
+                  className="absolute inset-y-0 w-px bg-text"
+                  style={{ left: `${(side.median / full) * 100}%` }}
+                />
+              </>
+            )}
+          </span>
+          <span className="w-16 shrink-0 text-right text-xs tabular-nums text-text">
+            {side.tail === null ? "\u2014" : `${Math.round(side.tail).toLocaleString("en-US")} km`}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The reading itself, in one line, where both halves are ready to give it.
+ *
+ * The bars say which is longer and this says by how much, which between them is
+ * the whole of what this section exists to report. Withheld rather than guessed
+ * at until both distributions have enough in them: they fill on the weather's
+ * schedule and it is ordinary for one to be ready an hour before the other.
+ */
+function ReachVerdict({ reach }) {
+  const { day, night } = reach;
+  if (day.tail === null || night.tail === null) {
+    return (
+      <p className="mt-1.5 text-xs text-dim">
+        &gt; {day.tail === null && night.tail === null ? "listening" : "waiting on the other half of the sky"}
+      </p>
+    );
+  }
+  const change = (night.tail - day.tail) / day.tail;
+  const percent = Math.abs(Math.round(change * 100));
+  // Under a twentieth is not a reading. The two distributions are day against
+  // night with the east-west asymmetry left in, and that is comparable in size
+  // to the effect being drawn, so a couple of percent either way is noise
+  // wearing a number.
+  if (percent < 5) {
+    return <p className="mt-1.5 text-xs text-dim">&gt; night and day reaching about the same</p>;
+  }
+  return (
+    <p className="mt-1.5 text-xs text-dim">
+      &gt; <span className="text-text glow">night {percent}% {change > 0 ? "further" : "shorter"}</span>
+    </p>
   );
 }
 
@@ -518,10 +545,10 @@ function Sidebar({
         {/* The session total belongs with the rate rather than with the curve
             it used to sit under. Both are counts of what this tab has heard,
             one over a minute and one over the whole session, and the reader
-            comparing them is doing the obvious thing. It moved because Session
-            now opens folded: the total was going with the fold, and the second
-            figure anybody looks for was reachable only by opening a group whose
-            heading says nothing about holding it. */}
+            comparing them is doing the obvious thing. It moved out of Session
+            because that group is a curve and this is not one, and because
+            Session can be switched off entirely, which would have taken the
+            session total with it. */}
         <Readout
           label="Detected"
           value={fmt(stats.total)}
@@ -529,12 +556,21 @@ function Sidebar({
         />
       </section>
 
-      {/* Since the tab was opened, as a shape. The curve is absent rather than
-          empty until there is one to draw, two minutes being the least it can
-          be and still be a line, so a fresh session shows the heading and its
-          fold and nothing else. That is the whole group now: the session total
-          used to sit here and has gone up to the rate, which is the figure it
-          is actually read against. */}
+      {/* Since the tab was opened, as a shape. The curve is the whole of this
+          group now: the session total used to sit under it and has gone up to
+          the rate, which is the figure it is actually read against.
+
+          Which leaves the group with exactly one thing to hold, so it goes when
+          that thing is switched off. Left standing it was a bordered heading
+          with a fold control that opened onto nothing, permanently, for anybody
+          who had turned the curve off in configuration.
+
+          The other empty case is kept: a session under two minutes old has no
+          line yet, two points being the least a line can be drawn from. That
+          one is a heading waiting for its curve rather than a heading over an
+          absence, it resolves itself in a minute, and withholding the group
+          until then would move everything below it while somebody was reading. */}
+      {settings.day && (
       <section className="border-b border-line px-4 pb-1 pt-4">
         <Label
           trailing={day?.series?.length > 1 ? span(day.spanMs) : null}
@@ -544,7 +580,7 @@ function Sidebar({
         >
           Session
         </Label>
-        {!shut.session && settings.day && day?.series?.length > 1 && (
+        {!shut.session && day?.series?.length > 1 && (
           <>
             <div className="mt-1">
               <DayTrace day={day} />
@@ -571,6 +607,7 @@ function Sidebar({
           </>
         )}
       </section>
+      )}
 
       {/* The instrument, reporting on itself.
           These were sitting among the weather figures in one undifferentiated
@@ -602,14 +639,12 @@ function Sidebar({
       </section>
 
       {/* How far the lightning is coming from, and why that changes between
-          noon and midnight. Absent until there is a shape
-          rather than drawn empty: a session opens with nothing in either bin,
-          and an empty pair of curves teaches the eye to stop looking. */}
+          noon and midnight. */}
       {settings.reach && reach && (
-        <section className="border-b border-line px-4 pb-1 pt-4">
+        <section className="border-b border-line px-4 pb-4 pt-4">
           <Label
-            trailing={reach.span > 2 ? `0-${Math.round((reach.span * STEP_KM) / 1000)}k km` : null}
-            hint="How far each strike was heard, counted to the most distant station that helped place it. Filled is paths under daylight, the line is paths under darkness."
+            trailing="90th"
+            hint="How far each strike was heard, counted to the most distant station that helped place it. The bar is the ninth strike in ten, which is where the waveguide shows; the tick inside it is the middle of the distribution. Sunlight makes a lossy layer at 60 to 70 km that the sferic has to bounce off; after sunset it decays and the reflection moves up to 85 to 90 km, where less is lost at every hop, so night should be the longer bar. Both are floors: the most distant station that heard a strike is not as far as it went."
             shut={shut.reach}
             onToggle={fold("reach")}
           >
@@ -617,31 +652,8 @@ function Sidebar({
           </Label>
           {!shut.reach && (
             <>
-          <div className="mt-1">
-            <ReachTrace reach={reach} />
-          </div>
-          {/* The two figures the shapes are only the picture of: the middle of
-              each distribution, and its far end.
-              Both, rather than the median alone, because they are not the same
-              reading and the second is the one this exists for. The middle is
-              mostly a fact about where the volunteers live, since half the
-              network is in Europe, and that sets how far a typical strike has to carry
-              before somebody hears it, day or night. The far end is where the
-              waveguide shows: it is the ninth strike in ten rather than the
-              farthest of all, because the farthest of all is one strike and one
-              strike is not a propagation condition.
-              Each half appears when it has enough in it. The two fill on the
-              weather's schedule and not on the clock's: at an hour when the
-              world's lightning is all over the Americas, the sunlit side is
-              ready long before the dark one. */}
-          <Readout quiet label="Day" value={far(reach.day)} unit={unit(reach.day)} />
-          <Readout
-            quiet
-            label="Night"
-            value={far(reach.night)}
-            unit={unit(reach.night)}
-            hint="Sunlight makes a lossy layer at 60 to 70 km that the sferic has to bounce off; after sunset it decays and the reflection moves up to 85 to 90 km, where less is lost at every hop. The far figure is where that shows, and it should be the longer one at night. Both are floors, since the most distant station that heard a strike is not as far as it went."
-          />
+              <ReachBars reach={reach} />
+              <ReachVerdict reach={reach} />
             </>
           )}
         </section>
