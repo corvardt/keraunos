@@ -61,6 +61,7 @@ import {
   metresAt,
   loadPicture,
 } from "./field.js";
+import { polarSheet, polarWeight } from "./polar.js";
 
 // The map wants three things from this file: `createSky`, and the two cadences.
 // Everything else exported below is the pure half, the grid, the territory and
@@ -249,8 +250,14 @@ const TERRITORY = (() => {
 // 60° the layer starts drawing the ground as though it were weather.
 //
 // Both stop mattering exactly where the subject does. Lightning needs a deep
-// warm column to build in and essentially does not happen up here: the band
-// this fades out is the band with nothing in it to miss.
+// warm column to build in and essentially does not happen up here.
+//
+// This closes and nothing is lost by it, which was not always true. The band it
+// fades out used to be the band nothing was drawn in at all, and on a globe that
+// is a bald cap in the middle of the planet where Mercator used to hide it. It
+// is now the band `polar.js` owns: the same two parallels, read the other way
+// round, so the ring hands the caps to the orbiters that fly over them and the
+// two weights sum to one the whole way across.
 const LAT_CORE = 60;
 const LAT_LIMB = 74;
 
@@ -280,7 +287,7 @@ export function longitudeWeight(disc, lon) {
   return best;
 }
 
-/** And the fade toward the poles, which no neighbour can improve on. */
+/** And the fade toward the poles, which only a polar orbiter can improve on. */
 const latitudeWeight = (lat) => ramp(Math.abs(lat), LAT_LIMB, LAT_CORE);
 
 /**
@@ -353,7 +360,7 @@ export function discsFor(frame) {
  * the same on both sides of a seam, which is all the layer asks of it.
  */
 export const BREAK = 0.72; // where -30°C sits on the common scale
-const COLDEST = 0.97; // ...and where each service's white point does
+export const COLDEST = 0.97; // ...and where each service's white point does
 
 /**
  * Each service's own greyscale, as the three bytes that anchor it: the warm
@@ -572,26 +579,32 @@ async function fetchTile(z, x, y, at) {
   // number per column and one per row rather than a pass over every pixel.
   const cols = new Float32Array(SAMPLES);
   const rows = new Float32Array(SAMPLES);
+  const caps = new Float32Array(SAMPLES);
   const lat = new Float32Array(SAMPLES);
   for (let i = 0; i < SAMPLES; i++) {
     const yM = frame.maxY - ((i + 0.5) / SAMPLES) * (frame.maxY - frame.minY);
     lat[i] = latAt(yM);
     rows[i] = latitudeWeight(lat[i]);
+    caps[i] = polarWeight(lat[i]);
   }
 
-  // Weighed before it is fetched, not after. Mercator gives the polar rows an
-  // enormous share of the grid: at level 4 the top two rows of tiles are
-  // entirely above the latitude the mask closes at, and every one of them used
-  // to be a request paid for, decoded, and multiplied by nothing. Returned as
-  // an empty tile rather than as a failure, because that is what it is: this
-  // ground is answered, and the answer is no cloud here. A failure would be
-  // asked for again on the next settle, forever.
-  if (!rows.some((w) => w > 0)) {
+  // Weighed before it is fetched, not after, and the ring and the orbiters are
+  // asked separately for it. Mercator gives the polar rows an enormous share of
+  // the grid: at level 4 the top row of tiles is entirely above the parallel the
+  // ring closes at, and every one of them used to be five requests paid for,
+  // decoded, and multiplied by nothing. Now they are the caps' own tiles and the
+  // ring is the one not asked.
+  const wantRing = rows.some((w) => w > 0);
+  const wantCaps = caps.some((w) => w > 0);
+  if (!wantRing && !wantCaps) {
     return { field: new Uint8Array(SAMPLES * SAMPLES), lat, any: false };
   }
 
-  const images = await Promise.all(discs.map((disc) => load(url(disc, frame, at), disc)));
-  if (!images.some(Boolean)) return null;
+  const [images, polar] = await Promise.all([
+    wantRing ? Promise.all(discs.map((disc) => load(url(disc, frame, at), disc))) : [],
+    wantCaps ? polarSheet(z, x, y, at, SAMPLES) : null,
+  ]);
+  if (!images.some(Boolean) && !polar) return null;
 
   // Each disc is decoded on its own sheet rather than after they are stacked.
   // It has to be: which of the two stretches above a pixel was drawn with is
@@ -618,7 +631,9 @@ async function fetchTile(z, x, y, at) {
   // what it looks like is clear weather over somebody's afternoon.
   let short = false;
 
-  discs.forEach((disc, i) => {
+  // Skipped whole when the tile is above the ring: `images` is empty then, and
+  // there is nothing for a dish's own weights to be worked out against.
+  (wantRing ? discs : []).forEach((disc, i) => {
     // Weighed before the image is looked at. The other order cannot tell a dish
     // that had nothing to contribute here from one that had plenty and did not
     // arrive, and those are the two cases this whole flag is here to separate.
@@ -671,6 +686,25 @@ async function fetchTile(z, x, y, at) {
       }
     }
   });
+
+  // The caps, into the same accumulator and on the same scale. One weight per
+  // row and none per column: an orbiter crosses every longitude and has no
+  // territory, which is the whole difference between it and a dish.
+  if (wantCaps) {
+    if (!polar) short = true;
+    else {
+      for (let row = 0; row < SAMPLES; row++) {
+        const weight = caps[row];
+        if (!weight) continue;
+        for (let col = 0; col < SAMPLES; col++) {
+          const p = row * SAMPLES + col;
+          if (polar[p] < 0) continue; // no swath over this ground
+          sum[p] += polar[p] * weight;
+          total[p] += weight;
+        }
+      }
+    }
+  }
 
   // A refusal is not an answer, so it is not kept. Returning null leaves the
   // key out of the pyramid, which puts the tile back in the queue on the next

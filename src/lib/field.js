@@ -435,9 +435,27 @@ function meshFor(worldPx) {
   }
   return pick;
 }
+// The last parallel the world picture can hold, and the one above which it is
+// levelled off.
+//
+// Mercator has no pole. The picture stops at 85.05° and the globe's mesh draws
+// the cap above it by smearing that last row over the pole, so whatever
+// longitude-to-longitude variation the row has left in it is drawn as a spoke
+// running out of the middle of the planet. Flattening the top of the picture is
+// what stops the fan, and it costs a degree and a half of ground that no
+// projection on this map could show in more than a few pixels anyway.
+const CAP_FROM = 83.5;
+
 // Where the mesh stops. The world picture is Mercator and Mercator has no
-// poles; this is the last parallel it can name.
-const MESH_LAT = 84;
+// poles, but the globe does: a mesh that stopped at the last parallel Mercator
+// can name left a bald cap of ground on a tilted planet, exactly where the
+// reader is looking. So the mesh runs to the pole and the picture is read at
+// its own limit (see `meshV`), which smears the top row of tiles over the cap.
+// A hair short of 90 because at 90 every column of the top row lands on the
+// same point, and a cell with two identical corners has no affine to draw it.
+const MESH_LAT = 89.9;
+// The last parallel the world picture holds, as `metresFor` clamps to.
+const MERC_LAT = 85.05;
 // A ceiling on the world picture. Nothing on this map asks for one anywhere
 // near it, since a globe on a large tube wants about five hundred, but the size
 // is derived from a projection's scale, and a scale is something a caller could
@@ -636,6 +654,11 @@ export function createField(source) {
   let world = null;
   let worldCtx = null;
   let worldAt = "";
+  // One pixel, borrowed to average a band of the world picture: a strip drawn
+  // into it is its own mean, which is cheaper and shorter than reading the
+  // strip out and adding it up.
+  let pale = null;
+  let paleCtx = null;
   let arrivals = 0;
   let fading = false;
   // Counted up every time the picture is actually repainted, so that anything
@@ -906,6 +929,67 @@ export function createField(source) {
       return true;
     }
     return false;
+  };
+
+  /**
+   * The poles of the world picture, painted rather than read.
+   *
+   * The ring is geostationary. Every dish sits over the equator and loses the
+   * earth's limb before it gets to a pole, so above about 78° the composite
+   * holds nothing at all — not clear sky, which is a reading, but no reading.
+   * On the flat map that never showed, because the map stops at 74°. On the
+   * globe it is a hole in the middle of the planet, and no setting of the
+   * latitude mask closes it: a mask keeps or discards data, and there is none
+   * here to keep.
+   *
+   * So the cap is painted. It says the one thing that is nearly always true up
+   * there, and the only reason this can be faked at all — that it is overcast —
+   * at the brightness the sky just below it is being drawn at, feathered in
+   * across the parallels where the real picture is fading out anyway. The seam
+   * lands where the eye has nothing to catch on.
+   *
+   * It is a picture and not a reading, and it is confined to one: this canvas
+   * is the globe's own wash. Nothing that counts anything, the storm cells, the
+   * burn, the readout, ever looks at it.
+   */
+  /**
+   * The very top and bottom of the world picture, levelled off.
+   *
+   * Not a fill and not a guess: the ground it covers is drawn from the same
+   * tiles as the rows below it, and the caps have real weather in them now
+   * (`polar.js`). This is about what Mercator can and cannot hold. The picture
+   * ends at 85.05°, the mesh smears its last row over everything above, and a
+   * row that still varies with longitude smears into a fan of spokes.
+   *
+   * So the last degree and a half is flattened to its own mean. The cap comes
+   * out as the average sky of the parallel below it, which is the one honest
+   * thing that can be said about ground the projection has no room for.
+   */
+  const capPoles = (ww) => {
+    if (!(ww > 8)) return;
+    // Latitude to picture row. Mercator, the same one the tile grid is on.
+    const vAt = (lat) =>
+      ww / 2 - (Math.log(Math.tan(Math.PI / 4 + (lat * RAD) / 2)) * ww) / (2 * Math.PI);
+
+    if (!pale) {
+      pale = document.createElement("canvas");
+      pale.width = 1;
+      pale.height = 1;
+      paleCtx = pale.getContext("2d", { willReadFrequently: true });
+    }
+
+    for (const sign of [1, -1]) {
+      const edge = vAt(sign * CAP_FROM);
+      const cap = sign > 0 ? edge : ww - edge;
+      const top = sign > 0 ? 0 : edge;
+      if (!(cap >= 1)) continue;
+      // A strip drawn into one pixel is its mean.
+      paleCtx.clearRect(0, 0, 1, 1);
+      paleCtx.drawImage(world, 0, top, ww, cap, 0, 0, 1, 1);
+      const [r, g, b] = paleCtx.getImageData(0, 0, 1, 1).data;
+      worldCtx.fillStyle = `rgb(${r},${g},${b})`;
+      worldCtx.fillRect(0, top, ww, cap);
+    }
   };
 
   return {
@@ -1402,6 +1486,7 @@ export function createField(source) {
           }
         }
         worldCtx.globalAlpha = 1;
+        capPoles(ww);
         worldAt = signature;
         worldGen++;
       }
@@ -1480,9 +1565,16 @@ export function createField(source) {
         if (!meshV || meshV.length !== rows + 1 || meshVAt !== ww) {
           meshV = new Float64Array(rows + 1);
           meshVAt = ww;
+          // Past MERC_LAT there is no picture, so every polar row would land on
+          // the same edge of it and the cells between them would have no height
+          // to draw. Each is given a sliver instead: the cap is drawn as the
+          // topmost sliver of the picture stretched over it, which is what a
+          // Mercator tile set has to say about a pole.
+          const sliver = Math.min(1, ww / (2 * (rows + 1)));
           for (let row = 0; row <= rows; row++) {
-            const phi = (MESH_LAT - row * meshDeg) * RAD;
-            meshV[row] = ww / 2 - (Math.log(Math.tan(Math.PI / 4 + phi / 2)) * ww) / (2 * Math.PI);
+            const phi = clamp(MESH_LAT - row * meshDeg, -MERC_LAT, MERC_LAT) * RAD;
+            const v = ww / 2 - (Math.log(Math.tan(Math.PI / 4 + phi / 2)) * ww) / (2 * Math.PI);
+            meshV[row] = clamp(v, row * sliver, ww - (rows - row) * sliver);
           }
         }
 
@@ -1510,29 +1602,49 @@ export function createField(source) {
           const sy = meshV[row];
           const sh = meshV[row + 1] - sy;
           if (!(sh > 0)) continue;
+          /**
+           * Which of the cell's two parallels is the longer one.
+           *
+           * A cell is a trapezoid on a sphere and canvas draws a parallelogram,
+           * so one of the two horizontal edges is used for the width and the
+           * other is missed by the difference between them. Taken from the edge
+           * nearer the pole, which is the shorter, the miss is a gap, and the
+           * gaps grow exactly as the parallels shorten: past about 86° they are
+           * most of the cell and the polar cap is bald however far the mesh
+           * runs. Taken from the edge nearer the equator it is an overlap
+           * instead, onto a neighbour holding all but the same sky, and the
+           * cells converging on the pole close over it.
+           */
+          const north = MESH_LAT - (row + 0.5) * meshDeg > 0;
           for (let col = 0; col < cols; col++) {
             const node = row * (cols + 1) + col;
             const below = node + cols + 1;
+            // The corner the patch is anchored at, and the edge it is spanned
+            // by: the lower parallel in the north, the upper one in the south.
+            const wide = north ? below : node;
             // The far side of a sphere, at whatever weight the caller gives it.
             // Asked first: on a globe at rest half the mesh is behind the
             // planet and weighs nothing, and there is no sense reading three
             // corners out of the mesh to place a patch that is not drawn.
-            const lit = meshLit[node] && meshLit[node + 1] && meshLit[below];
+            const lit = meshLit[node] && meshLit[below] && meshLit[wide + 1];
             const want = lit ? 1 : back;
             if (want <= 0) continue;
 
+            // The two ends of the spanning edge, and the cell's own left side.
+            const xa = mesh[wide * 2];
+            const xb = mesh[(wide + 1) * 2];
             const x00 = mesh[node * 2];
-            const x10 = mesh[(node + 1) * 2];
             const x01 = mesh[below * 2];
             // NaN: the projection had nothing to say about this corner.
-            if (!(x00 === x00) || !(x10 === x10) || !(x01 === x01)) continue;
+            if (!(xa === xa) || !(xb === xb) || !(x00 === x00) || !(x01 === x01)) continue;
+            const ya = mesh[wide * 2 + 1];
+            const yb = mesh[(wide + 1) * 2 + 1];
             const y00 = mesh[node * 2 + 1];
-            const y10 = mesh[(node + 1) * 2 + 1];
             const y01 = mesh[below * 2 + 1];
 
             // A cell that leaps the whole buffer is the projection wrapping at
             // the antimeridian, not a patch of sky.
-            if (Math.abs(x10 - x00) > bw / 2) continue;
+            if (Math.abs(xb - xa) > bw / 2) continue;
 
             if (want !== alpha) {
               warpCtx.globalAlpha = want;
@@ -1545,11 +1657,14 @@ export function createField(source) {
             // and the parallelogram part company, and at this mesh that is a
             // fraction of a pixel, under the block this whole layer is
             // quantised to, which is why the patches leave no seams.
-            const ax = (x10 - x00) / step;
-            const bx = (y10 - y00) / step;
+            const ax = (xb - xa) / step;
+            const bx = (yb - ya) / step;
             const cx = (x01 - x00) / sh;
             const dx = (y01 - y00) / sh;
-            warpCtx.setTransform(ax, bx, cx, dx, x00 - ax * sx - cx * sy, y00 - bx * sx - dx * sy);
+            // The anchor is a corner of the spanning edge, so the row it sits
+            // on is the row the source rectangle is pinned by.
+            const ay = north ? sy + sh : sy;
+            warpCtx.setTransform(ax, bx, cx, dx, xa - ax * sx - cx * ay, ya - bx * sx - dx * ay);
             // Drawn over its own edges, by a pixel of the buffer on each side.
             //
             // The patches already meet, on fractional coordinates, and each is

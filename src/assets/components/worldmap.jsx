@@ -1633,8 +1633,12 @@ const WorldMap = ({
     const point = projection.invert([x, y]);
     if (!point || !isFinite(point[0]) || !isFinite(point[1])) return null;
     // Mercator keeps inverting past the edges of the drawn world; those
-    // coordinates are real numbers but not places on this map.
-    if (Math.abs(point[0]) > 180 || Math.abs(point[1]) > LAT_LIMIT) return null;
+    // coordinates are real numbers but not places on this map. The globe has no
+    // such edge: it draws to the poles and its own inverse already answers null
+    // off the disk, so holding it to Mercator's last parallel only made the
+    // polar caps unhoverable on the one view that shows them.
+    if (Math.abs(point[0]) > 180) return null;
+    if (!globe && Math.abs(point[1]) > LAT_LIMIT) return null;
     return { x, y, lon: point[0], lat: point[1] };
   };
 
