@@ -22,6 +22,13 @@
        A matrix and a fill at the same value do not read the same. */
     --c-land: #666670;
 
+    /* The one hue on a greyscale instrument, and it means one thing: this is
+       failing. Derived from the amber phosphor ratio applied to the text grey
+       rather than picked by eye, and deliberately outside TOKENS: a failure
+       that changed colour with the coating would be decoration rather than a
+       failure indicator. */
+    --c-fail: #c8905b;
+
     /* The tube's own glass, which the shared medium does not draw: the band a
        vertical hold that never quite holds leaves behind, and the curvature. */
     --roll: rgba(255, 255, 255, 0.055);
@@ -32,6 +39,8 @@
 
   :root[data-theme='light'] {
     --c-land: #76767f;
+
+    --c-fail: #8a5417;
 
     --roll: rgba(0, 0, 0, 0.04);
     --roll-soft: rgba(0, 0, 0, 0.015);

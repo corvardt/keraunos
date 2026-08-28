@@ -43,8 +43,11 @@ export default {
       // it was asked for. Every scrim in the app was one of those. Mixing
       // toward transparent keeps the token as the single source of truth, so
       // palette.js rewriting these same properties still carries through.
+      // `fail` rides along here but is deliberately not one of TOKENS: it is
+      // declared in index.css and never derived, so a coating cannot recolour
+      // it. See the note there.
       colors: Object.fromEntries(
-        TOKENS.map((t) => [
+        [...TOKENS, "fail"].map((t) => [
           t,
           ({ opacityValue }) => {
             if (opacityValue === undefined) return `var(--c-${t})`;
@@ -68,6 +71,11 @@ export default {
         xs: ["11px", "16px"],
         sm: ["12px", "18px"],
         base: ["13px", "20px"],
+        // The one large number on a page, and at most one. Everything else in
+        // the panel is a 13px value against a 10px caption, which is the whole
+        // hierarchy there; without this there is no way in to a column of
+        // twenty of them.
+        figure: ["2.75rem", { lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "600" }],
       },
       letterSpacing: {
         label: "0.14em",

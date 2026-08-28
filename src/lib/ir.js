@@ -408,6 +408,28 @@ export function scalarFor(stretch, l) {
  */
 const FLOOR = 0.25;
 
+/**
+ * How heavy the two passes are allowed to get. The calibration knob for this
+ * layer: everything else here is arithmetic, and these two are set by looking.
+ *
+ * WASH is the body of the cloud, drawn in the land token. It was 150, which put
+ * an overcast near 14% and the coldest anything gets at 57%, and it was tuned
+ * on a tube with strikes falling on it. On a quiet feed, on a coating, or over
+ * the tropics at midday, a layer reaching 57% of the land token is the loudest
+ * thing on the glass, and the instrument's one rule is that the loudest thing
+ * on the glass is a strike. Backed off to 110, which is an overcast near 10%
+ * and a ceiling near 43%: still terrain, no longer competing.
+ *
+ * TOP is the cold tops, drawn in the reading token, and it is not backed off
+ * with it. That pass is very nearly a map of where this map is about to have
+ * something to show, and it is meant to be findable with the eye.
+ *
+ * Both are a straight ceiling on an alpha, so either can be moved on its own
+ * and nothing downstream has to be re-derived.
+ */
+const WASH = 110;
+const TOP = 135;
+
 // Where the cold tops start, on the 0-255 a tile is stored at. Set just above
 // the -30°C break the two sources were calibrated on, so this is the same cloud
 // on both sides of a seam: not weather in general any more, but the specific
@@ -780,13 +802,11 @@ function paintTile({ field, lat }, body, tops, ground) {
       // only way it could have been. Rendered against the real tube at 56, an
       // overcast sky measured out at three grey levels of movement on the
       // glass. The numbers said it was drawn and the eye said it was not, and
-      // the eye is the instrument this is for. At 150 an ordinary overcast
-      // lands near 14%, a deep top near 37%, and the coldest anything gets is
-      // 57%: a wash you can read the map through, rather than one you have to
-      // be told is there.
-      warm[p * 4 + 3] = t * 150;
+      // the eye is the instrument this is for. WASH is where that landed and
+      // where it is adjusted; see its note above.
+      warm[p * 4 + 3] = t * WASH;
       if (v > TOPS && lift > 0) {
-        cold[p * 4 + 3] = Math.sqrt((v - TOPS) / (255 - TOPS)) * 135 * lift;
+        cold[p * 4 + 3] = Math.sqrt((v - TOPS) / (255 - TOPS)) * TOP * lift;
         anyCold = true;
       }
     }

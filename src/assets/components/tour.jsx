@@ -77,7 +77,10 @@ const STEPS = [
         <Key>0</Key> do it from the keyboard. <Key>here</Key> asks this browser
         where you are (only when pressed, held for the session, sent
         nowhere) and then reads out how far the nearest strike fell and
-        how long until you hear it.
+        how long until you hear it. Across the other corner are the dials: which
+        world, what sits behind it, how much a storm cell carries, and how far
+        back the map burns in. Each names the stop it is on and cycles to the
+        next when pressed.
       </>
     ),
   },

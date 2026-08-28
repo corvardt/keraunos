@@ -178,7 +178,15 @@ function App() {
   // sunlit ionosphere or a dark one. Two hundred counts, held for the session.
   const [reach, setReach] = useState(null);
   const [stats, setStats] = useState(NO_STATS);
-  const [status, setStatus] = useState({ phase: "idle", message: "idle", host: null });
+  // What the line says before the socket has reported anything. "idle" was a
+  // state rather than a commentary: this line is the only thing on the page
+  // that says what the instrument is doing when the tube is quiet, and a page
+  // doing nothing and a page waiting for the sky look identical without it.
+  const [status, setStatus] = useState({
+    phase: "idle",
+    message: "waiting for the relay",
+    host: null,
+  });
   // How much of each tiled layer actually arrived, reported up by the map on a
   // slow timer and only when it changes. The footer is the only reader.
   const [fieldHealth, setFieldHealth] = useState(null);
@@ -1293,7 +1301,16 @@ function App() {
       {settings.chrome && (
       <footer className="flex h-7 shrink-0 items-center justify-between border-t border-line px-4 text-2xs text-dim unselectable">
         <Clock offset={archive ? archive.shift : 0} />
-        <span className="truncate pl-4" role="status" aria-live="polite">
+        {/* A link that is not there was being reported in the quietest text on
+            the screen, which is the one message on this line that has to be
+            read. The hue is the instrument's only one and says exactly this. */}
+        <span
+          className={`truncate pl-4 ${
+            status.phase === "down" || status.phase === "error" ? "text-fail" : ""
+          }`}
+          role="status"
+          aria-live="polite"
+        >
           &gt; {status.message}
         </span>
         <span className="flex shrink-0 items-center gap-4">

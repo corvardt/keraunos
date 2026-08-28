@@ -47,7 +47,24 @@ const FLASH_MS = 180; // the initial overbright moment
 // take a third off that peak and leave everything after it alone.
 const HALO_MAX_PX = 9;
 const CORE_MAX_PX = 3.8;
-const GRATICULE_STEP = 30; // degrees between scope reference lines
+const GRATICULE_STEP = 30; // degrees between scope reference lines at world zoom
+/**
+ * ...and what it becomes on the way in.
+ *
+ * A fixed 30° grid is right at world zoom and wrong everywhere else: the map
+ * runs to about a 200 km span, which is under two degrees, so past a few notches
+ * of zoom the reference lines leave the glass entirely and the one scale where
+ * a coordinate is actually being read is the one with nothing to read it
+ * against. Each stop is the previous one cut by three, so a line that was on
+ * the glass stays on it and two more arrive between: the grid gets finer
+ * without ever moving.
+ */
+function graticuleStep(k) {
+  if (k >= 24) return GRATICULE_STEP / 27; // ~1.1°
+  if (k >= 8) return GRATICULE_STEP / 9; // ~3.3°
+  if (k >= 2.6) return GRATICULE_STEP / 3; // 10°
+  return GRATICULE_STEP;
+}
 const BIN_SIZE = 1; // must match the binning in App.jsx
 const MIN_BURN = 3; // strikes a cell needs before it leaves a mark
 const SHAKE_MAX_PX = 3.2; // deflection ceiling; any more and the map smears
@@ -237,6 +254,14 @@ const LINK_ALPHA = 0.16;
 
 const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
 const STATES_K = 2.5; // zoom past which the state frontiers are worth drawing
+// And the same question one level up. The states were always held back and the
+// countries never were, which left the world view carrying every interior
+// border on the planet: Europe and Africa come out as a mesh at the one scale
+// where the map is meant to read as coastline and weather. A border is a
+// reading aid for placing a storm, and placing a storm is something you do
+// after moving toward it. Below the world's own rung rather than at it, because
+// the first step in from world zoom is still a continent.
+const FRONTIERS_K = 1.6;
 const RESIZE_SETTLE_MS = 120; // quiet time before a resize is acted on
 // The same wait again, on top of the settle that produced the view: the land
 // matrix costs this page some of its own milliseconds, the cloud field costs
@@ -334,6 +359,26 @@ const wound = (shape) => {
 // How long since, in one unit and no decimals. The window it is measured
 // inside is an hour, so minutes is as coarse as this ever has to get.
 const ago = (ms) => (ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60_000)}m`);
+
+// How wide the scale bar would like to be, before it is rounded to a distance
+// worth printing.
+const SCALE_PX = 110;
+
+/**
+ * The largest 1/2/5 round number that fits inside a span.
+ *
+ * A scale bar reading "137 km" is a bar nobody can measure anything against:
+ * the bar is a ruler, and a ruler is marked at numbers you can halve in your
+ * head. So the distance is chosen first and the bar is drawn to it, rather
+ * than the other way round.
+ */
+function niceKm(span) {
+  const pow = 10 ** Math.floor(Math.log10(span));
+  for (const step of [5, 2, 1]) {
+    if (step * pow <= span) return step * pow;
+  }
+  return pow;
+}
 
 /**
  * Where the reading beside a picked shape sits.
@@ -473,6 +518,16 @@ function scaleCanvas(canvas, width, height) {
  * presets on a phone. It shows what it is on, which is the only state worth
  * seeing, and the key panel says what the other stops are.
  */
+/**
+ * A hairline between two controls on the strip.
+ *
+ * It separates dials from each other, never a dial's name from its value. A
+ * label and the stop it is currently on are one control and read as one word;
+ * what the eye has to be able to cut is where that control ends and the next
+ * one begins, and at 10px with label tracking a gap alone will not do it.
+ */
+const Rule = () => <span className="h-2.5 w-px shrink-0 bg-line" aria-hidden="true" />;
+
 function Cycle({ label, value, options, onChange, title }) {
   const at = Math.max(0, options.indexOf(value));
   return (
@@ -508,6 +563,9 @@ function paintLand(
     projection,
     palette,
     graticule,
+    // How fine the grid is, in degrees. The caller knows the zoom; this only
+    // draws what it is told to.
+    graticuleAt = GRATICULE_STEP,
     daylight,
     borders,
     states,
@@ -570,7 +628,8 @@ function paintLand(
     }
   }
 
-  // Scope graticule: 30° meridians and parallels, under the land matrix.
+  // Scope graticule: meridians and parallels at whatever step the zoom asks
+  // for, under the land matrix.
   if (graticule) {
     ctx.strokeStyle = palette.line;
     ctx.lineWidth = 1;
@@ -601,19 +660,19 @@ function paintLand(
           }
         }
       };
-      for (let lon = -180; lon <= 180; lon += GRATICULE_STEP) {
+      for (let lon = -180; lon <= 180; lon += graticuleAt) {
         arc([lon, LAT_LIMIT], [lon, -LAT_LIMIT]);
       }
-      for (let lat = -60; lat <= 60; lat += GRATICULE_STEP) arc([-180, lat], [180, lat]);
+      for (let lat = -60; lat <= 60; lat += graticuleAt) arc([-180, lat], [180, lat]);
     } else {
-      for (let lon = -180; lon <= 180; lon += GRATICULE_STEP) {
+      for (let lon = -180; lon <= 180; lon += graticuleAt) {
         const top = projection([lon, LAT_LIMIT]);
         const bottom = projection([lon, -LAT_LIMIT]);
         if (!top || !bottom) continue;
         ctx.moveTo(Math.round(top[0]) + 0.5, top[1]);
         ctx.lineTo(Math.round(bottom[0]) + 0.5, bottom[1]);
       }
-      for (let lat = -60; lat <= 60; lat += GRATICULE_STEP) {
+      for (let lat = -60; lat <= 60; lat += graticuleAt) {
         const left = projection([-180, lat]);
         const right = projection([180, lat]);
         if (!left || !right) continue;
@@ -739,12 +798,12 @@ function paintLand(
     weight = (pass) => (pass < 2 ? 1 : sphere.back) * (gives(pass) ? faded : 1);
   }
 
-  const draw = (lines, colour) => {
+  const draw = (lines, colour, fade = 1) => {
     const paths = Array.from({ length: passes }, () => new Path2D());
     lay(lines, paths, classOf);
     ctx.strokeStyle = colour;
     for (let pass = 0; pass < passes; pass++) {
-      ctx.globalAlpha = weight(pass);
+      ctx.globalAlpha = weight(pass) * fade;
       ctx.stroke(paths[pass]);
     }
     ctx.globalAlpha = 1;
@@ -754,15 +813,24 @@ function paintLand(
   // step down: the shape of the world is the map, and the politics on it are a
   // reading aid. Drawn from the shared edges rather than from country rings, so
   // a border is stroked once and a coast is never stroked twice.
+  //
+  // The step down is a fade of the same token rather than a token of its own.
+  // Frontiers were `dim`, which is a rung *above* land and drew every interior
+  // border brighter than the coastline it was meant to sit under: at world zoom
+  // Europe and Africa came out as a mesh with the shape of the world lost
+  // inside it. `line` is the rung below and is the wrong one too, being drawn
+  // to sit at the edge of visibility. What is wanted is between them, and the
+  // way to a value between two rungs is to take the weight off the higher one.
+  // It reduces weight in both media for the same reason the night pass above
+  // does: fading a line darkens it on the tube and lightens it toward the sheet
+  // on paper, and either way it gives ground to what is drawn whole.
   const { coast, inner } = outlines();
   draw(coast, palette.land);
-  if (borders) draw(inner, palette.dim);
-  // Below the frontiers but not at the rule token, which is meant to sit at the
-  // edge of visibility and took the state lines with it: against the void it is
-  // a shade off black. The land token is the rung between, and it is a rung in
-  // both media rather than only in one - the ordering of the three inverts
-  // between tube and paper, and this is the middle of them either way.
-  if (borders && states) draw(states, palette.land);
+  if (borders) draw(inner, palette.land, 0.6);
+  // A step below the frontiers again. A state line is a subdivision of one
+  // country and only ever drawn zoomed in, where the country's own borders are
+  // already on the glass around it.
+  if (borders && states) draw(states, palette.land, 0.42);
 
   ctx.restore();
 }
@@ -2193,8 +2261,9 @@ const WorldMap = ({
       projection: layerProjection,
       palette,
       graticule: settings.graticule,
+      graticuleAt: graticuleStep(settled.k),
       daylight: settings.daylight,
-      borders: settings.frontiers,
+      borders: settings.frontiers && settled.k >= FRONTIERS_K,
       states: statesAt(settled.k),
       theme,
       sunAt,
@@ -2648,7 +2717,7 @@ const WorldMap = ({
         palette,
         graticule: settingsRef.current.graticule,
         daylight: settingsRef.current.daylight,
-        borders: settingsRef.current.frontiers,
+        borders: settingsRef.current.frontiers && viewRef.current.k >= FRONTIERS_K,
         theme: themeRef.current,
         sunAt: sunRef.current,
         width,
@@ -2760,19 +2829,22 @@ const WorldMap = ({
           themeRef.current,
           palette,
           config.graticule,
+          graticuleStep(globeKRef.current),
           config.daylight,
           // The world's outline is not a term - it is the same lines every
           // session - but the states are: they arrive mid-session, and they
           // come and go with how close the reader is standing.
           statesAt(globeKRef.current),
+          globeKRef.current >= FRONTIERS_K,
         ],
         (context) =>
           paintLand(context, {
             projection: live,
             palette,
             graticule: config.graticule,
+            graticuleAt: graticuleStep(globeKRef.current),
             daylight: config.daylight,
-            borders: config.frontiers,
+            borders: config.frontiers && globeKRef.current >= FRONTIERS_K,
             states: statesAt(globeKRef.current),
             theme: themeRef.current,
             sunAt: sunRef.current,
@@ -2857,7 +2929,7 @@ const WorldMap = ({
         palette,
         graticule: settingsRef.current.graticule,
         daylight: settingsRef.current.daylight,
-        borders: settingsRef.current.frontiers,
+        borders: settingsRef.current.frontiers && viewRef.current.k >= FRONTIERS_K,
         theme: themeRef.current,
         sunAt: sunRef.current,
         width,
@@ -3583,6 +3655,38 @@ const WorldMap = ({
   // the mode is refusing to let you change is furniture that says nothing.
   const zoomedIn = !spinning && view.k > 1.02;
 
+  /**
+   * How far a distance on the glass actually is.
+   *
+   * The one thing a map has to say about itself that nothing else on this tube
+   * says: every figure here is a count or a time, and a reader looking at a
+   * cluster of cells over the plains has no way to tell whether it is a county
+   * or a country. Measured rather than derived, by inverting two points either
+   * side of the middle of the tube and asking the same great-circle distance
+   * the rest of the instrument measures with, so it stays true through a
+   * projection change without knowing there was one.
+   *
+   * Taken at the centre because Mercator's scale is a function of latitude and
+   * there is no single answer for the whole glass. At world zoom the bar is
+   * honest about the middle of the map and generous about Norway, which is what
+   * a scale bar on a Mercator has always been; a step or two in, the error is
+   * smaller than the bar's own end ticks.
+   *
+   * Flat only. On a sphere the scale falls away toward the limb, and a bar in
+   * the corner is exactly where that is worst.
+   */
+  const scale = useMemo(() => {
+    if (!flat || !projection?.invert || !width || !height) return null;
+    const y = height / 2;
+    const west = projection.invert([width / 2 - SCALE_PX / 2, y]);
+    const east = projection.invert([width / 2 + SCALE_PX / 2, y]);
+    if (!west || !east) return null;
+    const span = distanceKm(west[0], west[1], east[0], east[1]);
+    if (!(span > 0)) return null;
+    const km = niceKm(span);
+    return { km, px: Math.round((km / span) * SCALE_PX) };
+  }, [flat, projection, width, height]);
+
   return (
     <div
       ref={containerRef}
@@ -3633,13 +3737,30 @@ const WorldMap = ({
           itself in one move instead of switching on in parts. Kept mounted
           throughout: the guide points at this strip, and a tour target that
           does not exist yet is a tour that opens pointing at nothing. */}
+      {/* Two groups, one row: where to look on the left, what to draw on the
+          right. They were one undifferentiated line of a dozen 10px labels
+          separated by two hairlines, which reads as a sentence rather than as
+          controls: a destination, a state and a dial are three different kinds
+          of thing and only the hairlines said so.
+
+          The row spans the tube so the two can sit in their own corners, which
+          means it lies over the map where nothing is drawn. Transparent to the
+          pointer for exactly that reason: a drag begun in the gap between them
+          is a drag of the world, not of the strip.
+
+          Below `sm` there is no room for two corners, so they close back up
+          into the one scrolling strip they were, with a gap in place of the
+          hairline. */}
       <div
         data-tour="regions"
-        className={`no-bar absolute inset-x-3 top-2 flex items-center gap-2 overflow-x-auto transition-opacity duration-500 sm:inset-x-auto sm:left-3 sm:top-3 ${
-          flat ? "opacity-100" : "pointer-events-none opacity-0"
+        className={`no-bar pointer-events-none absolute inset-x-3 top-2 flex items-start gap-3 overflow-x-auto transition-opacity duration-500 sm:top-3 sm:justify-between sm:overflow-visible ${
+          flat ? "opacity-100" : "opacity-0"
         }`}
         aria-hidden={!flat}
         style={{ touchAction: "pan-x" }}
+      >
+      <div
+        className={`flex items-center gap-2 ${flat ? "pointer-events-auto" : ""}`}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
@@ -3653,7 +3774,7 @@ const WorldMap = ({
             {region.label}
           </button>
         ))}
-        <span className="h-2.5 w-px shrink-0 bg-line" aria-hidden="true" />
+        <Rule />
         <button
           type="button"
           onClick={findMe}
@@ -3674,13 +3795,14 @@ const WorldMap = ({
         >
           [ {hereLabel} ]
         </button>
-        {zoomedIn && (
-          <span className="shrink-0 text-2xs uppercase tracking-label text-text glow">
-            &#215;{view.k.toFixed(1)}
-          </span>
-        )}
+      </div>
 
-        <span className="h-2.5 w-px shrink-0 bg-line" aria-hidden="true" />
+      {/* The dials. */}
+      <div
+        className={`flex items-center gap-2 ${flat ? "pointer-events-auto" : ""}`}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      >
         {/* Which world. First of the dials, because it is the one the others
             are read against: everything to the right of it is a layer on a map,
             and this says which map. */}
@@ -3691,6 +3813,7 @@ const WorldMap = ({
           options={["flat", "globe"]}
           onChange={(v) => onSetting("globe", v === "globe")}
         />
+        <Rule />
         <Cycle
           label="field"
           title="What sits behind the map. Cloud is thermal infrared from the geostationary satellites, and its bright tops are the cold ones, which is where the lightning is about to be. Rain is a ground-radar composite: it covers only the ground somebody built a radar network on, but it is the only layer here that sees what is actually falling. One at a time, because they land on the same storms from opposite ends."
@@ -3698,6 +3821,7 @@ const WorldMap = ({
           options={["off", "cloud", "rain"]}
           onChange={(v) => onSetting("field", v)}
         />
+        <Rule />
         {/* Off is a stop on the same dial rather than a switch of its own: a
             cell carrying nothing and no cell at all are the two ends of one
             question, and two controls for it is one more than the strip has
@@ -3712,6 +3836,7 @@ const WorldMap = ({
             if (v !== "off") onSetting("cells", v);
           }}
         />
+        <Rule />
         <Cycle
           label="burn"
           title="How far back the burn-in reaches. Four minutes is where it is raining lightning now; an hour is where it has been this session."
@@ -3722,7 +3847,7 @@ const WorldMap = ({
         {/* Only present when the header that usually carries it is not. */}
         {onConfig && (
           <>
-            <span className="h-2.5 w-px shrink-0 bg-line" aria-hidden="true" />
+            <Rule />
             <button
               type="button"
               onClick={onConfig}
@@ -3732,6 +3857,7 @@ const WorldMap = ({
             </button>
           </>
         )}
+      </div>
       </div>
 
       <div
@@ -3841,35 +3967,64 @@ const WorldMap = ({
       )}
 
       {cursor && !panning && (
-        <>
-          <svg
-            className="pointer-events-none absolute opacity-70"
-            style={{ left: cursor.x - 15, top: cursor.y - 15 }}
-            width="30"
-            height="30"
-            viewBox="0 0 30 30"
-            aria-hidden="true"
-          >
-            <circle cx="15" cy="15" r="5.5" className="stroke-text" fill="none" strokeWidth="1" />
-            <path
-              d="M15 0v5.5M15 24.5V30M0 15h5.5M24.5 15H30"
-              className="stroke-text"
-              fill="none"
-              strokeWidth="1"
-            />
-          </svg>
-          {/* Fixed corner, not a floating tooltip: the reading should sit still
-              while the eye moves, and never cover the cell being read. */}
-          <div className="pointer-events-none absolute bottom-3 left-3 max-w-[60%] bg-void/80 px-2 py-1.5 text-2xs uppercase tracking-label unselectable">
-            <div className="truncate text-text glow">[ {place ?? "—"} ]</div>
-            <div className="mt-0.5 text-dim">
-              {coord(cursor.lat, "lat")} {coord(cursor.lon, "lon")}
+        <svg
+          className="pointer-events-none absolute opacity-70"
+          style={{ left: cursor.x - 15, top: cursor.y - 15 }}
+          width="30"
+          height="30"
+          viewBox="0 0 30 30"
+          aria-hidden="true"
+        >
+          <circle cx="15" cy="15" r="5.5" className="stroke-text" fill="none" strokeWidth="1" />
+          <path
+            d="M15 0v5.5M15 24.5V30M0 15h5.5M24.5 15H30"
+            className="stroke-text"
+            fill="none"
+            strokeWidth="1"
+          />
+        </svg>
+      )}
+
+      {/* Where the map reports on itself.
+          Fixed corner, not a floating tooltip: the reading should sit still
+          while the eye moves, and never cover the cell being read. The zoom
+          figure joins it here rather than sitting up in the control strip,
+          where it was the one thing in a row of controls that could not be
+          pressed. Controls in the top corners, state in this one. */}
+      {(zoomedIn || (cursor && !panning)) && (
+        <div className="pointer-events-none absolute bottom-3 left-3 max-w-[60%] space-y-1 unselectable">
+          {zoomedIn && (
+            <div className="inline-block bg-void/80 px-2 py-1 text-2xs uppercase tracking-label text-text glow">
+              &#215;{view.k.toFixed(1)}
             </div>
-            <div className="mt-0.5 text-dim">
-              {count ? `${count.toLocaleString("en-US")} in cell` : "quiet cell"}
+          )}
+          {cursor && !panning && (
+            <div className="bg-void/80 px-2 py-1.5 text-2xs uppercase tracking-label">
+              <div className="truncate text-text glow">[ {place ?? "—"} ]</div>
+              <div className="mt-0.5 text-dim">
+                {coord(cursor.lat, "lat")} {coord(cursor.lon, "lon")}
+              </div>
+              <div className="mt-0.5 text-dim">
+                {count ? `${count.toLocaleString("en-US")} in cell` : "quiet cell"}
+              </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* The scale bar. A ruler and nothing else: two end ticks and a rule, in
+          the land token, because it is furniture that is present rather than a
+          value being read. Held back below `sm`, where the rewind strip has the
+          whole width of this corner. */}
+      {scale && (
+        <div className="pointer-events-none absolute bottom-3 right-3 hidden text-2xs uppercase tracking-label text-land unselectable sm:block">
+          <div className="flex h-1.5 items-end" style={{ width: scale.px }}>
+            <span className="h-1.5 w-px bg-land" />
+            <span className="h-px flex-1 self-end bg-land" />
+            <span className="h-1.5 w-px bg-land" />
           </div>
-        </>
+          <div className="mt-1 text-right">{scale.km.toLocaleString("en-US")} km</div>
+        </div>
       )}
       {/* Tracking band drifting up the tube, then the curved glass falloff. */}
       <div className="crt-roll pointer-events-none absolute inset-x-0" />

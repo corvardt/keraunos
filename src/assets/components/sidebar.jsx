@@ -489,7 +489,10 @@ function Sidebar({
         >
           Rate
         </Label>
-        <div className="mt-2 text-base text-text glow-hot">{fmt(stats.rate)}</div>
+        {/* The figure. One per instrument, and this is it: the subject of the
+            whole panel is how hard the world is firing, and at 13px it was the
+            same size as the latency underneath it. */}
+        <div className="mt-1 text-figure leading-none text-text glow-hot">{fmt(stats.rate)}</div>
         {settings.trace && (
           <div className="mt-1">
             <RateTrace samples={samples} />
@@ -514,7 +517,7 @@ function Sidebar({
       <section className="border-b border-line px-4 pb-1 pt-4">
         <Label
           trailing={day?.series?.length > 1 ? span(day.spanMs) : null}
-          hint="Arrivals by the minute, for as long as this tab has been open. The hairline is midnight UTC."
+          hint="Arrivals by the minute, for as long as this tab has been open. The hairline is midnight UTC, and Peak is the hardest minute in the window with the hour it fell in."
           shut={shut.session}
           onToggle={fold("session")}
         >
@@ -542,7 +545,13 @@ function Sidebar({
             </div>
           </>
         )}
-        {!shut.session && <Readout label="Detected" value={fmt(stats.total)} />}
+        {!shut.session && (
+          <Readout
+            label="Detected"
+            value={fmt(stats.total)}
+            hint="Every strike this tab has heard since it opened, and only those. Not a figure about the world: the hour the session started from is on the map but is not counted here."
+          />
+        )}
       </section>
 
       {/* The instrument, reporting on itself.
@@ -552,6 +561,14 @@ function Sidebar({
           the link, they move on the network's schedule rather than the
           weather's, and under their own heading they say so without a word of
           explanation. Unlit, for the same reason. */}
+      {/* Absent until the link has said something, rather than drawn as a pair
+          of dashes. The reach and the day curve already withhold themselves for
+          this reason and this is the same fact: a session that has heard
+          nothing yet, or one with no relay behind it at all, was opening on a
+          column of zeroes and em dashes, which reads as a broken instrument
+          rather than an idle one. The footer is where a link that is not there
+          is reported. */}
+      {(stats.delay !== null || stats.stations !== null) && (
       <section data-tour="stats" className="border-b border-line px-4 pb-1 pt-4">
         <Label>Link</Label>
         <Readout
@@ -573,6 +590,7 @@ function Sidebar({
             one, and the picture is per strike where the number could only ever
             be the middle of the last few. */}
       </section>
+      )}
 
       {/* How far the lightning is coming from, and why that changes between
           noon and midnight. Absent until there is a shape
@@ -629,6 +647,7 @@ function Sidebar({
             label="Nearest strike"
             value={watch.nearest === null ? "—" : fmt(Math.round(watch.nearest))}
             unit={watch.nearest === null ? "" : "km"}
+            hint="The closest strike still inside the retained window, from where you said you are. A dash means nothing has fallen within 2,000 km of you in that time."
           />
           <Thunder thunder={watch.thunder} />
         </section>

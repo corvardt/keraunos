@@ -80,7 +80,16 @@ export const DEFAULTS = {
   // say whether a reading is wanted at all, and a curve that never fills is one
   // somebody may want gone for good. Folding says only "not while I am looking
   // at something else", and is expected to be undone a minute later.
-  shut: {},
+  //
+  // Two of them start folded. Eight open groups is the whole column on the
+  // first screen and no way in to it, and these are the two a first minute
+  // needs least: the session curve is empty until a couple of minutes have been
+  // watched, and the reach distributions are a reading about the ionosphere
+  // rather than about the weather. Both are one keypress from open, and once
+  // opened they stay that way, which is the difference between this and hiding
+  // them. What is left is Rate, Link, Most active and Recent: what is arriving,
+  // how well, from where, and what just landed.
+  shut: { session: true, reach: true },
   // panel
   feed: true,
   trace: true,
