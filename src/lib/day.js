@@ -25,6 +25,12 @@ const MINUTE_MS = 60000;
 const SPAN = 24 * 60; // minutes held; the ring wraps and the oldest rolls off
 
 export function createDay() {
+  // When this session began watching. Everything filed at a minute earlier than
+  // this came out of the relay's window rather than off the wire, which is a
+  // distinction the curve cannot draw and the reader is owed: an hour of it was
+  // handed over on arrival and is weather somebody else's link heard, and the
+  // rest is what this tab has actually sat through.
+  const opened = Date.now();
   // A ring of counts, plus the minute each slot belongs to. Without the second
   // array a slot cannot say whether it holds this hour's traffic or yesterday's
   // at the same clock position, and a quiet session would read as a busy one a
@@ -86,6 +92,11 @@ export function createDay() {
 
       const series = [];
       let peak = null;
+      // The two halves of the window, counted as they are walked: what the
+      // relay handed over, and what this tab has watched arrive.
+      const openedMinute = Math.floor(opened / MINUTE_MS);
+      let seeded = 0;
+      let watched = 0;
       for (let minute = current - SPAN; minute < current; minute++) {
         const slot = ((minute % SPAN) + SPAN) % SPAN;
         // A minute the session was not running for is absent rather than zero.
@@ -94,6 +105,8 @@ export function createDay() {
         if (stamps[slot] !== minute || minute === first) continue;
         const point = { t: minute * MINUTE_MS, rate: counts[slot] };
         series.push(point);
+        if (minute < openedMinute) seeded++;
+        else watched++;
         if (!peak || point.rate > peak.rate) peak = point;
       }
 
@@ -105,6 +118,13 @@ export function createDay() {
         // session has been running, and says so, rather than drawing a day's
         // worth of axis with twenty minutes of reading in the corner of it.
         spanMs: series.length * MINUTE_MS,
+        // ...and which part of that was watched rather than handed over. Two
+        // figures because they are two different claims: the first is weather
+        // the relay heard before anybody arrived, the second is the session
+        // itself. A single span reading "1h 04m" four minutes into a visit is
+        // true about the curve and a lie about the visit.
+        seededMs: seeded * MINUTE_MS,
+        watchedMs: watched * MINUTE_MS,
       };
       return cached;
     },

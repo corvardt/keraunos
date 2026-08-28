@@ -299,10 +299,38 @@ function reachExtent(reach) {
   return reach.span * STEP_KM;
 }
 
-/** One half of the sky as a density: each bin's share of that half's strikes. */
+/**
+ * One half of the sky as a density: each bin's share of that half's strikes,
+ * lightly smoothed.
+ *
+ * The smoothing is the difference between a reading and a sawtooth. A bin is
+ * 200 km wide and a half that has just become ready holds a couple of hundred
+ * strikes across twenty-odd of them, so a bin carries about ten and the noise
+ * on a count of ten is three: a third of the bin, changing every time one
+ * lands. The frame is held still now and that noise was the whole of what was
+ * left moving, and it moves most in exactly the half that has least in it,
+ * which is the half a reader is most likely to be misled by.
+ *
+ * A three-bin binomial kernel, [1 2 1], which is the smallest thing that is
+ * still a smooth. It costs 200 km of resolution on a curve whose own caveats
+ * are measured in thousands, and it cannot move the reading: the rules under
+ * the curve are percentiles of the raw counts and are not smoothed at all, so
+ * what is being smoothed is the picture of the distribution and never the
+ * figures taken off it.
+ *
+ * The ends are renormalised over the neighbours that exist rather than treated
+ * as zero, or the curve would be dragged down at both edges by bins that are
+ * not there.
+ */
 function reachDensity(side, bins) {
   if (!side.n) return null;
-  return Array.from({ length: bins }, (unused, i) => side.counts[i] / side.n);
+  const raw = Array.from({ length: bins }, (unused, i) => side.counts[i] / side.n);
+  return raw.map((value, i) => {
+    const left = i > 0 ? raw[i - 1] : null;
+    const right = i < bins - 1 ? raw[i + 1] : null;
+    const weight = 2 + (left === null ? 0 : 1) + (right === null ? 0 : 1);
+    return (value * 2 + (left ?? 0) + (right ?? 0)) / weight;
+  });
 }
 
 /** The tallest bin across both halves, which is what puts them on one axis. */
@@ -333,7 +361,7 @@ function reachPeak(reach, bins) {
  * frame that has become too large is only wasting glass, and can take its time
  * about it. Which is also what a real needle does, and why it reads as one.
  */
-function damp(current, target, fall = 0.08) {
+function damp(current, target, fall = 0.04) {
   if (!current) return target;
   return target > current ? target : current + (target - current) * fall;
 }
@@ -454,18 +482,14 @@ function ReachBars({ reach, extent }) {
               </>
             )}
           </span>
-          <span className="w-24 shrink-0 text-right text-2xs tabular-nums text-dim">
-            {side.tail === null ? (
-              "\u2014"
-            ) : (
-              <>
-                <span className="text-xs text-text">
-                  {Math.round(side.tail).toLocaleString("en-US")}
-                </span>
-                {" km · "}
-                {side.n.toLocaleString("en-US")}
-              </>
-            )}
+          {/* One figure, on one line. It carried its own strike count as well
+              and the pair did not fit the column: at three digits and a unit it
+              wrapped, and a reading on two lines is a reading you have to
+              assemble. The count says how much is behind the claim rather than
+              what the claim is, so it has gone to the verdict, which is the
+              claim. */}
+          <span className="w-20 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-text">
+            {side.tail === null ? "\u2014" : `${Math.round(side.tail).toLocaleString("en-US")} km`}
           </span>
         </div>
       ))}
@@ -503,6 +527,13 @@ function ReachVerdict({ reach }) {
   return (
     <p className="mt-2 text-xs text-dim">
       &gt; <span className="text-text glow">night {percent}% {change > 0 ? "further" : "shorter"}</span>
+      {/* What the claim is made of. A twenty-one percent difference off five
+          hundred strikes and off fifty thousand are the same sentence and not
+          the same reading, and a length cannot say which it is. */}
+      <span className="text-dim">
+        {" \u00b7 "}
+        {day.n.toLocaleString("en-US")}/{night.n.toLocaleString("en-US")}
+      </span>
     </p>
   );
 }
@@ -734,9 +765,20 @@ function Sidebar({
           until then would move everything below it while somebody was reading. */}
       {settings.day && (
       <section className="border-b border-line px-4 pb-1 pt-4">
+        {/* Two figures where there are two: the hour the relay handed over on
+            arrival, and what this tab has watched since. One span would say
+            "1h 04m" four minutes into a visit, which is true about the curve
+            and false about the session, and the whole point of the curve is
+            that it is the session's own. */}
         <Label
-          trailing={day?.series?.length > 1 ? span(day.spanMs) : null}
-          hint="Arrivals by the minute, for as long as this tab has been open. The hairline is midnight UTC, and Peak is the hardest minute in the window with the hour it fell in."
+          trailing={
+            day?.series?.length > 1
+              ? day.seededMs
+                ? `${span(day.seededMs)} + ${span(day.watchedMs)}`
+                : span(day.spanMs)
+              : null
+          }
+          hint="Arrivals by the minute. The first figure is the hour the relay was holding when this tab opened, the second is what it has watched since. The hairline is midnight UTC, and Peak is the hardest minute in the window with the hour it fell in."
           shut={shut.session}
           onToggle={fold("session")}
         >
