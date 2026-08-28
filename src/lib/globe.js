@@ -65,7 +65,14 @@ export function globeProjection(width, height, [lon, lat], k = 1) {
   const inner = geoProjection(geoOrthographicRaw)
     .scale(radius)
     .translate([width / 2, height / 2])
-    .rotate([-lon, -lat]);
+    .rotate([-lon, -lat])
+    // Only geometry pushed through the stream is cut at the limb; asking the
+    // projection for a single point goes straight to the raw one and is
+    // answered on either side of the planet, which is the contract `plain`
+    // below is handed over on and is unchanged. This is here for the one
+    // caller that streams: the outline of a picked shape, which without it
+    // would have the far half of a country folded back over the near one.
+    .clipAngle(90);
 
   const rotate = rotationFor([lon, lat]);
   const projection = (point) => (facing(point[0], point[1], rotate) ? inner(point) : BEHIND);

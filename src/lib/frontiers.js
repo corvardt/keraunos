@@ -19,7 +19,10 @@ const key = (point) => `${point[0]},${point[1]}`;
 const ringsOf = (geometry) =>
   geometry.type === "Polygon" ? geometry.coordinates : geometry.coordinates.flat();
 
-let cached = null;
+// Keyed on the feature array itself, so a second set of shapes - the states,
+// which arrive later and separately - gets its own answer rather than the
+// world's, and neither is chained twice.
+const cached = new Map();
 
 /**
  * Chain a heap of segments into polylines, in lon/lat.
@@ -79,20 +82,25 @@ function chain(segments) {
 }
 
 /**
- * The outline of the world, as two sets of polylines in lon/lat.
+ * The outline of a set of shapes, as two sets of polylines in lon/lat.
  *
- *   coast: every edge only one country claims, which is a coastline
+ *   coast: every edge only one shape claims, which is a coastline
  *   inner: every edge two of them claim, which is a frontier
+ *
+ * The world by default. The states are the other caller, and they want the
+ * frontiers alone: a state's coast is the country's coast, and it is already
+ * drawn.
  */
-export default function outlines() {
-  if (cached) return cached;
+export default function outlines(features = GeoData.features) {
+  const held = cached.get(features);
+  if (held) return held;
 
   // One pass to find the shared edges. `owner` holds the first country to claim
   // an edge; a second, different claimant is what makes it a frontier. Comparing
   // names rather than counting visits keeps an enclave's own doubled-back ring
   // from looking like a border with itself.
   const edges = new Map();
-  for (const feature of GeoData.features) {
+  for (const feature of features) {
     const name = feature.properties.name;
     for (const ring of ringsOf(feature.geometry)) {
       for (let i = 0; i < ring.length - 1; i++) {
@@ -111,6 +119,7 @@ export default function outlines() {
   const inner = [];
   for (const edge of edges.values()) (edge.shared ? inner : coast).push(edge);
 
-  cached = { coast: chain(coast), inner: chain(inner) };
-  return cached;
+  const lines = { coast: chain(coast), inner: chain(inner) };
+  cached.set(features, lines);
+  return lines;
 }

@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { geoArea, geoBounds, geoPath } from "d3-geo";
 import { distanceKm } from "../../lib/geo.js";
 import { readMedium } from "../../lib/theme.js";
 import { motion, forecast, surge } from "../../lib/storms.js";
@@ -235,6 +236,7 @@ const LINK_MS = 900;
 const LINK_ALPHA = 0.16;
 
 const SETTLE_MS = 160; // quiet time before the land matrix is rebuilt
+const STATES_K = 2.5; // zoom past which the state frontiers are worth drawing
 const RESIZE_SETTLE_MS = 120; // quiet time before a resize is acted on
 // The same wait again, on top of the settle that produced the view: the land
 // matrix costs this page some of its own milliseconds, the cloud field costs
@@ -298,6 +300,62 @@ const wrapLon = (lon) => ((((lon + 180) % 360) + 360) % 360) - 180;
 function coord(value, axis) {
   const hemisphere = axis === "lat" ? (value < 0 ? "S" : "N") : value < 0 ? "W" : "E";
   return `${Math.abs(value).toFixed(2)}°${hemisphere}`;
+}
+
+/**
+ * A shape wound the way d3 reads one.
+ *
+ * GeoJSON does not agree with itself about which way a ring runs, and the sets
+ * this map ships do not agree either. d3 reads a ring the wrong way round as
+ * everything except the ring, so a sea picked from the water set came back as
+ * the whole planet with a sea-shaped hole in it. Spherical area is the test
+ * that does not care which convention is "right": more than half the globe is
+ * a ring being read inside out, and nothing in these sets is that large.
+ */
+const HALF_SPHERE = 2 * Math.PI;
+
+// Per polygon rather than per shape: a sea in the water set is one real ring
+// and two dozen slivers around islands, and it is the slivers that are wound
+// inside out. Reversing every ring of the polygon together keeps a hole a hole.
+const rewound = (poly) =>
+  geoArea({ type: "Polygon", coordinates: poly }) > HALF_SPHERE
+    ? poly.map((ring) => [...ring].reverse())
+    : poly;
+
+const wound = (shape) => {
+  const geometry = shape.geometry;
+  const coordinates =
+    geometry.type === "MultiPolygon"
+      ? geometry.coordinates.map(rewound)
+      : rewound(geometry.coordinates);
+  return { ...shape, geometry: { ...geometry, coordinates } };
+};
+
+/**
+ * Where the reading beside a picked shape sits.
+ *
+ * Beside the mark on the pick rather than beside the shape's own bounds, which
+ * is what this did and what put Russia's reading in the corner of the tube: a
+ * country crossing the date line has bounds the width of the world, one
+ * reaching past 80° north has bounds that start above the glass, and a box that
+ * large has no edge to hang a label on. The mark is where the reader pointed,
+ * it is always on the tube, and it is already the thing that says what was
+ * picked.
+ *
+ * Up and to the right, so the lines do not sit under the pointer that put them
+ * there; the other side when that would run them off the glass, and clamped in
+ * both directions after that.
+ */
+const HUD_W = 120; // room for a line of the readout, in pixels
+const HUD_H = 64;
+function hudAt([x, y], width, height) {
+  const right = x + 16;
+  const left = right + HUD_W > width - 8 ? x - HUD_W - 16 : right;
+  return {
+    left: Math.max(8, Math.min(left, width - HUD_W - 8)),
+    top: Math.max(8, Math.min(y - HUD_H / 2, height - HUD_H - 8)),
+    width: HUD_W,
+  };
 }
 
 function useElementSize(ref) {
@@ -442,7 +500,19 @@ function Cycle({ label, value, options, onChange, title }) {
  */
 function paintLand(
   ctx,
-  { projection, palette, graticule, daylight, borders, theme, sunAt, width, height, sphere }
+  {
+    projection,
+    palette,
+    graticule,
+    daylight,
+    borders,
+    states,
+    theme,
+    sunAt,
+    width,
+    height,
+    sphere,
+  }
 ) {
   // Which side of the terminator gets shaded is a property of the medium,
   // not a colour choice. On a tube the lit hemisphere is lit: light is
@@ -683,6 +753,12 @@ function paintLand(
   const { coast, inner } = outlines();
   draw(coast, palette.land);
   if (borders) draw(inner, palette.dim);
+  // Below the frontiers but not at the rule token, which is meant to sit at the
+  // edge of visibility and took the state lines with it: against the void it is
+  // a shade off black. The land token is the rung between, and it is a rung in
+  // both media rather than only in one - the ordering of the three inverts
+  // between tube and paper, and this is the middle of them either way.
+  if (borders && states) draw(states, palette.land);
 
   ctx.restore();
 }
@@ -908,6 +984,8 @@ const WorldMap = ({
   onSeek,
   onPace,
   locate,
+  shapeAt,
+  states,
   focus,
   selection,
   here,
@@ -1048,6 +1126,10 @@ const WorldMap = ({
   // orbit: the matrix would hold dots for Oklahoma alone and the globe would
   // come up an empty wireframe, which is exactly what a shared link used to do.
   const [flat, setFlat] = useState(false);
+  // Whether the world is between shapes. The swap itself is a ref, because it
+  // is read on a frame and nothing about it is a render; this is the one fact
+  // about it the DOM marks need, and they can only be told by a render.
+  const [swapping, setSwapping] = useState(false);
   const heldStill = useRef(true);
   heldStill.current = !flat;
 
@@ -1164,6 +1246,7 @@ const WorldMap = ({
     // it runs is the whole of the difference between the two directions, and
     // the whole of it is run now: the dial is the only thing that starts this,
     // so there is never a part of the fold already crossed to take over from.
+    setSwapping(true);
     swapRef.current = {
       from: spinning ? 1 : 0,
       to: spinning ? 0 : 1,
@@ -1306,6 +1389,27 @@ const WorldMap = ({
     return () => clearTimeout(id);
   }, [layerProjection, settled, width, height]);
 
+  /**
+   * The frontiers between the states, chained the way the world's are.
+   *
+   * The shapes arrive with the rest of the fine naming, a second or two after
+   * the map does, so this cannot be done at mount with the world's. Only the
+   * shared edges are kept: a state's coastline is the country's coastline and
+   * is already on the glass, and drawing it again would double its weight.
+   *
+   * Held back until the map is zoomed in. Forty-eight subdivisions of one
+   * country at world zoom is a mesh over North America that reads as noise
+   * rather than as anything, and the same lines a few steps in are the only
+   * geography a storm over the plains can be placed against.
+   */
+  const stateLines = useMemo(() => (states ? outlines(states).inner : null), [states]);
+  // Read through a ref by the render loop, which is built once and cannot be
+  // rebuilt to learn that the shapes have landed; the layer effect below takes
+  // `stateLines` itself, since arriving is exactly when it has to repaint.
+  const stateLinesRef = useRef(null);
+  stateLinesRef.current = stateLines;
+  const statesAt = useCallback((k) => (k >= STATES_K ? stateLinesRef.current : null), []);
+
   // Chaining the outline is a one-off ~17ms, and left alone it is paid inside
   // the first frame that draws it, which is the first frame of the unfold.
   // Asked for here instead, at mount, before anything is animating.
@@ -1416,6 +1520,75 @@ const WorldMap = ({
   };
   const focusXY = project(focus);
   const selectedXY = project(selection);
+
+  /**
+   * The outline of whatever the pick landed in, as an SVG path.
+   *
+   * Not across a swap between the map and the globe: the projection this is
+   * drawn in is not the one the canvas underneath is painting for the length of
+   * it, and an outline of Brazil laid over a sphere that is still folding is a
+   * shape adrift from its own country.
+   *
+   * Rebuilt as the view moves, which is a path string per pan step for one
+   * shape. That is the same order of work as the DOM marks beside it, and far
+   * less than the frame the canvas is drawing underneath; the alternative is a
+   * bitmap of the outline that has to be invalidated on every settle.
+   */
+  const pick = useMemo(() => {
+    if (swapping || !shapeAt || !selection || !projection) return null;
+    const shape = shapeAt(selection.lon, selection.lat);
+    // The globe is a function with a hemisphere test in front of it rather than
+    // a d3 projection, and a path has to be streamed. It hands the sphere
+    // itself over on `plain`, which cuts streamed geometry at the limb: a
+    // country turned to the far side goes rather than folding back over the
+    // near one.
+    if (!shape) return null;
+    const stream = projection.plain ?? projection;
+    const d = geoPath(stream)(wound(shape));
+    // Nothing drawn: the shape is behind the planet, or off the tube entirely.
+    return d ? { shape, d } : null;
+  }, [swapping, shapeAt, selection, projection]);
+
+  /**
+   * What is happening inside the picked shape, now.
+   *
+   * The bounding box first, then the same naming everything else on this
+   * instrument uses. The box alone would hand Algeria a share of Libya, and
+   * naming every burning cell on the planet to find the ones that are not in
+   * it is the walk the ranking in the panel is gated to avoid; between the two
+   * it is a handful of point-in-polygon tests on the cells that could possibly
+   * be inside, which is what the box is for.
+   *
+   * The share is of what is burning, not of the session: this whole reading is
+   * the present tense, and a country quiet for an hour should say so rather
+   * than carry the storm it had at breakfast.
+   */
+  const reading = useMemo(() => {
+    if (!pick || !locate || !selection) return null;
+    const [[west, south], [east, north]] = geoBounds(pick.shape);
+    // A shape crossing the antimeridian comes back with its edges the other way
+    // round, which is the box wrapping rather than the box being wrong.
+    const wraps = west > east;
+    const boxed = (lon, lat) =>
+      lat >= south &&
+      lat <= north &&
+      (wraps ? lon >= west || lon <= east : lon >= west && lon <= east);
+    const mine = (lon, lat) => boxed(lon, lat) && locate(lon, lat) === selection.place;
+
+    let strikes = 0;
+    let cells = 0;
+    let burning = 0;
+    for (const bin of bins) {
+      burning += bin.count;
+      if (!mine(bin.lon + BIN_SIZE / 2, bin.lat + BIN_SIZE / 2)) continue;
+      strikes += bin.count;
+      cells += 1;
+    }
+    const tracked = settings.storms
+      ? storms.filter((storm) => mine(storm.lon, storm.lat)).length
+      : 0;
+    return { strikes, cells, tracked, share: burning ? strikes / burning : 0 };
+  }, [pick, bins, storms, locate, selection, settings.storms]);
 
   const readPointer = (event) => {
     if (!projection || !projection.invert || !containerRef.current) return null;
@@ -1983,6 +2156,7 @@ const WorldMap = ({
       graticule: settings.graticule,
       daylight: settings.daylight,
       borders: settings.frontiers,
+      states: statesAt(settled.k),
       theme,
       sunAt,
       width,
@@ -2004,6 +2178,8 @@ const WorldMap = ({
     settings.frontiers,
     settled,
     spinning,
+    stateLines,
+    statesAt,
     sunAt,
     theme,
     width,
@@ -2546,6 +2722,10 @@ const WorldMap = ({
           palette,
           config.graticule,
           config.daylight,
+          // The world's outline is not a term - it is the same lines every
+          // session - but the states are: they arrive mid-session, and they
+          // come and go with how close the reader is standing.
+          statesAt(globeKRef.current),
         ],
         (context) =>
           paintLand(context, {
@@ -2554,6 +2734,7 @@ const WorldMap = ({
             graticule: config.graticule,
             daylight: config.daylight,
             borders: config.frontiers,
+            states: statesAt(globeKRef.current),
             theme: themeRef.current,
             sunAt: sunRef.current,
             width,
@@ -2667,6 +2848,7 @@ const WorldMap = ({
       const p = (now - swap.at) / swap.ms;
       if (p >= 1) {
         swapRef.current = null;
+        setSwapping(false);
         // And nothing is done to the sky here. It was faded up after the boot,
         // where the field is arriving from a cold cache and a tile landing is a
         // rectangle snapping in; there is no such thing to hide at the end of a
@@ -3352,6 +3534,7 @@ const WorldMap = ({
     settings.stations,
     settings.storms,
     settings.cells,
+    statesAt,
     history,
     width,
     height,
@@ -3528,6 +3711,50 @@ const WorldMap = ({
           onPace={onPace}
         />
       </div>
+
+      {/* What the pick landed in, drawn on once. `pathLength` normalises the
+          outline to 1 regardless of how much coastline it holds, so the same
+          dash pair draws Chile and Luxembourg at the same speed; keyed on the
+          place so picking the next one draws again rather than cutting to it. */}
+      {pick && (
+        <svg
+          className="pointer-events-none absolute inset-0"
+          width={width}
+          height={height}
+          aria-hidden="true"
+        >
+          <path key={selection.place} d={pick.d} className="pick stroke-text" pathLength="1" />
+        </svg>
+      )}
+
+      {/* The reading for what was picked, set beside it rather than in a corner:
+          the outline is what it is about, and a figure across the tube from its
+          own shape is two things to look at instead of one. Right of the shape
+          where there is room for it, left where there is not, and never off the
+          glass. Lines, no rules and no box: it is an annotation on the map, and
+          a panel here would be a second instrument in front of the first. */}
+      {pick && reading && selectedXY && (
+        <div
+          className="pointer-events-none absolute bg-void/80 px-1.5 py-1 text-2xs uppercase tracking-label unselectable"
+          style={hudAt(selectedXY, width, height)}
+        >
+          <div className="text-text glow">{selection.place}</div>
+          <div className="mt-0.5 text-dim">
+            {reading.strikes ? `${reading.strikes.toLocaleString("en-US")} burning` : "quiet"}
+          </div>
+          {reading.strikes > 0 && (
+            <div className="mt-0.5 text-dim">
+              {reading.cells.toLocaleString("en-US")} cells
+              {reading.tracked ? ` · ${reading.tracked} storms` : ""}
+            </div>
+          )}
+          {reading.share > 0 && (
+            <div className="mt-0.5 text-dim">
+              {reading.share < 0.01 ? "<1" : Math.round(reading.share * 100)}% of world
+            </div>
+          )}
+        </div>
+      )}
 
       {/* A held mark on the filtered place, and a soft one on the feed row
           under the pointer. Both are DOM so the canvas loop stays untouched. */}

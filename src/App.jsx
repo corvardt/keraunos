@@ -311,6 +311,10 @@ function App() {
   // Until they land, `locate` answers at the resolution it has: "USA" rather
   // than "Texas", "open water" rather than "Coral Sea".
   const [detail, setDetail] = useState({ us: null, water: null });
+  // The state shapes themselves, kept beside the index built from them: the
+  // index answers where a point is and has thrown the outlines away, and the
+  // map draws the frontiers between them.
+  const [states, setStates] = useState(null);
   // How many shapes each of those two brought, or zeroes if they never
   // arrived. Held apart from the indexes themselves because it is not a map
   // concern: the boot readout reports it, and by the time the indexes exist
@@ -323,6 +327,7 @@ function App() {
       .then(([us, water]) => {
         if (!live) return;
         setNamed({ us: us.default.features.length, water: water.default.features.length });
+        setStates(us.default.features);
         setDetail({
           us: indexFeatures(us.default.features),
           // Pre-sorted smallest-first, so the first hit is the most specific
@@ -411,23 +416,35 @@ function App() {
     return hush;
   }, [settings.thunder, here, replayAt !== null]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const locate = useCallback(
+  /**
+   * The shape a point falls in, at the finest resolution loaded: a state
+   * inside the United States, a named sea at the coarser resolution the water
+   * set gives, a country everywhere else. Null over water nobody has named.
+   *
+   * The naming below is this lookup with the name read off it. The map wants
+   * the shape itself, to draw the outline of what has been picked, and a
+   * second walk of the polygons to find what has already been found once
+   * would be the same work twice.
+   */
+  const shapeAt = useCallback(
     (lon, lat) => {
       const country = findFeature(worldIndex, lon, lat);
       if (country) {
         if (country.properties.name === "USA" && detail.us) {
-          const state = findFeature(detail.us, lon, lat);
-          if (state) return state.properties.name;
+          return findFeature(detail.us, lon, lat) ?? country;
         }
-        return country.properties.name;
+        return country;
       }
       // Most strikes fall at sea, and "open water" is the same answer for the
       // Coral Sea as for the mid-Atlantic. Name the body where we can.
-      if (!detail.water) return "open water";
-      const water = findFeature(detail.water, lon, lat);
-      return water ? water.properties.name : "open water";
+      return detail.water ? findFeature(detail.water, lon, lat) : null;
     },
     [worldIndex, detail]
+  );
+
+  const locate = useCallback(
+    (lon, lat) => shapeAt(lon, lat)?.properties.name ?? "open water",
+    [shapeAt]
   );
 
   const handleDataReceived = useCallback((data) => {
@@ -1227,6 +1244,8 @@ function App() {
             // turning the chrome off is never a door that locks behind you.
             onConfig={settings.chrome ? null : openConfig}
             locate={locate}
+            shapeAt={shapeAt}
+            states={states}
             focus={focus}
             selection={selection}
             here={here}

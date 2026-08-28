@@ -183,11 +183,40 @@ a {
   mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
 }
 
+/* ── The picked shape ───────────────────────────────────────────────────────
+   The outline of the country, state or sea a pick landed in. It is drawn
+   rather than switched on: the stroke runs round the coast once, and the wash
+   inside it comes up bright and settles, which is the same decay every other
+   arrival on this instrument follows. What is left is a held outline, quiet
+   enough to read the map through. */
+@keyframes pick-in {
+  from {
+    stroke-dashoffset: 1;
+    fill-opacity: 0.16;
+  }
+  to {
+    stroke-dashoffset: 0;
+    fill-opacity: 0.05;
+  }
+}
+
+.pick {
+  fill: currentColor;
+  fill-opacity: 0.05;
+  stroke-width: 1;
+  /* Normalised by `pathLength` on the element, so this is the whole outline
+     however long it is, and the offset that hides it is the same number. */
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: pick-in 900ms ease-out;
+}
+
 /* Only this instrument's own. `settle`, `breathe`, `seek` and the sweep are
    cancelled by the shared medium. */
 @media (prefers-reduced-motion: reduce) {
   .flash,
   .alive,
+  .pick,
   .row,
   .crt-roll,
   .boot-line,
