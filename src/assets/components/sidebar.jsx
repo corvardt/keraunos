@@ -561,14 +561,6 @@ function Sidebar({
           the link, they move on the network's schedule rather than the
           weather's, and under their own heading they say so without a word of
           explanation. Unlit, for the same reason. */}
-      {/* Absent until the link has said something, rather than drawn as a pair
-          of dashes. The reach and the day curve already withhold themselves for
-          this reason and this is the same fact: a session that has heard
-          nothing yet, or one with no relay behind it at all, was opening on a
-          column of zeroes and em dashes, which reads as a broken instrument
-          rather than an idle one. The footer is where a link that is not there
-          is reported. */}
-      {(stats.delay !== null || stats.stations !== null) && (
       <section data-tour="stats" className="border-b border-line px-4 pb-1 pt-4">
         <Label>Link</Label>
         <Readout
@@ -590,7 +582,6 @@ function Sidebar({
             one, and the picture is per strike where the number could only ever
             be the middle of the last few. */}
       </section>
-      )}
 
       {/* How far the lightning is coming from, and why that changes between
           noon and midnight. Absent until there is a shape
