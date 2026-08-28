@@ -1,4 +1,5 @@
 import { memo, useEffect, useState } from "react";
+import { BINS, STEP_KM } from "../../lib/reach.js";
 
 const TRACE_W = 300;
 const TRACE_H = 34;
@@ -267,65 +268,176 @@ function DayTrace({ day }) {
   );
 }
 
+// Height of the reach distributions. Shorter than the day trace: that one is a
+// day of weather and this is two curves whose only job is to be compared with
+// each other and with the two rules under them.
+const REACH_H = 34;
+
 /**
- * The two reach readings, as two bars on one scale.
+ * Where the shared axis ends, in kilometres.
  *
- * This was a pair of histograms drawn over each other, and it was the hardest
- * thing in the panel to read. The shapes were honest and almost nobody could
- * get an answer out of them: two overlapping curves at 40px, one filled and one
- * stroked, each scaled to its own peak, asking the eye to judge which had more
- * mass further right. That is a comparison of areas, and an eye is bad at
- * areas.
+ * Everything in this group is drawn against this one number: both curves, both
+ * bars, and the heading. That is the whole of what makes it one picture instead
+ * of three, and it is why the extent is worked out here rather than inside any
+ * of them.
  *
- * The question is only ever "does the sferic get further at night", and the eye
- * is very good indeed at comparing two lengths that start at the same place. So
- * the distributions are gone and what is left is the figure each of them was
- * being read for.
+ * Not the furthest anything was heard, which is what the axis used to run to.
+ * One freak path of fifteen thousand kilometres would set it, and the reading
+ * would then be four fifths empty glass with everything that matters crushed
+ * into the left-hand corner. The far half-percent is dropped instead, which
+ * costs a tail nobody could resolve at this height and buys back the width the
+ * comparison is made in.
+ */
+function reachExtent(reach) {
+  const total = reach.day.n + reach.night.n;
+  if (!total) return 0;
+  let seen = 0;
+  for (let bin = 0; bin < BINS; bin++) {
+    seen += reach.day.counts[bin] + reach.night.counts[bin];
+    if (seen >= total * 0.995) return (bin + 1) * STEP_KM;
+  }
+  return reach.span * STEP_KM;
+}
+
+/**
+ * The two distributions, over each other, on one scale.
  *
- * The bar runs to the ninetieth percentile, because that is where the waveguide
+ * "One scale" is the whole correction here, and it is two scales at once. The
+ * x is `reachExtent`, shared with the bars below, so a bar's end falls on the
+ * point of the curve it is marking. The y is a share of each half's own
+ * strikes rather than a count of them.
+ *
+ * That second one is the fix. These were drawn as raw counts, each scaled to
+ * its own peak, which was a reasonable answer to a real problem: the two bins
+ * fill at whatever rate the weather offers, so at an hour when the world's
+ * lightning is all over the Americas the daylight half has ten times the
+ * strikes in it, and drawn as counts against one axis the night curve is a
+ * flat line along the floor. But scaling each to itself means they are never
+ * on the same axis at all, which is the one arrangement that makes the
+ * comparison impossible, and the comparison is the reading.
+ *
+ * A density has neither fault. Both curves integrate to the same thing, so
+ * neither is punished for the weather being somewhere else, and the height at
+ * a range now means "this share of strikes carried this far", which is
+ * comparable between them by construction. A night curve sitting to the right
+ * of the day curve is the ionosphere, drawn.
+ *
+ * Day is the filled shape and night is the line, the pairing the day trace
+ * above already uses: the fill is context and the line is the thing being read.
+ * Night gets the line because night is the interesting half.
+ */
+function ReachChart({ reach, extent }) {
+  const bins = Math.max(2, Math.round(extent / STEP_KM));
+
+  const shape = (counts, total) => {
+    if (!total) return null;
+    const density = Array.from({ length: bins }, (unused, i) => counts[i] / total);
+    return density;
+  };
+
+  const lit = shape(reach.day.counts, reach.day.n);
+  const dark = shape(reach.night.counts, reach.night.n);
+  if (!lit && !dark) return null;
+
+  // One peak across both, which is what puts them on the same axis.
+  const peak = Math.max(...(lit ?? [0]), ...(dark ?? [0]));
+  if (!peak) return null;
+
+  const step = TRACE_W / (bins - 1);
+  const points = (density) =>
+    density.map((value, i) => [i * step, REACH_H - (value / peak) * (REACH_H - 2) - 1]);
+  const path = (pts) =>
+    pts.map(([px, py], i) => `${i ? "L" : "M"}${px.toFixed(1)} ${py.toFixed(1)}`).join(" ");
+
+  return (
+    <svg
+      viewBox={`0 0 ${TRACE_W} ${REACH_H}`}
+      preserveAspectRatio="none"
+      className="mt-2 h-[34px] w-full"
+      role="img"
+      aria-label={`How far strikes were heard, over paths in daylight against paths in darkness, out to ${Math.round(extent / 1000)} thousand kilometres`}
+    >
+      {lit && (
+        <path
+          d={`${path(points(lit))} L${TRACE_W} ${REACH_H} L0 ${REACH_H} Z`}
+          className="fill-line"
+        />
+      )}
+      {dark && (
+        <path
+          d={path(points(dark))}
+          className="stroke-text"
+          fill="none"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+    </svg>
+  );
+}
+
+/**
+ * The same two distributions as two rules, on the same axis as the curves.
+ *
+ * The curve above says what the shape is; this says where each half's far end
+ * falls, which is the question. An eye is poor at judging which of two
+ * overlapping areas has more mass to the right and very good at telling which
+ * of two lengths from a common origin is longer, so the reading the section
+ * exists for is drawn the second way and the shape is left to say the rest.
+ *
+ * The rule runs to the ninth strike in ten, because that is where the waveguide
  * shows: the median is mostly a fact about where the volunteers live, since
  * half the network is in Europe, and that sets how far a typical strike has to
  * carry before somebody hears it whatever the sky is doing. The median is kept
- * as a tick inside the bar rather than dropped, so the middle and the far end
- * are still both on screen and it is visible when they move apart.
+ * as a tick inside the rule, so the middle and the far end are both on screen
+ * and it is visible when they move apart.
  *
- * Both bars share one scale, which is the whole point: scaled to themselves
- * they would always be the same length and the reading would be gone.
+ * The count rides on the end of each. A rule drawn from two hundred strikes and
+ * one drawn from twenty thousand are the same rule, which is exactly the thing
+ * a histogram wore on its face and a length cannot: a thin half looks as
+ * confident as a full one unless it says how thin it is.
  */
-function ReachBars({ reach }) {
+function ReachBars({ reach, extent }) {
   const sides = [
     { key: "day", label: "Day", side: reach.day },
     { key: "night", label: "Night", side: reach.night },
   ];
-  // The furthest either half got, so the two are drawn against each other.
-  const full = Math.max(reach.day.tail ?? 0, reach.night.tail ?? 0);
-  if (!full) return null;
+  if (!extent) return null;
 
   return (
-    <div className="mt-2 space-y-1.5">
+    <div className="mt-1.5 space-y-1">
       {sides.map(({ key, label, side }) => (
         <div key={key} className="flex items-center gap-2">
-          <span className="w-10 shrink-0 text-2xs uppercase tracking-label text-dim">{label}</span>
-          {/* A half that has not filled yet draws no bar at all. A short one
+          <span className="w-9 shrink-0 text-2xs uppercase tracking-label text-dim">{label}</span>
+          {/* A half that has not filled yet draws no rule at all. A short one
               would be a claim that the sferic did not get far, where the truth
-              is that nothing has been counted. */}
-          <span className="relative h-2 flex-1 bg-line">
+              is that nothing has been counted yet. */}
+          <span className="relative h-1.5 flex-1 bg-line">
             {side.tail !== null && (
               <>
                 <span
                   className="absolute inset-y-0 left-0 bg-land"
-                  style={{ width: `${(side.tail / full) * 100}%` }}
+                  style={{ width: `${Math.min(100, (side.tail / extent) * 100)}%` }}
                 />
-                {/* The middle of the distribution, held inside its own bar. */}
                 <span
                   className="absolute inset-y-0 w-px bg-text"
-                  style={{ left: `${(side.median / full) * 100}%` }}
+                  style={{ left: `${Math.min(100, (side.median / extent) * 100)}%` }}
                 />
               </>
             )}
           </span>
-          <span className="w-16 shrink-0 text-right text-xs tabular-nums text-text">
-            {side.tail === null ? "\u2014" : `${Math.round(side.tail).toLocaleString("en-US")} km`}
+          <span className="w-24 shrink-0 text-right text-2xs tabular-nums text-dim">
+            {side.tail === null ? (
+              "\u2014"
+            ) : (
+              <>
+                <span className="text-xs text-text">
+                  {Math.round(side.tail).toLocaleString("en-US")}
+                </span>
+                {" km · "}
+                {side.n.toLocaleString("en-US")}
+              </>
+            )}
           </span>
         </div>
       ))}
@@ -336,16 +448,17 @@ function ReachBars({ reach }) {
 /**
  * The reading itself, in one line, where both halves are ready to give it.
  *
- * The bars say which is longer and this says by how much, which between them is
- * the whole of what this section exists to report. Withheld rather than guessed
- * at until both distributions have enough in them: they fill on the weather's
- * schedule and it is ordinary for one to be ready an hour before the other.
+ * The rules say which is longer and this says by how much, which between them
+ * is the whole of what this section exists to report. Withheld rather than
+ * guessed at until both distributions have enough in them: they fill on the
+ * weather's schedule and it is ordinary for one to be ready an hour before the
+ * other.
  */
 function ReachVerdict({ reach }) {
   const { day, night } = reach;
   if (day.tail === null || night.tail === null) {
     return (
-      <p className="mt-1.5 text-xs text-dim">
+      <p className="mt-2 text-xs text-dim">
         &gt; {day.tail === null && night.tail === null ? "listening" : "waiting on the other half of the sky"}
       </p>
     );
@@ -357,10 +470,10 @@ function ReachVerdict({ reach }) {
   // to the effect being drawn, so a couple of percent either way is noise
   // wearing a number.
   if (percent < 5) {
-    return <p className="mt-1.5 text-xs text-dim">&gt; night and day reaching about the same</p>;
+    return <p className="mt-2 text-xs text-dim">&gt; night and day reaching about the same</p>;
   }
   return (
-    <p className="mt-1.5 text-xs text-dim">
+    <p className="mt-2 text-xs text-dim">
       &gt; <span className="text-text glow">night {percent}% {change > 0 ? "further" : "shorter"}</span>
     </p>
   );
@@ -494,6 +607,10 @@ function Sidebar({
       )
     : feed;
   const busiest = Math.max(1, ...regions.map((region) => region.count));
+  // The reach group's one axis, worked out here because three things are drawn
+  // against it and none of them may disagree with the others about how wide the
+  // sky is.
+  const extent = reach ? reachExtent(reach) : 0;
   // The same rate the group at the top is showing, in the unit the figure it is
   // about to be compared against was published in.
 
@@ -643,8 +760,8 @@ function Sidebar({
       {settings.reach && reach && (
         <section className="border-b border-line px-4 pb-4 pt-4">
           <Label
-            trailing="90th"
-            hint="How far each strike was heard, counted to the most distant station that helped place it. The bar is the ninth strike in ten, which is where the waveguide shows; the tick inside it is the middle of the distribution. Sunlight makes a lossy layer at 60 to 70 km that the sferic has to bounce off; after sunset it decays and the reflection moves up to 85 to 90 km, where less is lost at every hop, so night should be the longer bar. Both are floors: the most distant station that heard a strike is not as far as it went."
+            trailing={extent ? `0-${Math.round(extent / 1000)}k km` : null}
+            hint="How far each strike was heard, counted to the most distant station that helped place it. The curve is the shape, as a share of each half's own strikes; the rules under it are the ninth strike in ten, with the middle marked inside. Sunlight makes a lossy layer at 60 to 70 km that the sferic has to bounce off; after sunset it decays and the reflection moves up to 85 to 90 km, where less is lost at every hop, so night should be the longer rule. Both are floors: the most distant station that heard a strike is not as far as it went."
             shut={shut.reach}
             onToggle={fold("reach")}
           >
@@ -652,7 +769,8 @@ function Sidebar({
           </Label>
           {!shut.reach && (
             <>
-              <ReachBars reach={reach} />
+              <ReachChart reach={reach} extent={extent} />
+              <ReachBars reach={reach} extent={extent} />
               <ReachVerdict reach={reach} />
             </>
           )}

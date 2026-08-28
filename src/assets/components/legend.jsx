@@ -507,19 +507,35 @@ export default function Legend({ onClose }) {
             <>
               <p>
                 Counted to the most distant station that helped place each strike, and split by
-                whether the middle of that path lay under a sunlit ionosphere or a dark one. Each
-                bar runs to the ninth strike in ten rather than the farthest of all, since the
-                farthest of all is one strike and one strike is not a propagation condition. The
-                tick inside a bar is the middle of the distribution, which is mostly a fact about
-                where the volunteers live: half the network is in Europe, and that sets how far a
-                typical strike has to carry before somebody hears it whatever the sky is doing.
+                whether the middle of that path lay under a sunlit ionosphere or a dark one.
               </p>
               <p>
-                Both bars are drawn on one scale, because the reading is not either length but the
-                difference between them. Neither is drawn until its own half has 200 strikes in it:
-                they fill on the weather&rsquo;s schedule rather than the clock&rsquo;s, so at an
-                hour when the world&rsquo;s lightning is all over the Americas the sunlit half is
-                ready long before the dark one.
+                The curve is the shape of it: filled is daylight, the line is darkness, and the
+                height at a range is the share of that half&rsquo;s strikes that carried
+                that far. A share rather than a count, so that a half the weather has left quiet
+                is not drawn short for it — the two fill at whatever rate the sky offers, and how
+                many landed in each says nothing about how far they went. Both curves therefore sit
+                on one axis, which is the only arrangement the comparison can be made in.
+              </p>
+              <p>
+                The two rules under it are the same two distributions read as a length, because an
+                eye is poor at judging which of two overlapping shapes has more mass to the right
+                and very good at telling which of two lines is longer. Each runs to the ninth strike
+                in ten rather than the farthest of all, since the farthest of all is one strike and
+                one strike is not a propagation condition. The tick inside a rule is the middle of
+                the distribution, mostly a fact about where the volunteers live: half the network is
+                in Europe, and that sets how far a typical strike has to carry before somebody hears
+                it whatever the sky is doing. The count on the end is how much is behind the rule,
+                since a rule drawn from two hundred strikes looks exactly as certain as one drawn
+                from twenty thousand.
+              </p>
+              <p>
+                Neither half is drawn until it has 200 strikes in it. They fill on the
+                weather&rsquo;s schedule rather than the clock&rsquo;s, so at an hour when the
+                world&rsquo;s lightning is all over the Americas the sunlit half is ready long
+                before the dark one. The axis stops where all but the last half-percent was heard:
+                one freak path of fifteen thousand kilometres would otherwise set it and crush
+                everything worth reading into the left-hand corner.
               </p>
               <p>
                 Sunlight makes a lossy layer at 60 to 70 km that the sferic has to bounce off; after
