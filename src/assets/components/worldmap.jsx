@@ -3797,6 +3797,13 @@ const WorldMap = ({
         </button>
       </div>
 
+      {/* Closed up into one strip, the two groups meet with nothing between
+          them and `[ here ]` runs straight into the first dial. The hairline
+          that used to separate them comes back for exactly the widths where
+          they share a row; above `sm` they are in opposite corners and a rule
+          in the middle of the tube would be marking nothing. */}
+      <span className="h-2.5 w-px shrink-0 self-center bg-line sm:hidden" aria-hidden="true" />
+
       {/* The dials. */}
       <div
         className={`flex items-center gap-2 ${flat ? "pointer-events-auto" : ""}`}
