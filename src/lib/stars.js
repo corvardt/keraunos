@@ -34,8 +34,8 @@
  * the night side of the globe faces the constellations that are actually behind
  * it, and the sky at four in the morning is not the sky at midnight.
  *
- * Nothing is drawn over the planet. The globe's land is dots on the void with
- * no fill behind them, so a star inside the disk is not a star behind the
+ * Nothing is drawn over the planet. The globe's land is an outline on the void
+ * with no fill behind it, so a star inside the disk is not a star behind the
  * earth, it is the earth turning transparent. It is cut at the limb, and the
  * limb is exactly where the camera says the earth occludes the sky, so the cut
  * is the same geometry stated once rather than an effect laid on top.

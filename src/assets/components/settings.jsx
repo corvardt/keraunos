@@ -256,7 +256,7 @@ export default function Settings({
       </Group>
 
       {/* Which world, the field, the storm cells and the burn window are not
-          here: they are on the tube, beside the region presets. They are the
+          here: they are the dials across the top of the tube. They are the
           ones that get changed while watching rather than set once, and a
           control you reach for that often does not belong behind a panel. What
           is left is the furniture. */}

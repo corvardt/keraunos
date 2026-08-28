@@ -207,7 +207,7 @@ const GLOBE_TURN_MAX_MS = 1100;
 // rate: a frame is a zoom and a pan at once, and there is no single distance to
 // scale it by that means the same thing at both ends of the zoom range.
 const VIEW_EASE_MS = 640;
-// Where the globe stops shading night onto the dots, easing out so that the
+// Where the globe stops shading night onto the outline, easing out so that the
 // flat map's wash arrives onto an evenly lit world rather than trading places
 // with a second treatment mid-frame.
 const HANDOVER = 0.72;
@@ -447,12 +447,12 @@ function useElementSize(ref) {
 // How many device pixels the tube is drawn at, per pixel of layout.
 //
 // The screen's own answer, up to a point. Past two the marks this map is made
-// of stop gaining anything, since a dot is 1.8px of glass and a hairline is
-// one, and neither is carrying detail a third sample could resolve, while
-// everything that costs area goes on getting more expensive as its square. A
-// phone at three is drawing 2.25 times the pixels of the same tube at two, four
-// times over per frame (the void, the sky, the matrix, the burn-in), for a
-// picture that is a dot matrix on black.
+// of stop gaining anything, since every line this map is drawn with is a
+// hairline, and a hairline carries no detail a third sample could resolve,
+// while everything that costs area goes on getting more expensive as its
+// square. A phone at three is drawing 2.25 times the pixels of the same tube at
+// two, four times over per frame (the void, the sky, the outline, the burn-in),
+// for a picture that is a wireframe on black.
 //
 // It is the globe that made this worth stating. The flat map pans by stretching
 // a bitmap it already has, so its area is paid once per settle; a rotation has
@@ -990,9 +990,9 @@ function paintHistory(
 
   ctx.font = '10px "IBM Plex Mono", ui-monospace, monospace';
   ctx.textBaseline = "middle";
-  // Knocked out of the background before being drawn: a label over the
-  // land matrix is text on a field of dots at nearly its own weight, and
-  // no amount of contrast fixes that; the dots have to go first.
+  // Knocked out of the background before being drawn: a label over the coast
+  // is text crossed by a hairline at nearly its own weight, and no amount of
+  // contrast fixes that; what is under it has to go first.
   ctx.strokeStyle = palette.void;
   ctx.fillStyle = palette.void;
   ctx.lineJoin = "round";
@@ -1135,8 +1135,8 @@ const WorldMap = ({
   // over at and the size the mode always opens at. Below it the reader has
   // pushed the world away to stand further off it; above it they have leaned
   // in, and the matrix is rebuilt finer to meet them. `globeK` is a term in the
-  // spacing, so a planet drawn twice the size is drawn from twice the dots
-  // rather than from the same ones spread further apart. `GLOBE_MAX_K` is where
+  // spacing, so a planet drawn twice the size is drawn at twice the resolution
+  // rather than from the same outline stretched. `GLOBE_MAX_K` is where
   // that stops paying for itself.
   const [globeK, setGlobeK] = useState(1);
   const globeKRef = useRef(globeK);
@@ -1195,7 +1195,7 @@ const WorldMap = ({
   // earth until it has, and nothing may move it, not the reader and not a
   // link. A globe is drawn at one scale, from a matrix built for one scale, and
   // there is no meaning to being zoomed into Oklahoma on a planet seen from
-  // orbit: the matrix would hold dots for Oklahoma alone and the globe would
+  // orbit: the matrix would hold Oklahoma alone and the globe would
   // come up an empty wireframe, which is exactly what a shared link used to do.
   const [flat, setFlat] = useState(false);
   // Whether the world is between shapes. The swap itself is a ref, because it
@@ -1299,8 +1299,8 @@ const WorldMap = ({
     // Both, together, and not just the live view. The matrix is built from the
     // *settled* one, and it normally catches up a settle later, which is fine
     // when the view is being dragged and fatal here: the swap starts on the
-    // next frame and would spend its first third drawing a world whose dots are
-    // all in whichever country the map happened to be zoomed into. Set here,
+    // next frame and would spend its first third drawing a world that is all in
+    // whichever country the map happened to be zoomed into. Set here,
     // the matrix is rebuilt in the same render that arms the swap, so the world
     // the planet rolls up out of is a whole one.
     if (spinning) {
@@ -1764,7 +1764,7 @@ const WorldMap = ({
    * animation on demand, and it has to say so too: a view moved under a
    * running swap is not the view the swap is drawing, and worse, `settled`
    * follows it and rebuilds the land matrix for wherever the reader zoomed to.
-   * The planet then comes up holding dots for that one place: the empty
+   * The planet then comes up holding that one place alone: the empty
    * wireframe described above, arrived at from the other direction.
    *
    * Read live rather than derived in render. Arming a swap is a ref write on a
@@ -1778,7 +1778,7 @@ const WorldMap = ({
    * A sphere has no pan and no k, so this is the only thing zoom can mean here.
    * Out, the world shrinks to `GLOBE_MIN_K` and stops, because a globe is
    * already the whole planet and further off is not a view of anything more.
-   * In, it grows to `GLOBE_MAX_K`, where the land matrix runs out of dots to
+   * In, it grows to `GLOBE_MAX_K`, where the land matrix runs out of detail to
    * give.
    *
    * Both ends are stops and neither is a door: zooming does not change which
@@ -2007,7 +2007,7 @@ const WorldMap = ({
     // The layers are viewport-sized bitmaps stretched through the delta from
     // the view they were built for, which is fine for a drag and ruinous for a
     // flight: a matrix built for europe is a patch in the middle of the glass
-    // on the way to africa, and the dots are simply gone until the settle. Sent
+    // on the way to africa, and the world is simply gone until the settle. Sent
     // back to the world for the length of the turn, the bitmap contains every
     // view the flight passes through, so the matrix is stretched and coarse in
     // the air rather than absent. The settle above sharpens it on arrival.
@@ -2609,7 +2609,7 @@ const WorldMap = ({
     };
 
     // Cloud under the land matrix rather than over it. Physically it is the
-    // wrong way round and on the glass it is the only way round: the dot matrix
+    // wrong way round and on the glass it is the only way round: the coastline
     // is how you know where you are looking, and a wash laid over it takes the
     // coastline away exactly where the weather is. Underneath, the same wash
     // reads as something lit behind the world, which is what a tube does best
@@ -2882,7 +2882,7 @@ const WorldMap = ({
      *
      * Not a second animation that resembles the first. It is the first, driven
      * from a different pair of endpoints: one projection interpolated, so the
-     * dots arrive where they belong rather than being tweened into place and
+     * coast arrives where it belongs rather than being tweened into place and
      * hoping, and so the frame it hands over on is the same picture twice at
      * both ends. `t = 1` is `fitProjection` to the pixel, and `t = 0` is the
      * sphere `globeProjection` draws, at the same radius, in the same place.
@@ -2946,7 +2946,7 @@ const WorldMap = ({
           // cost is a stretch with no terminator on it at all, which nobody
           // sees under a readout on the way in and everybody sees when the same
           // move is a control they just pressed. So night is carried by the
-          // dots the whole way here, and the wash arrives over it.
+          // outline the whole way here, and the wash arrives over it.
           shade: 1,
         },
       });
@@ -3346,9 +3346,23 @@ const WorldMap = ({
         );
         if (clash) continue;
         taken.push(box);
+        // Knocked out of what is behind it before it is drawn, exactly as a
+        // capital's name is. This label has more to survive than that one: it
+        // sits over the land outline, the burn-in and the cloud field at once,
+        // and it is drawn at as little as 0.45 of the reading token, where a
+        // figure over a bright anvil was the least legible text on the tube.
+        // The halo clears a space rather than tinting one, so it fades with the
+        // label instead of leaving a patch behind when the cell goes.
         ctx.globalAlpha = label.alpha;
+        ctx.strokeStyle = palette.void;
+        ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
+        ctx.miterLimit = 2;
+        ctx.strokeText(label.text, label.x, label.y);
+        ctx.lineWidth = 1;
         ctx.fillText(label.text, label.x, label.y);
       }
+      ctx.strokeStyle = palette.text;
       ctx.globalAlpha = 1;
 
       // The fix, drawn: a thread from each contributing detector to the strike
@@ -3907,10 +3921,12 @@ const WorldMap = ({
           a panel here would be a second instrument in front of the first. */}
       {pick && reading && selectedXY && (
         <div
-          className="pointer-events-none absolute bg-void/80 px-1.5 py-1 text-2xs uppercase tracking-label unselectable"
+          className="pointer-events-none absolute bg-void/80 px-1.5 py-1 text-2xs tabular-nums unselectable"
           style={hudAt(selectedXY, width, height)}
         >
-          <div className="text-text glow">{selection.place}</div>
+          {/* Same reasoning as the corner readout: this is the name of what was
+              picked, and a name is a value. */}
+          <div className="text-xs text-text glow">{selection.place}</div>
           <div className="mt-0.5 text-dim">
             {reading.strikes ? `${reading.strikes.toLocaleString("en-US")} strikes` : "quiet"}
           </div>
@@ -4005,9 +4021,14 @@ const WorldMap = ({
               &#215;{view.k.toFixed(1)}
             </div>
           )}
+          {/* Values, not labels. There is no caption in this block at all: a
+              place, a coordinate and a count, three readings stacked, and the
+              whole of it was wearing the 10px uppercase label idiom. Caps and
+              0.14em on a proper noun is a name read twice, and it is read here
+              more often than anywhere else on the instrument. */}
           {cursor && !panning && (
-            <div className="bg-void/80 px-2 py-1.5 text-2xs uppercase tracking-label">
-              <div className="truncate text-text glow">[ {place ?? "—"} ]</div>
+            <div className="bg-void/80 px-2 py-1.5 text-2xs tabular-nums">
+              <div className="truncate text-xs text-text glow">{place ?? "—"}</div>
               <div className="mt-0.5 text-dim">
                 {coord(cursor.lat, "lat")} {coord(cursor.lon, "lon")}
               </div>

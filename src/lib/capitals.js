@@ -1,7 +1,7 @@
 // Capitals, as sparse orientation marks.
 //
-// The map is a dot matrix with no coastline, which is legible as a planet and
-// useless as an atlas: at 6× zoom over central Africa there is nothing to say
+// The map is a bare coastline, which is legible as a planet and useless as an
+// atlas: at 6× zoom over central Africa there is nothing to say
 // which part of central Africa. A handful of named points fixes that without
 // the map becoming a reference chart: they are drawn dim, small, and culled
 // hard, so they stay underneath the strikes rather than competing with them.

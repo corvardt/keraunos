@@ -759,7 +759,7 @@ async function fetchTile(z, x, y, at) {
  *
  * Two passes, because cloud and storm are not the same reading and should not
  * be the same mark. The body of the cloud is laid down in the land token at low
- * alpha: it is terrain, the same class of thing as the dot matrix, and it is
+ * alpha: it is terrain, the same class of thing as the coastline, and it is
  * there to be seen past. Over it, only the coldest tops, in the reading token
  * and much harder. What that second pass draws is very nearly a map of where
  * this map is about to have something to show, which is why it is allowed to be

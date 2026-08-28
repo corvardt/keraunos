@@ -420,7 +420,14 @@ const Row = memo(function Row({ strike, onSelect, onFocus, onHold }) {
       >
         <span className="shrink-0 text-dim">&gt;</span>
         <span className="shrink-0 text-dim">{strike.time}</span>
-        <span className="truncate uppercase">{strike.place}</span>
+        {/* A place name is a value, and values are not set in caps: the label
+            idiom is 10px uppercase at 0.14em, and a proper noun wearing it is a
+            result read twice. It also truncates sooner, which in a 340px column
+            is the difference between reading "Papua New Guinea" and reading
+            "PAPUA NEW GUIN…". The map has always drawn these as they are
+            written, so this is also what makes the panel and the tube agree
+            about how a place is spelled. */}
+        <span className="truncate">{strike.place}</span>
         <span className="ml-auto shrink-0 text-dim">{strike.delay}</span>
       </button>
     </li>
@@ -508,12 +515,26 @@ function Sidebar({
           unit={stats.surging ? `↑${stats.surging}` : ""}
           hint="Clusters of 12 strikes or more in adjacent ~45 km bins. The arrow counts those whose flash rate is climbing sharply."
         />
+        {/* The session total belongs with the rate rather than with the curve
+            it used to sit under. Both are counts of what this tab has heard,
+            one over a minute and one over the whole session, and the reader
+            comparing them is doing the obvious thing. It moved because Session
+            now opens folded: the total was going with the fold, and the second
+            figure anybody looks for was reachable only by opening a group whose
+            heading says nothing about holding it. */}
+        <Readout
+          label="Detected"
+          value={fmt(stats.total)}
+          hint="Every strike this tab has heard since it opened, and only those. Not a figure about the world: the hour the session started from is on the map but is not counted here."
+        />
       </section>
 
-      {/* Since the tab was opened. The trace is absent rather than empty until
-          there is a curve to draw, since two minutes is the least it can be
-          and still be a line, but the total is always here, so the group never
-          disappears out from under a figure somebody was watching. */}
+      {/* Since the tab was opened, as a shape. The curve is absent rather than
+          empty until there is one to draw, two minutes being the least it can
+          be and still be a line, so a fresh session shows the heading and its
+          fold and nothing else. That is the whole group now: the session total
+          used to sit here and has gone up to the rate, which is the figure it
+          is actually read against. */}
       <section className="border-b border-line px-4 pb-1 pt-4">
         <Label
           trailing={day?.series?.length > 1 ? span(day.spanMs) : null}
@@ -533,24 +554,21 @@ function Sidebar({
                 firing at its hardest, and when. UTC, like the footer clock and
                 for the same reason: the peak is somebody's afternoon, and
                 whose it was is the reading. */}
+            {/* The caption keeps the label idiom; the two figures do not. They
+                were the only values in this panel drawn at label size, which
+                after Rate took the figure scale left them two steps below every
+                other reading in the column. */}
             <div className="mt-1 flex items-baseline justify-between text-2xs uppercase tracking-label text-dim">
               <span>Peak</span>
-              <span>
-                <span className="text-text">{fmt(day.peak.rate)}</span> / min at{" "}
-                <span className="text-text">
+              <span className="normal-case tracking-normal">
+                <span className="text-xs text-text">{fmt(day.peak.rate)}</span> / min at{" "}
+                <span className="text-xs text-text">
                   {new Date(day.peak.t).toISOString().slice(11, 16)}
                 </span>
                 z
               </span>
             </div>
           </>
-        )}
-        {!shut.session && (
-          <Readout
-            label="Detected"
-            value={fmt(stats.total)}
-            hint="Every strike this tab has heard since it opened, and only those. Not a figure about the world: the hour the session started from is on the map but is not counted here."
-          />
         )}
       </section>
 
@@ -686,7 +704,7 @@ function Sidebar({
                     aria-hidden="true"
                   />
                   {/* Positioned, so they paint over the bar behind them. */}
-                  <span className="relative truncate uppercase">{region.place}</span>
+                  <span className="relative truncate">{region.place}</span>
                   <span className="relative ml-auto shrink-0 text-dim">{fmt(region.count)}</span>
                 </button>
               </li>
@@ -739,7 +757,9 @@ function Sidebar({
             onClick={() => onSelect(selection)}
             className="mt-2 flex w-full items-center gap-2 text-2xs uppercase tracking-label text-text transition-colors hover:text-dim active:text-dim touch:py-2"
           >
-            <span className="truncate">
+            {/* The brackets and `clear` are the control and keep the control's
+                idiom; the name between them is a value and does not. */}
+            <span className="truncate normal-case tracking-normal">
               [ {selection.radius ? `cell · ${selection.place}` : selection.place} ]
             </span>
             <span className="shrink-0 text-dim">clear &#215;</span>

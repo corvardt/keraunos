@@ -9,8 +9,8 @@ import { fitProjection, LAT_LIMIT, PAD } from "./view.js";
  * scale and a translate, and raw functions can be mixed. So the planet on the
  * boot screen and the map underneath it are the same object at two values of
  * one number, and everything between is a real projection that a point can be
- * put through, which is why the dots arrive where they belong rather than being
- * tweened into place and hoping.
+ * put through, which is why the coast arrives where it belongs rather than
+ * being tweened into place and hoping.
  *
  * The end has to be exact, not close: at t = 1 this is `fitProjection` to the
  * pixel, so the frame where the unfold stops and the map's own land layer takes
@@ -92,8 +92,9 @@ export function facing(lon, lat, rotate) {
  * the middle of the disk, zero is the limb, and negative is round the back, so
  * a caller that knows how much of the planet its canvas can hold can cull at
  * that angle instead of at the horizon. On a globe drawn larger than the glass
- * most of the near side is off the edge, and asking each of those dots whether
- * it is also in daylight is a turn's frame rate spent on ground nobody can see.
+ * most of the near side is off the edge, and asking each of those vertices
+ * whether it is also in daylight is a turn's frame rate spent on ground nobody
+ * can see.
  */
 export function cosCentre(lon, lat, rotate) {
   const RAD = Math.PI / 180;

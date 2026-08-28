@@ -16,10 +16,11 @@
      replaced is `--c-land`, for a reason particular to this instrument. */
   :root,
   :root[data-theme='dark'] {
-    /* Land is a dot matrix here, not a fill: 1.8px marks carrying the whole of
-       the map's geography. It is held near 3.4:1 against the void in both
-       media, and matched between them, so neither reads as background texture.
-       A matrix and a fill at the same value do not read the same. */
+    /* Land is a hairline coastline here, not a fill: a wireframe carrying the
+       whole of the map's geography. It is held near 3.4:1 against the void in
+       both media, and matched between them, so neither reads as background
+       texture. A wireframe and a fill at the same value do not read the
+       same. */
     --c-land: #666670;
 
     /* The one hue on a greyscale instrument, and it means one thing: this is

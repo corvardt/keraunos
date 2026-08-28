@@ -205,7 +205,10 @@ function Transport({ from, roll, shape, at: instant, pace, onSeek, onPace }) {
           }`}
           aria-hidden={armed && behind > 0 ? undefined : true}
         >
-          <span className="text-line">speed</span>
+          {/* `line` is the rule token and is drawn to sit at the edge of
+              visibility; it is for hairlines, not for words. This is a label
+              like every other label on the instrument. */}
+          <span className="text-dim">speed</span>
           {PACES.map((rate) => (
             <button
               key={rate}

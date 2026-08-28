@@ -250,7 +250,7 @@ for private and entertainment purposes, and explicitly not for storm warning,
 for checking overvoltage claims, or for risk analysis. It is not for the
 protection of life or property, and neither is this.
 
-That matters here more than it would on a map of dots, because the instrument
+That matters here more than it would on a plain map, because the instrument
 will tell you the distance to the nearest strike and count down to its thunder.
 Those are the two readings most easily mistaken for a safety tool. They are
 arithmetic on a feed that is incomplete by construction: the network hears the
