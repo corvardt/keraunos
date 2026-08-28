@@ -331,6 +331,10 @@ const wound = (shape) => {
   return { ...shape, geometry: { ...geometry, coordinates } };
 };
 
+// How long since, in one unit and no decimals. The window it is measured
+// inside is an hour, so minutes is as coarse as this ever has to get.
+const ago = (ms) => (ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60_000)}m`);
+
 /**
  * Where the reading beside a picked shape sits.
  *
@@ -347,7 +351,7 @@ const wound = (shape) => {
  * both directions after that.
  */
 const HUD_W = 120; // room for a line of the readout, in pixels
-const HUD_H = 64;
+const HUD_H = 78;
 function hudAt([x, y], width, height) {
   const right = x + 16;
   const left = right + HUD_W > width - 8 ? x - HUD_W - 16 : right;
@@ -1576,19 +1580,50 @@ const WorldMap = ({
     const mine = (lon, lat) => boxed(lon, lat) && locate(lon, lat) === selection.place;
 
     let strikes = 0;
-    let cells = 0;
     let burning = 0;
     for (const bin of bins) {
       burning += bin.count;
       if (!mine(bin.lon + BIN_SIZE / 2, bin.lat + BIN_SIZE / 2)) continue;
       strikes += bin.count;
-      cells += 1;
     }
-    const tracked = settings.storms
-      ? storms.filter((storm) => mine(storm.lon, storm.lat)).length
-      : 0;
-    return { strikes, cells, tracked, share: burning ? strikes / burning : 0 };
-  }, [pick, bins, storms, locate, selection, settings.storms]);
+
+    // The retained window, walked once for two figures the burn-in cannot
+    // give: how much has fallen here in the whole hour, and how long since the
+    // last of it. The naming is cached by cell for the length of the walk,
+    // because a strike is not a new question - a hundred thousand of them fall
+    // in a few hundred cells, and it is the cell that has to be placed.
+    const held = new Map();
+    const owned = (lon, lat) => {
+      const key = `${Math.floor(lon)},${Math.floor(lat)}`;
+      let answer = held.get(key);
+      if (answer === undefined) {
+        answer = mine(lon, lat);
+        held.set(key, answer);
+      }
+      return answer;
+    };
+    const now = replay ? replay.at : Date.now();
+    let hour = 0;
+    let last = null;
+    for (const strike of history?.current ?? []) {
+      // Rewound, the hour that has been watched is the hour up to where the
+      // clock is set down, not the one up to now: counting past it would put
+      // strikes in this reading that have not happened on the tube.
+      if (strike.t > now) break;
+      if (!owned(strike.lon, strike.lat)) continue;
+      hour += 1;
+      last = strike.t;
+    }
+
+    return {
+      strikes,
+      hour,
+      // Held as an age rather than an instant: everything reading it wants the
+      // gap, and the gap is what the tick below re-renders for.
+      since: last === null ? null : Math.max(0, now - last),
+      share: burning ? strikes / burning : 0,
+    };
+  }, [pick, bins, locate, selection, history, replay]);
 
   const readPointer = (event) => {
     if (!projection || !projection.invert || !containerRef.current) return null;
@@ -3740,18 +3775,20 @@ const WorldMap = ({
         >
           <div className="text-text glow">{selection.place}</div>
           <div className="mt-0.5 text-dim">
-            {reading.strikes ? `${reading.strikes.toLocaleString("en-US")} burning` : "quiet"}
+            {reading.strikes ? `${reading.strikes.toLocaleString("en-US")} strikes` : "quiet"}
           </div>
-          {reading.strikes > 0 && (
-            <div className="mt-0.5 text-dim">
-              {reading.cells.toLocaleString("en-US")} cells
-              {reading.tracked ? ` · ${reading.tracked} storms` : ""}
-            </div>
-          )}
           {reading.share > 0 && (
             <div className="mt-0.5 text-dim">
               {reading.share < 0.01 ? "<1" : Math.round(reading.share * 100)}% of world
             </div>
+          )}
+          {reading.hour > 0 && (
+            <div className="mt-0.5 text-dim">
+              {reading.hour.toLocaleString("en-US")} in the hour
+            </div>
+          )}
+          {reading.since !== null && (
+            <div className="mt-0.5 text-dim">last {ago(reading.since)}</div>
           )}
         </div>
       )}
