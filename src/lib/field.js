@@ -198,6 +198,45 @@ export const MIN_PATCH = 4;
  * colours, so whatever the stylesheet and the phosphor between them decided a
  * token is, is what gets drawn.
  */
+/**
+ * The colour that means nothing at all, per medium.
+ *
+ * This layer is assembled from pieces that abut: tile against tile, and on the
+ * globe a mesh of some thousands of quads. Two pieces meeting on a fractional
+ * edge split that pixel's coverage between them, and while the pieces carried
+ * their own transparency there was no way to put it back together. Source-over
+ * does not add coverage, it composites it: a cloud at alpha 0.6 drawn twice at
+ * half coverage comes out at 0.51, a hairline of missing weather along every
+ * seam in the picture. Overlap the pieces to close it and the same arithmetic
+ * runs the other way, to 0.75, and the hairline is bright instead of dark.
+ * Neither is a value you can tune between.
+ *
+ * So the pieces are opaque. Every tile is laid on this ground before its marks
+ * go down, the buffers they are composed into are filled with it, and what
+ * reaches the glass is a picture with no alpha channel left to accumulate: two
+ * pieces meeting now blend colour, and the colour they are blending either side
+ * of a seam is the same colour.
+ *
+ * Which colour it is, is the medium's own answer. The tube adds light, so the
+ * ground is black and adding it changes nothing; paper deposits ink, so the
+ * ground is white and multiplying by it changes nothing. That is the same pair
+ * of operations `COMPOSITE` names in `theme.js`, and it has to be: the ground
+ * is whatever the identity of the operation the field is laid down with is, or
+ * the sky outside the planet would be a grey rectangle.
+ */
+const GROUND = { lighter: "#000", multiply: "#fff" };
+
+// How far a piece is drawn past its own edge, in pixels of what it is drawn on.
+//
+// One: an antialiased edge can spread its coverage over a whole pixel, so that
+// is the least that covers a neighbour's. Opacity alone does not close a seam
+// and neither does overlap alone; it takes both. See GROUND.
+//
+// The warp asks for more than this, because on a sphere the pieces are not only
+// antialiased against each other, they are bent away from each other. See the
+// bow it works out.
+const SEAM_PX = 1;
+
 // One sheet, reused. Every source builds both its passes through here, so a
 // tile costs two of these and a pan over new ground costs a couple of hundred,
 // each of them a canvas and its backing store, allocated to be drawn once and
@@ -247,19 +286,27 @@ const KEEP = 320;
 /**
  * How large one block of the field is on the glass, in CSS pixels.
  *
- * The map is a dot matrix, and a photographic wash behind it was the one thing
- * on this instrument that looked photographed rather than read off something.
- * So the field is composed into a buffer one block to the pixel and enlarged
- * without smoothing, which quantises it to a lattice the same way everything
- * else here is quantised, without turning it into a pattern of its own: it is
- * still a wash, drawn at the resolution the rest of the map is drawn at.
+ * One: the field is composed at the resolution it is drawn at.
  *
- * Five, because that is where the land matrix's own dots start. They sit about
- * five pixels apart at world zoom, opening to thirteen as you close in, and a
- * field quantised finer than the marks over it reads as blur rather than as
- * structure.
+ * It was five while the world was a dot matrix. A photographic wash behind it
+ * was the one thing on this instrument that looked photographed rather than
+ * read off something, so the field was composed a block to the pixel and
+ * enlarged without smoothing, quantised to the pitch the dots sat at. The
+ * world is an outline now, and against a hairline coast the same blocks read
+ * as an artefact of the layer rather than as the instrument.
+ *
+ * That enlargement was also doing a second job nobody had written down: it was
+ * hiding the seams between the pieces this layer is assembled from. Nearest
+ * neighbour snaps the picture to the block grid, and a seam is exactly the
+ * sub-block detail that snapping discards. See `GROUND`, which is how they are
+ * dealt with now that they can be seen.
+ *
+ * The saving is real and is given back with it: the composite happens at
+ * twenty-five times the area, and the globe's world picture goes with it, up to
+ * the `MAX_WORLD` ceiling it was never reaching before. One number, so it can
+ * be turned back up if a machine cannot afford it.
  */
-const BLOCK_PX = 5;
+const BLOCK_PX = 1;
 
 // How long a tile takes to come up. Short: there is almost always an ancestor
 // underneath showing the same weather more coarsely, so this is a sharpening
@@ -346,9 +393,15 @@ const RAD = Math.PI / 180;
 // It buys accuracy against draw calls, and both scale as its square: four
 // degrees is 4,050 cells for the planet and puts the error between the quad the
 // projection wants and the parallelogram canvas can draw at about a quarter of
-// a pixel on a large tube, well under the block the layer is quantised to,
-// which is what matters. Halving it would quarter an error nobody can see and
-// cost sixteen thousand draws a frame.
+// a pixel on a large tube. Halving it would quarter that and cost sixteen
+// thousand draws a frame.
+//
+// It used to be enough to say the error was under the block the layer was
+// quantised to. There is no block now, so it is under a pixel instead, and four
+// degrees is the finest step here: past the zoom where four degrees stops being
+// enough the error goes on growing with the planet. It is covered rather than
+// refined, since the pieces overlap anyway and an opaque overlap is free. See
+// where the warp works out its bow.
 //
 // So it is the error that is held, and not the cell count. Stated as one number
 // the cells were sized to fit a desktop, a phone got the same four thousand
@@ -553,6 +606,10 @@ export function createField(source) {
 
   let body = "#fff";
   let tops = "#fff";
+  // The medium, and with it the ground everything here is laid on. Defaulted to
+  // the tube because that is what an instrument that has not been told yet is.
+  let composite = "lighter";
+  let ground = GROUND.lighter;
   let tint = "";
 
   // The block buffer, held across frames rather than made each one: it is the
@@ -808,7 +865,7 @@ export function createField(source) {
       tile.used = clock;
       if (!tile.any) return true; // nothing here, and known to be
       if (tile.tinted !== tint) {
-        tile.canvas = source.paint(tile, body, tops);
+        tile.canvas = source.paint(tile, body, tops, ground);
         tile.tinted = tint;
       }
       // Only a tile drawn at its own level has an arrival worth showing; an
@@ -820,16 +877,31 @@ export function createField(source) {
       // way it can stop being the same picture without anything happening.
       if (age < 1) fading = true;
       ctx.globalAlpha = alpha * age;
+      // Over its own edges, exactly as the warp's patches are, and needed for
+      // the same reason: a tile placed on a fractional boundary is antialiased
+      // along it, and two of them abutting split that pixel's coverage without
+      // putting it back together. Opaque is half the answer and the overlap is
+      // the other half. Measured on a value of 153: abutting comes out at 116,
+      // overlapped at 153.
+      //
+      // The exception it buys is small and passes: while a tile is coming up,
+      // or one published frame is dissolving into the next, this is laid down
+      // at less than full weight, and the overlap then composites twice into a
+      // bright hairline for as long as that lasts. Drawing every tile whole
+      // into a layer of its own and fading the layer once would answer it
+      // properly, at the cost of another canvas the size of the tube and a
+      // second blit through it every frame. Worth doing if the handover ever
+      // reads as a grid.
       ctx.drawImage(
         tile.canvas,
         patch.sx,
         patch.sy,
         patch.step,
         patch.step,
-        place.x,
-        place.y,
-        place.w,
-        place.h
+        place.x - SEAM_PX,
+        place.y - SEAM_PX,
+        place.w + SEAM_PX * 2,
+        place.h + SEAM_PX * 2
       );
       return true;
     }
@@ -860,11 +932,21 @@ export function createField(source) {
       return false;
     },
 
-    /** The tokens the marks are drawn in; a change repaints, never refetches. */
-    palette(nextBody, nextTops) {
+    /**
+     * The tokens the marks are drawn in, and the medium they are laid down on;
+     * a change repaints, never refetches.
+     *
+     * The medium belongs here rather than at the call that draws, because it
+     * reaches further than the last blit: it decides the ground every tile is
+     * painted over, so a tube becoming paper is a repaint of the whole pyramid.
+     * `tint` is what says so, and every buffer's signature reads it.
+     */
+    palette(nextBody, nextTops, nextComposite) {
       body = nextBody;
       tops = nextTops;
-      tint = `${nextBody}|${nextTops}`;
+      composite = GROUND[nextComposite] ? nextComposite : "lighter";
+      ground = GROUND[composite];
+      tint = `${nextBody}|${nextTops}|${composite}`;
     },
 
     /** Everything goes: the layer was switched off. */
@@ -1044,9 +1126,9 @@ export function createField(source) {
       const wanted = tilesFor(frame, z);
       clock++;
 
-      // The field is composed into a block-sized buffer and enlarged onto the
-      // glass at the end, so everything below works in blocks rather than in
-      // pixels. See BLOCK_PX.
+      // The field is composed into its own buffer and laid on the glass at the
+      // end, so everything below works in the buffer's units rather than the
+      // tube's. See BLOCK_PX, where the two are currently the same.
       const bw = Math.max(1, Math.round(width / BLOCK_PX));
       const bh = Math.max(1, Math.round(height / BLOCK_PX));
       if (!buffer) {
@@ -1097,7 +1179,12 @@ export function createField(source) {
       // coming up and has to be redrawn on a frame where nothing else changed.
       const signature = `${shown}|${incoming}|${fade}|${arrivals}|${tint}|${z}|${bw}|${bh}|${k}|${tx}|${ty}`;
       if (signature !== bufferAt || fading) {
-        bufferCtx.clearRect(0, 0, bw, bh);
+        // Laid on the ground rather than cleared to nothing: an opaque fill
+        // replaces what was there, and everything composed onto it from here
+        // has no transparency of its own left to come apart at a seam. Outside
+        // the tiles it stays the ground, which the blit below is a no-op over.
+        bufferCtx.fillStyle = ground;
+        bufferCtx.fillRect(0, 0, bw, bh);
         fading = false;
 
         // The frame on the glass, on its way out, and the one arriving over it.
@@ -1106,12 +1193,18 @@ export function createField(source) {
         for (const tile of wanted) {
           const box = place(tile);
           if (box.w <= 0 || box.h <= 0) continue;
-          // Out as the other comes in, and the complement is the point: held at
-          // full weight the two frames sum to more field than either of them
-          // is, and the pair reads as one doubled rather than one replacing the
-          // other. Both are washes, so the two halves add back to a whole.
+          // The one on the glass at full weight, the one arriving faded over
+          // it: a dissolve, where before it was a pair of complementary washes.
+          //
+          // The complement was what two transparent frames needed, since held
+          // at full weight they summed to more field than either of them was
+          // and the pair read as one doubled. Opaque, the arithmetic runs the
+          // other way: a frame at 1 - fade over the ground is already part way
+          // to nothing and the one over it takes the rest, so the handover
+          // would dip toward a clear sky halfway through it. Laid down whole
+          // and dissolved into, the two sum to one frame at every point.
           if (shown !== null && fade < 1) {
-            drawTile(bufferCtx, shown, tile.z, tile.x, tile.y, box, now, 1 - fade);
+            drawTile(bufferCtx, shown, tile.z, tile.x, tile.y, box, now, 1);
           }
           if (incoming && fade > 0) {
             drawTile(bufferCtx, incoming, tile.z, tile.x, tile.y, box, now, fade);
@@ -1120,19 +1213,12 @@ export function createField(source) {
         bufferAt = signature;
       }
 
-      // And onto the glass, one block to many pixels, unsmoothed. This is the
-      // whole of the pixelation: the lattice belongs to the screen rather than
-      // to any tile, so it does not shift phase at a tile boundary or change
-      // pitch with the zoom, and it lands on whole device pixels the way the
-      // land matrix's own dots do.
-      //
-      // It is also cheaper than drawing the tiles straight onto the canvas was.
-      // The composite happens at a hundredth of the area, and what replaces it
-      // at full size is a nearest-neighbour enlargement, which is the least
-      // work canvas can do.
+      // And onto the glass, through the operation the ground is the identity of.
+      // Light added on a tube, ink deposited on paper, and in both the sky the
+      // tiles never covered contributes nothing.
       bufferCtx.globalAlpha = 1;
       ctx.save();
-      ctx.imageSmoothingEnabled = false;
+      ctx.globalCompositeOperation = composite;
       ctx.drawImage(buffer, 0, 0, width, height);
       ctx.restore();
 
@@ -1286,7 +1372,11 @@ export function createField(source) {
       // cannot see time passing.
       const signature = shown + "|" + incoming + "|" + fade + "|" + arrivals + "|" + tint + "|" + z + "|" + ww;
       if (signature !== worldAt || fading) {
-        worldCtx.clearRect(0, 0, ww, ww);
+        // On the ground, like the flat map's buffer and for the same reason:
+        // the patches the warp cuts out of this must be opaque before they can
+        // be laid edge to edge without seams.
+        worldCtx.fillStyle = ground;
+        worldCtx.fillRect(0, 0, ww, ww);
         fading = false;
         // Metres to blocks: the world is `ww` blocks across by definition, so
         // this is one multiplication and the tile grid falls straight out.
@@ -1302,8 +1392,10 @@ export function createField(source) {
           const bottom = Math.round(ww / 2 - at(f.minY));
           const box = { x: left, y: top, w: right - left, h: bottom - top };
           if (box.w <= 0 || box.h <= 0) continue;
+          // Whole, and dissolved into by the frame arriving over it. See the
+          // flat map's own pass for why the two are not complementary washes.
           if (shown !== null && fade < 1) {
-            drawTile(worldCtx, shown, tile.z, tile.x, tile.y, box, now, 1 - fade);
+            drawTile(worldCtx, shown, tile.z, tile.x, tile.y, box, now, 1);
           }
           if (incoming && fade > 0) {
             drawTile(worldCtx, incoming, tile.z, tile.x, tile.y, box, now, fade);
@@ -1346,7 +1438,8 @@ export function createField(source) {
       if (laid !== warpAt) {
         warpAt = laid;
         warpCtx.setTransform(1, 0, 0, 1, 0, 0);
-        warpCtx.clearRect(0, 0, bw, bh);
+        warpCtx.fillStyle = ground;
+        warpCtx.fillRect(0, 0, bw, bh);
 
         // How finely the world has to be cut up to be drawn at this size. See
         // `meshFor`: it is the error that is held constant, not the cell count,
@@ -1392,6 +1485,24 @@ export function createField(source) {
             meshV[row] = ww / 2 - (Math.log(Math.tan(Math.PI / 4 + phi / 2)) * ww) / (2 * Math.PI);
           }
         }
+
+        // How far a cell's own curvature carries it off the flat piece drawn in
+        // its place, in pixels of the buffer.
+        //
+        // The mesh cuts a sphere into pieces and canvas draws each of them
+        // flat: three corners fix an affine and the fourth is where the quad
+        // and the parallelogram part company. Two neighbours part company in
+        // opposite directions, so the edge they are meant to share opens into a
+        // wedge between them, widest where the planet turns fastest, which is
+        // toward the limb and toward the poles. That is the grain that runs
+        // across a zoomed globe, and no amount of opacity closes it: the pieces
+        // genuinely are not touching.
+        //
+        // `meshFor` holds it under half a pixel while it can and runs out of
+        // steps at four degrees, so past that zoom it is this that has to give.
+        // The bow of a chord is r·θ²/8; twice it, because both sides bow.
+        const bow = (((worldPx / (2 * Math.PI)) * (meshDeg * RAD) ** 2) / 8) * toX;
+        const seam = SEAM_PX + 2 * bow;
 
         const step = (meshDeg / 360) * ww;
         let alpha = -1;
@@ -1439,10 +1550,38 @@ export function createField(source) {
             const cx = (x01 - x00) / sh;
             const dx = (y01 - y00) / sh;
             warpCtx.setTransform(ax, bx, cx, dx, x00 - ax * sx - cx * sy, y00 - bx * sx - dx * sy);
-            // Drawn a hair over its own edges. The patches already meet, but
-            // they meet on fractional coordinates, and a rasteriser rounding
-            // two abutting edges the same way leaves the odd pixel unclaimed.
-            warpCtx.drawImage(world, sx, sy, step, sh, sx - 0.5, sy - 0.5, step + 1, sh + 1);
+            // Drawn over its own edges, by a pixel of the buffer on each side.
+            //
+            // The patches already meet, on fractional coordinates, and each is
+            // antialiased along the edge it shares. Left to abut, the two soft
+            // edges leave a hairline of ground showing between them, and a
+            // pixel is the least that covers it: an antialiased edge can spread
+            // over one whole pixel, so anything less leaves part of the
+            // neighbour's outside this patch's solid area. The overlap costs
+            // nothing now that both are opaque and the colour either side of a
+            // seam is the same colour; while they carried alpha it would have
+            // been the same hairline with the sign flipped. See GROUND.
+            //
+            // Stated on the buffer, where it has to be true, and carried back
+            // into the source's units by the scale of the affine above, which
+            // is the space this rectangle is given in.
+            const overX = seam / Math.hypot(ax, bx);
+            const overY = seam / Math.hypot(cx, dx);
+            // A patch crushed to a sliver at the limb divides by almost
+            // nothing, and has no seam anyone could see either.
+            const bleedX = overX < step ? overX : 0;
+            const bleedY = overY < sh ? overY : 0;
+            warpCtx.drawImage(
+              world,
+              sx,
+              sy,
+              step,
+              sh,
+              sx - bleedX,
+              sy - bleedY,
+              step + bleedX * 2,
+              sh + bleedY * 2
+            );
           }
         }
         warpCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1450,7 +1589,7 @@ export function createField(source) {
       }
 
       ctx.save();
-      ctx.imageSmoothingEnabled = false;
+      ctx.globalCompositeOperation = composite;
       ctx.drawImage(warp, 0, 0, width, height);
       ctx.restore();
 

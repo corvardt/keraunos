@@ -28,6 +28,11 @@ export const DEFAULTS = {
   // layout
   sidebar: true,
   chrome: true,
+  // Where the fold between map and panel sits on a screen too narrow to put
+  // them side by side, as a share of the viewport. Not in the configuration
+  // panel: it is set by dragging the thing itself, like `shut` above, and a
+  // number in a list is a worse way to say it than the edge is.
+  mapVh: 45,
   // map
   //
   // The world as a sphere rather than as a sheet. Off, and off by default: this

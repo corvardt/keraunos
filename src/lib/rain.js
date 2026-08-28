@@ -306,7 +306,7 @@ const CORE = (CORE_DBZ - FLOOR_DBZ) / (TOP_DBZ - FLOOR_DBZ);
  * the fraction of the ground somebody has a radar on, so it is not competing
  * for the same screen and can afford to be read.
  */
-function paintTile({ field }, body, tops) {
+function paintTile({ field }, body, tops, ground) {
   const size = SAMPLES * SAMPLES;
   const wet = new Uint8ClampedArray(size * 4);
   const core = new Uint8ClampedArray(size * 4);
@@ -331,6 +331,10 @@ function paintTile({ field }, body, tops) {
   canvas.height = SAMPLES;
   const ctx = canvas.getContext("2d");
 
+  // Opaque, on the medium's own ground, so that tiles meeting edge to edge do
+  // not leave a hairline between them. See GROUND in field.js.
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, 0, SAMPLES, SAMPLES);
   fillThrough(ctx, wet, body, SAMPLES);
   if (anyCore) fillThrough(ctx, core, tops, SAMPLES);
   return canvas;

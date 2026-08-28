@@ -713,7 +713,7 @@ async function fetchTile(z, x, y, at) {
  * are CSS colours and stay CSS colours, so whatever the stylesheet and the
  * phosphor between them decided a token is, is what gets drawn.
  */
-function paintTile({ field, lat }, body, tops) {
+function paintTile({ field, lat }, body, tops, ground) {
   const size = SAMPLES * SAMPLES;
   const warm = new Uint8ClampedArray(size * 4);
   const cold = new Uint8ClampedArray(size * 4);
@@ -763,6 +763,12 @@ function paintTile({ field, lat }, body, tops) {
   canvas.height = SAMPLES;
   const ctx = canvas.getContext("2d");
 
+  // Laid on the ground first, so the tile is opaque and can meet its neighbours
+  // edge to edge without a seam of half-composited weather between them. The
+  // ground is the identity of the operation the whole field is laid down with,
+  // so a tile of clear sky is still a tile of clear sky. See GROUND in field.js.
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, 0, SAMPLES, SAMPLES);
   fillThrough(ctx, warm, body, SAMPLES);
   if (anyCold) fillThrough(ctx, cold, tops, SAMPLES);
   return canvas;

@@ -58,9 +58,16 @@ export function clampView(view, base, width, height) {
 
   const axis = (min, max, size, t) => {
     const span = (max - min) * k;
-    // Smaller than the viewport (which is the case at k = 1, by the padding in
-    // the fit): centre it rather than pinning it to an edge.
-    if (span <= size) return (size - span) / 2 - min * k;
+    // Smaller than the viewport, which is the case at k = 1 by the padding in
+    // the fit: anywhere that keeps the whole of it on the glass will do.
+    //
+    // It used to be centred outright here. That is where the fit already puts
+    // it and where it stays until something moves it, so the two agreed on
+    // every view this had been asked about, and the difference only shows when
+    // the tube changes shape under a settled world: forced, the world slides to
+    // the new middle, which under a finger dragging the fold between map and
+    // panel reads as the map running away rather than the pane growing.
+    if (span <= size) return Math.max(-min * k, Math.min(size - max * k, t));
     return Math.max(size - max * k, Math.min(-min * k, t));
   };
 

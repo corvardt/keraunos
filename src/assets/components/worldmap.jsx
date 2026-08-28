@@ -1043,9 +1043,49 @@ const WorldMap = ({
 
   // A resize refits the world under the view, so the view has to be re-checked
   // against the new bounds or it can end up parked off the edge.
+  //
+  // And the refit is itself a move. `fitProjection` centres what it fits, so a
+  // tube that only changes height carries the world half of that change with
+  // it, which is right for a window being resized and wrong for the one gesture
+  // that changes this box on purpose: dragging the fold between map and panel
+  // on a phone, where the world sliding down at half the speed of the finger
+  // reads as the map running away rather than as the pane growing. Undone here,
+  // by the amount the fit moved, so the world holds its place on the glass and
+  // the room opens where it was added. Only while the scale is untouched: a
+  // refit that resizes the world is a different picture, and the fit's own
+  // centring is the honest answer to it.
+  const lastFit = useRef(null);
   useEffect(() => {
     if (!base) return;
-    setView((prev) => clampView(prev, base, width, height));
+    const was = lastFit.current;
+    lastFit.current = base;
+    const prev = viewRef.current;
+    let held = prev;
+    if (was && was.scale() === base.scale()) {
+      const [wasX, wasY] = was.translate();
+      const [nowX, nowY] = base.translate();
+      held = {
+        k: prev.k,
+        x: prev.x + (wasX - nowX) * prev.k,
+        y: prev.y + (wasY - nowY) * prev.k,
+      };
+    }
+    const next = clampView(held, base, width, height);
+    setView(next);
+    // Settled with it, rather than after the usual quiet.
+    //
+    // The wait exists so that a pan does not re-plot the layers on every frame
+    // of it. It has nothing to offer a resize, which rebuilds them anyway, and
+    // it costs something real: between the view moving and the settle catching
+    // up, the layers are bitmaps belonging to the older of the two, and the
+    // loop draws them through the delta. That delta is a translation, and a
+    // translated bitmap leaves an uncovered band its own width at the edge it
+    // came from. Under a drag of the fold the compensation above accumulates
+    // into exactly such a delta, one that cannot settle while the finger is
+    // down, so the band grows and the map is eaten from the edge until you let
+    // go. These layers are being redrawn on this frame regardless, so there is
+    // nothing for a delta to carry.
+    setSettled(next);
   }, [base, width, height]);
 
   // Going out to the globe takes the place you were looking at with you, and
@@ -1520,7 +1560,15 @@ const WorldMap = ({
       q.panX = 0;
       q.panY = 0;
       stopTurn();
-      setView((prev) => clampView({ k: prev.k, x: prev.x + dx, y: prev.y + dy }, fitted, w, h));
+      setView((prev) =>
+        // Pinned at world zoom. The whole world is on the glass there and the
+        // padding around it is not somewhere to go, so a drag has nothing to
+        // move: `clampView` used to say so by centring outright, and now that it
+        // only keeps the world on the glass, this is where it is said.
+        prev.k <= MIN_K
+          ? prev
+          : clampView({ k: prev.k, x: prev.x + dx, y: prev.y + dy }, fitted, w, h)
+      );
     }
     if (q.cursor !== undefined) {
       setCursor(q.cursor);
@@ -1797,7 +1845,16 @@ const WorldMap = ({
 
   const onPointerMove = (event) => {
     if (holding()) return;
-    queued.current.cursor = readPointer(event);
+    // Every overlay sits inside this container, so its pointer events bubble
+    // through here: the rewind strip, the region row, and whatever is added
+    // next. A finger scrubbing the replay track is not a hover on the map, and
+    // reported as one it lights the crosshair and names the country under the
+    // control being held, which is what a phone does with the strip across the
+    // bottom of the glass. Answered once, against the glass itself, rather than
+    // by every overlay remembering to stop the event: they already stop
+    // pointerdown, and this is the one that was forgotten.
+    const onGlass = screenRef.current?.contains(event.target) ?? true;
+    queued.current.cursor = onGlass ? readPointer(event) : null;
     schedule();
     const previous = pointers.current.get(event.pointerId);
     if (!previous) return;
@@ -1904,12 +1961,12 @@ const WorldMap = ({
       sphere: null,
     });
 
-    // Stamped with the view it was drawn for, and published only now that it is
-    // finished: until this line the previous bitmap is still the one on screen,
-    // and it still knows where it belongs. The one it replaces becomes the
-    // spare, to be painted into next time.
+    // Stamped with the view it was drawn for, and the size it was drawn at, and
+    // published only now that it is finished: until this line the previous
+    // bitmap is still the one on screen, and it still knows where it belongs.
+    // The one it replaces becomes the spare, to be painted into next time.
     landSpare.current = landLayer.current?.canvas ?? null;
-    landLayer.current = { canvas, view: settled };
+    landLayer.current = { canvas, view: settled, w: width, h: height };
   }, [
     layerProjection,
     palette,
@@ -2005,8 +2062,8 @@ const WorldMap = ({
   // that are on screen from bytes already in hand; it does not go back to the
   // satellites for a picture that has not changed.
   useEffect(() => {
-    sky.current?.palette(palette.land, palette.text);
-  }, [palette.land, palette.text, kind]);
+    sky.current?.palette(palette.land, palette.text, composite);
+  }, [palette.land, palette.text, composite, kind]);
 
   useEffect(() => {
     if (!kind || !skyProjection || !width || !height) return;
@@ -2105,7 +2162,7 @@ const WorldMap = ({
       height,
     });
 
-    historyLayer.current = { canvas, view: settled, labels: namePlaced };
+    historyLayer.current = { canvas, view: settled, labels: namePlaced, w: width, h: height };
   }, [
     burnFull,
     bins,
@@ -2229,7 +2286,12 @@ const WorldMap = ({
         ctx.save();
         ctx.transform(s, 0, 0, s, tx, ty);
       }
-      ctx.drawImage(layer.canvas, 0, 0, width, height);
+      // At the size it was painted at, not the tube's size now. The two are the
+      // same except while the tube is changing shape, and there stretching the
+      // bitmap to the new box squashes the world along whichever axis is moving
+      // until the layer is repainted a frame later. The view delta above is the
+      // only transform this bitmap is meant to be under.
+      ctx.drawImage(layer.canvas, 0, 0, layer.w ?? width, layer.h ?? height);
       if (moved) ctx.restore();
     };
 
@@ -3241,7 +3303,14 @@ const WorldMap = ({
       return () => clearInterval(id);
     }
 
-    frame = requestAnimationFrame(render);
+    // Drawn once here rather than waited for. `scaleCanvas` above resizes the
+    // backing store, and resizing a canvas is how it is cleared, so between
+    // this effect and the first frame of the loop the tube is blank. At rest
+    // that gap is a frame nobody sees; under a resize it is a frame per step,
+    // which is the map blinking out while the fold between it and the panel is
+    // being dragged. `render` schedules itself, so this is the same loop, one
+    // frame earlier.
+    render();
     return () => cancelAnimationFrame(frame);
   }, [
     strikeQueue,

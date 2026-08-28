@@ -30,6 +30,13 @@ import { fixSpreadKm } from "./lib/fix.js";
 import { clock } from "./lib/lag.js";
 import geoData from "./lib/world.json";
 
+// How far the fold between map and panel may be dragged on a narrow screen, as
+// a share of the viewport. Both stops are the honest ones: less map than a
+// quarter is not a map, and past this there is no panel left above the fold to
+// take hold of and drag back. Where it starts is `mapVh` in the defaults.
+const MAP_VH_MIN = 25;
+const MAP_VH_MAX = 85;
+
 const FEED_LENGTH = 60; // strikes listed in the recent feed
 const BIN_SIZE = 1; // degrees per map cell
 const FLUSH_MS = 500; // how often buffered strikes reach React state
@@ -183,6 +190,49 @@ function App() {
   const startUnfold = useCallback(() => setUnfolding(true), []);
   const { theme, setTheme } = useTheme();
   const { settings, set, reset } = useSettings();
+
+  /**
+   * The fold between map and panel, on a screen too narrow to put them side by
+   * side. Dragged by the grabber on the panel's top edge.
+   *
+   * Written to the DOM as a custom property during the drag and to the settings
+   * only when the finger lifts. A resize re-lays the map, which re-sizes its
+   * canvas and rebuilds every layer on it, so a render of the whole instrument
+   * on top of that, sixty times a second, with a write to local storage behind
+   * each one, is the difference between a drag that follows the finger and one
+   * that catches up afterwards.
+   */
+  const mainRef = useRef(null);
+  const fold = useRef(null);
+  const foldTo = (vh) => {
+    // Rounded: this is written to storage and read back next session, and a
+    // fold is not a measurement worth carrying fifteen decimal places of.
+    const at = Math.round(Math.max(MAP_VH_MIN, Math.min(MAP_VH_MAX, vh)) * 10) / 10;
+    mainRef.current?.style.setProperty("--map-h", `${at}vh`);
+    return at;
+  };
+  const grabber = {
+    onPointerDown: (event) => {
+      fold.current = { y: event.clientY, from: settings.mapVh, at: settings.mapVh };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    },
+    onPointerMove: (event) => {
+      if (!fold.current) return;
+      const moved = ((event.clientY - fold.current.y) / window.innerHeight) * 100;
+      fold.current.at = foldTo(fold.current.from + moved);
+    },
+    onPointerUp: () => {
+      if (fold.current) set("mapVh", fold.current.at);
+      fold.current = null;
+    },
+    onKeyDown: (event) => {
+      const step = event.shiftKey ? 10 : 2;
+      if (event.key === "ArrowUp") set("mapVh", foldTo(settings.mapVh - step));
+      else if (event.key === "ArrowDown") set("mapVh", foldTo(settings.mapVh + step));
+      else return;
+      event.preventDefault();
+    },
+  };
   // How far back the burn-in reaches. Four minutes is the live reading; opened
   // out, the same layer becomes where the lightning has been this session.
   const burnMs = DENSITY[settings.density] ?? DENSITY["4m"];
@@ -1126,11 +1176,8 @@ function App() {
       {!archive && <Seeker onDataReceived={handleDataReceived} onBackfill={absorb} onStatus={setStatus} />}
       {settings.chrome && (
         <Navbar
-          phase={status.phase}
-          host={status.host}
           archive={archiveRange}
           onLive={leaveArchive}
-          pulse={stats.total}
           theme={theme}
           onTheme={setTheme}
           onConfig={openConfig}
@@ -1139,8 +1186,12 @@ function App() {
         />
       )}
 
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain wide:flex-row wide:overflow-hidden">
-        <div data-tour="map" className="min-h-[45vh] flex-1 wide:min-h-0">
+      <main
+        ref={mainRef}
+        style={{ "--map-h": `${settings.mapVh}vh` }}
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain wide:flex-row wide:overflow-hidden"
+      >
+        <div data-tour="map" className="min-h-[var(--map-h)] flex-1 wide:min-h-0">
           <WorldMap
             // The map draws the boot screen's planet itself, and unrolls it
             // into the world as the readout leaves. So it has to be told when
@@ -1185,6 +1236,21 @@ function App() {
             onFieldHealth={setFieldHealth}
           />
         </div>
+        {settings.sidebar && (
+          // Only where the two are stacked. Side by side the panel is a fixed
+          // column against the window's height and there is no fold to move.
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Drag to resize the map"
+            tabIndex={0}
+            className="flex h-6 shrink-0 cursor-ns-resize touch-none items-center justify-center border-t border-line bg-panel wide:hidden"
+            {...grabber}
+            onPointerCancel={grabber.onPointerUp}
+          >
+            <span aria-hidden="true" className="h-px w-8 bg-dim" />
+          </div>
+        )}
         {settings.sidebar && (
         <Sidebar
           stats={stats}
