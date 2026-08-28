@@ -30,16 +30,10 @@ const UPSTREAM = "https://view.eumetsat.int/geoserver/wms";
 //
 // Without it this is an open proxy: anything on the internet could route
 // anything through this hostname, and the bill and the blame would both arrive
-// here. The map asks for a named few layers at exactly one size, so the gate is
+// here. The map asks for two named layers at exactly one size, so the gate is
 // narrow enough to write down, and a request that does not match is either a
 // bug or somebody else's traffic, and both want the same answer.
-//
-// The third is not infrared and not a dish: it is MTG's Lightning Imager, which
-// `flash.js` draws as the coverage layer. It is carried here rather than behind
-// a proxy of its own because it is the same GeoServer withholding the same
-// header for the same reason, and a second function in front of one origin is a
-// second thing to keep alive to no purpose.
-const LAYERS = new Set(["msg_fes:ir108", "msg_iodc:ir108", "mtg_fd:li_afa"]);
+const LAYERS = new Set(["msg_fes:ir108", "msg_iodc:ir108"]);
 const MAX_SIDE = 512;
 
 // A tile is the same tile for as long as the scan behind it is. EUMETSAT

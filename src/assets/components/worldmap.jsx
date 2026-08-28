@@ -17,22 +17,15 @@ import {
   zoomed,
 } from "../../lib/view.js";
 import { terminator, subsolar } from "../../lib/sun.js";
-import { unfoldProjection, facing, cosCentre } from "../../lib/unfold.js";
+import { unfoldProjection, cosCentre } from "../../lib/unfold.js";
 import { globeProjection, globeRadius, pointed, rotationFor, turned } from "../../lib/globe.js";
 import { paintStars, STAR_STEP } from "../../lib/stars.js";
 import capitals from "../../lib/capitals.js";
 import frontiers from "../../lib/frontiers.js";
 import { fixQuality } from "../../lib/fix.js";
-import { useAurora, litCells, FLOOR } from "../../lib/aurora.js";
 import { stations } from "../../lib/stations.js";
 import { tick } from "../../lib/click.js";
-import { FIELDS, momentAt, momentFor } from "../../lib/sources.js";
-import {
-  createFlash,
-  REFRESH_MS as FLASH_REFRESH_MS,
-  STEP_MS as FLASH_STEP_MS,
-  LAG_MS as FLASH_LAG_MS,
-} from "../../lib/flash.js";
+import { FIELDS, momentFor } from "../../lib/sources.js";
 import Transport from "./transport.jsx";
 import { Ticks } from "./crt.jsx";
 import GeoData from "../../lib/world.json";
@@ -104,51 +97,6 @@ const FLASH_MS = 180; // the initial overbright moment
 const GRATICULE_STEP = 30; // degrees between scope reference lines
 const BIN_SIZE = 1; // must match the binning in App.jsx
 const MIN_BURN = 3; // strikes a cell needs before it leaves a mark
-// The oval. A degree of the model is one soft mark, and these bound how big
-// that mark may get: the floor keeps a cell from vanishing where the meridians
-// close up, the ceiling keeps Mercator from inflating one at the top of the map
-// into a disc that swallows the pole. `ALPHA` is the weight of a single mark at
-// full probability, and low, because the band is built out of the overlap of
-// several hundred of them and anything heavier closes to solid white.
-const AURORA_MIN_PX = 3;
-// Generous, because the mark fades to nothing at its rim: a soft mark can be
-// large without ever reading as a shape, which a hard one cannot. This only has
-// to stop a block at the very top of a Mercator sheet running away entirely.
-const AURORA_MAX_PX = 70;
-const AURORA_ALPHA = 0.45;
-// A mark reaches this much past the block it stands for. Wide, so that the
-// falloffs interlock rather than merely touch: where two marks meet, both are
-// already most of the way to nothing, and it takes real overlap for that to add
-// back up to an even field. The only softness added anywhere: the model itself
-// is never interpolated.
-const AURORA_SPREAD = 1.7;
-// How much glass one mark is worth asking for, and the lever this layer's cost
-// hangs off: blocks fall away as the square of it.
-//
-// The model is published at a degree, which is about two pixels at world zoom
-// and about seven on the globe, finer than anybody can read and far finer
-// than the thing being drawn actually is. The aurora has no structure at a
-// degree. It is a diffuse curtain tens of kilometres thick and thousands long,
-// and OVATION is a model of where it is likely to be rather than a photograph
-// of where it is, so summarising it at two or three degrees discards nothing a
-// reader could have used. Twelve pixels puts the globe on a two-degree step,
-// which is four times fewer marks than the degree it is published at.
-const AURORA_MARK_PX = 12;
-// How much of a mark's weight the shimmer is allowed to move. A third: enough
-// to see the curtain living, not enough to be mistaken for the model saying
-// something. The other two thirds are the reading and do not move.
-const AURORA_SHIMMER = 0.34;
-// The shimmer's own clock, and it is coarse on purpose.
-//
-// This is the trick the stars already use to breathe: the loop holds the frame
-// when nothing has changed, and a layer that moved continuously would mean the
-// tube never rests again for as long as the layer is on. Stepped instead, the
-// oval advances about eight times a second, which is all a slow shimmer needs,
-// and the rest signature carries the step number, so a still map repaints on
-// the steps rather than on every frame. Silence stays cheap.
-const AURORA_STEP_MS = 125;
-// One full turn of the slower wave, in milliseconds.
-const AURORA_CYCLE_MS = 14000;
 const SHAKE_MAX_PX = 3.2; // deflection ceiling; any more and the map smears
 const SHAKE_COOLDOWN_MS = 1500; // rare enough that each knock still lands
 const BOLT_MS = 260; // how long the descending bolt is drawn
@@ -990,263 +938,6 @@ function litCapitals(bins) {
   return litNames;
 }
 
-/**
- * One soft mark, made once and stamped everywhere.
- *
- * The oval was drawn as filled ellipses first, and on the flat map it read as
- * exactly what it was: a bed of discs. A hard-edged shape at partial alpha
- * shows its own edge no matter how faint it is, and laying more of them down
- * only draws more edges: the marks have to *stop* somewhere, and wherever they
- * stop is a line the eye finds. No amount of overlap fixes it, because the
- * overlap has an edge too.
- *
- * A mark that fades to nothing at its rim has no edge to find, so neighbours
- * interlock into one continuous field. Built once into a small canvas and then
- * blitted, which is also the cheaper way round: a scaled `drawImage` of a ready
- * sprite costs less than rasterising an antialiased ellipse path, and this
- * painter runs on every frame of a rotation.
- *
- * White, because the ink is decided at the point of use. The sprite is a shape,
- * and the token it is filled through is the caller's business.
- */
-/**
- * The sheet the marks are laid on, held across frames.
- *
- * One, shared by both callers, which is safe because neither of them is ever
- * part way through the other: the flat map paints its layer inside an effect
- * and the globe paints its bitmap inside the render loop, and a frame is one or
- * the other. Reallocated only when the tube changes size.
- */
-/**
- * Where the shimmer has got to, quantised to its own step.
- *
- * Quantised at the source rather than at each caller, so the flat map's layer
- * and the globe's bitmap cannot land on different phases of the same wave and
- * make the crossing between them flicker.
- */
-const auroraPhase = (now) =>
-  ((Math.floor(now / AURORA_STEP_MS) * AURORA_STEP_MS) / AURORA_CYCLE_MS) * Math.PI * 2;
-
-let auroraSheet = null;
-function auroraScratch(width, height) {
-  const w = Math.max(1, Math.round(width));
-  const h = Math.max(1, Math.round(height));
-  if (!auroraSheet || auroraSheet.width !== w || auroraSheet.height !== h) {
-    auroraSheet = document.createElement("canvas");
-    auroraSheet.width = w;
-    auroraSheet.height = h;
-  }
-  return auroraSheet;
-}
-
-let auroraMark = null;
-function auroraSprite() {
-  if (auroraMark) return auroraMark;
-  const size = 64;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  const r = size / 2;
-  const gradient = ctx.createRadialGradient(r, r, 0, r, r, r);
-  // Held flat through the middle and then let go, rather than falling from the
-  // very centre. A pure gaussian leaves the field lumpy at the marks' own
-  // spacing: each one is brightest at its own middle, so the band beads. A
-  // plateau is what makes several of them add up to something even. A core and
-  // then a long tail. The core is what makes the band read as a band; the tail
-  // is the glow, and it is most of the sprite's radius for very little of its
-  // weight, because a light source on a dark ground is mostly halo, and an
-  // aurora seen from the ground is nearly all halo. Getting that by drawing
-  // every mark twice would double the blits; putting it in the falloff is free.
-  gradient.addColorStop(0, "rgba(255,255,255,1)");
-  gradient.addColorStop(0.3, "rgba(255,255,255,0.82)");
-  gradient.addColorStop(0.55, "rgba(255,255,255,0.34)");
-  gradient.addColorStop(0.78, "rgba(255,255,255,0.1)");
-  gradient.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-  auroraMark = canvas;
-  return auroraMark;
-}
-
-/**
- * The auroral oval, onto whatever context, through whatever projection.
- *
- * Two callers, exactly as `paintLand` and `paintHistory` have two, and for the
- * same reason: the flat map rasterises it once per settle, and the globe
- * repaints it per turn because a rotation is not a transform a bitmap can be
- * stretched by.
- *
- * ── Why it is drawn as light ────────────────────────────────────────────────
- *
- * In the reading token, and composited additively within its own bitmap. Both
- * of those are the same decision, which is that this is a light source and not
- * a wash. The stars on this tube are drawn in `text` for the argument written
- * beside them, that a star is the only light on the glass that is not weather
- * and the reading token is what makes it read as light rather than as dust, and
- * the aurora is that argument again with more of it: it is literally the sky
- * glowing.
- *
- * Additive is what light does. Two cells overlapping make a brighter cell,
- * never a muddier one, and because addition is commutative the band builds the
- * same way whatever order the cells happen to be walked in. It is also what
- * lets the oval be drawn as a few thousand soft overlapping marks and still
- * come out as one continuous curtain rather than a bed of discs: the overlap
- * *is* the smoothness, so nothing has to be interpolated between cells that the
- * model never measured between.
- *
- * Confined to this bitmap, which is what makes it safe. `lighter` needs to know
- * what it is adding to, and the map's own stack does not currently promise
- * that; inside a transparent canvas of its own the layer only ever adds to
- * itself, and what reaches the tube is one ordinary blit.
- *
- * On paper the mode flips to `multiply` and the ink drops a rung to `dim`. Ink
- * on a page darkens where light on a tube brightens, so an additive curtain on
- * a white sheet is a curtain that erases itself, the same inversion the night
- * wash and the dot matrix each make, for the same reason.
- */
-function paintAurora(
-  ctx,
-  { projection, cells, palette, theme, composite, phase = 0, width, height, sphere }
-) {
-  if (!cells.length) return;
-
-  // The same test the land makes, for the same reason: which way the ink runs
-  // is a property of the medium rather than a colour choice.
-  const lit = theme === "dark";
-
-  // Built as a shape and then filled through, which is the same two-step
-  // `ir.js` paints a cloud with and is here for the same reason: the tokens are
-  // CSS colours that the stylesheet and the phosphor between them decide, and
-  // the layer has no business knowing what they came out as. The marks are laid
-  // down in white on a canvas of their own, and the token is painted through
-  // the shape they make at the end.
-  //
-  // It is also the only way the additive part works. `lighter` adds what is
-  // under it, so stamping coloured marks straight onto the map would add the
-  // map: the land dots and the graticule would brighten wherever the oval
-  // crossed them, which is a layer reaching into layers below it. On a
-  // transparent sheet of its own the marks only ever add to each other.
-  // Held between frames rather than made each one. On the globe this painter
-  // runs on every frame of a drag, and a full-size canvas allocated and thrown
-  // away sixty times a second is the largest piece of garbage the map could
-  // manufacture, and `field.js` holds its block buffer for exactly this reason.
-  // Cleared instead, which is what the two callers would have had to do anyway.
-  const sheet = auroraScratch(ctx.canvas.width, ctx.canvas.height);
-  const sheetCtx = sheet.getContext("2d");
-  sheetCtx.setTransform(1, 0, 0, 1, 0, 0);
-  sheetCtx.clearRect(0, 0, sheet.width, sheet.height);
-  sheetCtx.setTransform(ctx.getTransform());
-  sheetCtx.globalCompositeOperation = "lighter";
-
-  const sprite = auroraSprite();
-
-  for (const [lon, lat, percent, lonSpan, latSpan] of cells) {
-    // The far side, thrown out before it costs anything. The projection refuses
-    // those points anyway, but it refuses them after doing the trigonometry,
-    // and on a rotation this painter runs on every frame, so half the planet's
-    // worth of that is the cheapest thing here to stop paying for. The land
-    // matrix culls the same way and for the same reason.
-    if (sphere && !facing(lon, lat, sphere.rotate)) continue;
-
-    const centre = projection([lon, lat]);
-    if (!centre || !isFinite(centre[0]) || !isFinite(centre[1])) continue;
-    const [x, y] = centre;
-    const half = lonSpan / 2;
-    const halfLat = latSpan / 2;
-    if (x < -AURORA_MAX_PX || y < -AURORA_MAX_PX) continue;
-    if (x > width + AURORA_MAX_PX || y > height + AURORA_MAX_PX) continue;
-
-    // The cell's own footprint, as two measured half-axes rather than one
-    // radius.
-    //
-    // This is the whole of what makes the layer read as a curtain instead of a
-    // bank of smoke. A degree of longitude and a degree of latitude are not the
-    // same distance anywhere except the equator, and at the top of the oval
-    // they are nothing like it: at 75° the meridians have closed to a quarter
-    // of their spacing, and at the pole itself all 360 of them meet. Drawn as
-    // circles on the diagonal, every polar cell stays as wide as it is tall
-    // while the ground under it shrinks, so the same mark gets laid down six
-    // and then sixty times over, which saturates to flat opaque grey, rings the
-    // pole in hard arcs, and puts a solid disc exactly where all the meridians
-    // land. The oval came out looking like weather rather than light.
-    //
-    // Asked of the projection along each axis instead, a mark covers the ground
-    // its own cell covers and no more, so the marks overlap by the same amount
-    // everywhere and the band builds evenly. It also costs nothing to be right
-    // on both media at once: Mercator stretches the latitude axis going north
-    // and the sphere closes the longitude one, and neither is assumed here.
-    const east = projection([lon + half, lat]);
-    const north = projection([lon, lat + halfLat]);
-    if (!east || !north || !isFinite(east[0]) || !isFinite(north[1])) continue;
-
-    // Opened a little past the cell, so neighbours meet rather than leaving a
-    // grid of gaps between them. This is the only place softness is added: the
-    // model is not interpolated, the marks simply touch.
-    const rx = Math.hypot(east[0] - x, east[1] - y) * AURORA_SPREAD;
-    const ry = Math.hypot(north[0] - x, north[1] - y) * AURORA_SPREAD;
-    // Which way the cell's own east is pointing, which on a sphere is not the
-    // screen's east anywhere but the middle of the disc.
-    const tilt = Math.atan2(east[1] - y, east[0] - x);
-
-    // Square-rooted, so the faint end of the oval, which is most of its area
-    // and all of its shape, is visible at all. Linear alpha on a field whose
-    // values are mostly single digits draws the two brightest cells and nothing
-    // else, which is a map of the peak rather than of the oval.
-    const strength = Math.sqrt((percent - FLOOR) / (100 - FLOOR));
-    const w = Math.max(AURORA_MIN_PX, Math.min(AURORA_MAX_PX, rx));
-    const h = Math.max(AURORA_MIN_PX, Math.min(AURORA_MAX_PX, ry));
-
-    // The shimmer.
-    //
-    // Two slow waves running round the oval at different rates and different
-    // wavelengths, so what a reader sees is brightness travelling through the
-    // curtain rather than the whole ring pulsing at once. Which is roughly what
-    // the thing does: a substorm brightens a sector and the brightening runs
-    // along the oval, so a wave in longitude is the honest shape for it even
-    // though the amplitude here is invented.
-    //
-    // It modulates only the top third of the weight. The oval's position and
-    // strength are the reading and they come from the model; this is texture
-    // laid over them, and it must never be able to turn a lit cell dark or
-    // suggest structure the model did not report.
-    const wave =
-      Math.sin(phase + (lon * Math.PI) / 34) * 0.6 +
-      Math.sin(phase * 0.61 - (lon * Math.PI) / 57 + lat * 0.12) * 0.4;
-    const shimmer = 1 - AURORA_SHIMMER + AURORA_SHIMMER * (0.5 + 0.5 * wave);
-
-    sheetCtx.globalAlpha = Math.min(1, AURORA_ALPHA * strength * shimmer);
-    // The sprite is square and centred, so placing it is a translate to the
-    // cell, a turn onto the cell's own east, and a scale to its two half-axes.
-    sheetCtx.translate(x, y);
-    sheetCtx.rotate(tilt);
-    sheetCtx.drawImage(sprite, -w, -h, w * 2, h * 2);
-    sheetCtx.rotate(-tilt);
-    sheetCtx.translate(-x, -y);
-  }
-
-  // The token, through the shape the marks made. `source-in` keeps the sheet's
-  // own alpha and takes the colour from the fill, so whatever the phosphor
-  // decided `text` is on this tube is what the oval is drawn in.
-  sheetCtx.setTransform(1, 0, 0, 1, 0, 0);
-  sheetCtx.globalAlpha = 1;
-  sheetCtx.globalCompositeOperation = "source-in";
-  sheetCtx.fillStyle = lit ? palette.text : palette.dim;
-  sheetCtx.fillRect(0, 0, sheet.width, sheet.height);
-
-  // One blit onto the map, in the medium's own direction. On the tube the
-  // curtain is added to the void, which is what light does; on paper it is
-  // multiplied into the sheet, which is what ink does. The same inversion the
-  // night wash and the dot matrix each make.
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  // The medium's own direction, taken from where that rule already lives rather
-  // than restated here: `theme.js` names it, and the tube and the sheet must
-  // never be able to disagree about which way ink runs.
-  ctx.globalCompositeOperation = composite;
-  ctx.drawImage(sheet, 0, 0);
-  ctx.restore();
-}
 
 /**
  * The burn-in and the names it lights, onto whatever context, through whatever
@@ -1431,7 +1122,6 @@ const WorldMap = ({
   }, [tube]);
   const landLayer = useRef(null);
   const historyLayer = useRef(null);
-  const auroraLayer = useRef(null);
   const particles = useRef([]);
   const recentHits = useRef(new Map());
   const { width, height } = useElementSize(containerRef);
@@ -2657,73 +2347,9 @@ const WorldMap = ({
     return () => clearTimeout(id);
   }, [kind, skyProjection, spinning, width, height, irAt, irTick]);
 
-  // ── The coverage layer ───────────────────────────────────────────────────
-  //
-  // A second pyramid, on the same machinery and the same settle, holding what
-  // MTG's Lightning Imager saw. It is not a third field and does not take a
-  // turn with the other two: it is a second opinion on the dots, so it has to
-  // be able to be on at the same time as the weather they are firing in. See
-  // `flash.js` for what that opinion is worth and where it disagrees.
-  //
-  // Everything below is the sky's arrangement above, on this source's own
-  // numbers. It is deliberately not shared with it: the two run on different
-  // steps and different lags, they are switched by different settings, and the
-  // one thing that must not be common between them is the moment: a coverage
-  // layer quantised to the cloud's ten minutes would sit up to five minutes off
-  // its own publication and answer 502 for the privilege.
-  const covering = settings.coverage;
-  const flash = useRef(null);
-  const flashHeld = useRef(false);
-  if (flashHeld.current !== covering) {
-    // Dropped whole rather than cleared, exactly as the field is: nothing in a
-    // pyramid nobody holds a reference to survives, tiles included.
-    flash.current = covering ? createFlash() : null;
-    flashHeld.current = covering;
-  }
-
-  const [flashTick, setFlashTick] = useState(0);
-  useEffect(() => {
-    if (!covering) return;
-    const id = setInterval(() => setFlashTick((n) => n + 1), FLASH_REFRESH_MS);
-    return () => clearInterval(id);
-  }, [covering]);
-
-  const flashAt = momentAt(FLASH_STEP_MS, FLASH_LAG_MS, replay ? replay.at : null, Date.now());
-
-  useEffect(() => {
-    // A register brighter than the weather, and deliberately. The cloud field
-    // is painted in the land token and the text token, terrain and a reading
-    // laid on terrain. This is not terrain at all: it is an observation of the
-    // same thing the dots are, so it is drawn in the two tokens the instrument
-    // uses for what it has measured. Left in the land token it was legible over
-    // an empty map and indistinguishable from cloud over a cloudy one, which is
-    // the one view where a reader is actually comparing the two.
-    flash.current?.palette(palette.text, palette.strike);
-  }, [palette.text, palette.strike, covering]);
-
-  useEffect(() => {
-    if (!covering || !skyProjection || !width || !height) return;
-    if (document.hidden) return;
-    const id = setTimeout(() => {
-      flash.current.want(skyProjection, width, height, flashAt, spinning && spinRef.current);
-    }, IR_SETTLE_MS);
-    return () => clearTimeout(id);
-    // `irTick` as well as this layer's own: it is what the visibility handler
-    // above bumps, and a tab coming back to the front wants both layers asked
-    // for again rather than only the weather.
-  }, [covering, skyProjection, spinning, width, height, flashAt, flashTick, irTick]);
-
-  // The one layer here that is neither derived from the strikes nor cut into
-  // tiles: the whole planet arrives in a single request, so there is no
-  // pyramid, no queue and no eviction to hold (see `aurora.js`). Null whenever
-  // the layer is off, which is what empties the bitmap below.
-  const aurora = useAurora(settings.aurora);
-  // Read by the health poll below, which runs on a timer rather than a render.
-  const auroraStateRef = useRef(aurora);
-  auroraStateRef.current = aurora;
 
   /**
-   * How much of each tiled layer is actually on the glass, reported upward.
+   * How much of the tiled layer is actually on the glass, reported upward.
    *
    * Polled rather than pushed, and that is the lazy answer to a real problem:
    * tiles land whenever the network says so, four at a time, from inside a
@@ -2732,9 +2358,9 @@ const WorldMap = ({
    * A cheap read on a slow timer says the same thing, and only speaks when the
    * answer has changed.
    *
-   * The layers are asked together because the reader sees one footer: what is
-   * wanted is whether the weather behind the map can be trusted, not which of
-   * two pyramids is behind on it.
+   * What is wanted is whether the weather behind the map can be trusted, which
+   * is one question with one answer, and the footer asks it of the one tiled
+   * layer there is.
    */
   useEffect(() => {
     if (!onFieldHealth) return;
@@ -2744,16 +2370,7 @@ const WorldMap = ({
         const state = field?.health();
         return state?.whole ? state : null;
       };
-      // Aurora is not a pyramid, being one request for the whole planet, so it
-      // has no tiles to count. What it has instead is a frame that stops being
-      // refreshed while staying on the glass, which is the same failure wearing
-      // different clothes: something plausible drawn from data nobody is
-      // keeping current. `useAurora` stamps it; this carries it to the footer.
-      const next = {
-        cloud: of(sky.current),
-        coverage: of(flash.current),
-        aurora: auroraStateRef.current ? { stale: Boolean(auroraStateRef.current.stale) } : null,
-      };
+      const next = { cloud: of(sky.current) };
       const key = JSON.stringify(next);
       if (key === last) return;
       last = key;
@@ -2762,114 +2379,7 @@ const WorldMap = ({
     read();
     const id = setInterval(read, HEALTH_MS);
     return () => clearInterval(id);
-  }, [onFieldHealth, kind, covering]);
-
-
-  // The shimmer's clock, for the flat map's bitmap.
-  //
-  // The globe reads the phase off the render loop's own `now`, because it is
-  // repainting anyway. The flat map is not: its layer is a bitmap rebuilt from
-  // an effect, so something has to ask for the rebuild, and this is the same
-  // shape as the slow clock the sun already keeps. Nothing ticks when the layer
-  // is off, and nothing ticks for a reader who asked for stillness. The oval
-  // is then simply a still curtain, which is the whole of what reduced motion
-  // should cost it.
-  const [auroraAt, setAuroraAt] = useState(0);
-  const auroraStill = reduceMotion || !settings.aurora;
-  useEffect(() => {
-    if (auroraStill) return;
-    const id = setInterval(() => setAuroraAt(performance.now()), AURORA_STEP_MS);
-    return () => clearInterval(id);
-  }, [auroraStill]);
-
-  // How coarsely the oval is worth summarising, in degrees at the equator.
-  //
-  // Quantised to whole steps rather than tracked continuously, because this is
-  // the key to a memo over the whole model grid: a drag would otherwise rebuild
-  // nine thousand blocks on every frame it moved, which is the cost this exists
-  // to avoid. Rounded, the answer changes a handful of times across the whole
-  // zoom range and the walk happens that many times.
-  const auroraStep = useMemo(() => {
-    // d3's Mercator lays x out as scale·λ with λ in radians, so the scale is
-    // pixels per radian and this is pixels per degree at the equator. The globe
-    // is the same question asked of its radius. `layerProjection` rather than
-    // `base`, because it is the one that carries the zoom: the flat map's scale
-    // is the fitted world times k, and asking the unzoomed fit would summarise
-    // a street the way it summarises a hemisphere.
-    const perDegree =
-      ((spinning
-        ? globeRadius(width, height) * globeK
-        : layerProjection?.scale() ?? 0) *
-        Math.PI) /
-      180;
-    if (!perDegree) return 1;
-    return Math.max(1, Math.min(8, Math.round(AURORA_MARK_PX / perDegree)));
-  }, [spinning, globeK, layerProjection, width, height]);
-
-  // The oval, as blocks worth drawing.
-  //
-  // Derived once per published frame and per step rather than per settle, which
-  // is the whole reason a walk over 65,160 cells is affordable: the sun changes
-  // its mind every five minutes, the step changes a few times across the zoom
-  // range, and a pan changes neither.
-  const auroraCells = useMemo(
-    () => litCells(aurora?.grid, auroraStep),
-    [aurora, auroraStep]
-  );
-
-  // Held for the loop's rest signature, the same way the grid and the bins are:
-  // a new array arrives exactly when the oval changes, so identity is the whole
-  // comparison and the loop can tell in one `===` that the sky has moved on.
-  const auroraRef = useRef(auroraCells);
-  auroraRef.current = auroraCells;
-
-  // The oval, flat. Rasterised on a settle and stretched between them, exactly
-  // as the burn-in and the matrix are: it is a picture of the world at a
-  // moment, and a pan is a transform of that picture rather than a reason to
-  // walk the model again.
-  useEffect(() => {
-    // Handed back on the globe, where the sphere paints its own: two tubes of
-    // backing store held against a mode that is off is the budget `field.js`
-    // warns about, and this layer has no more claim on it than the others.
-    if (spinning || !auroraCells.length) {
-      auroraLayer.current = release(auroraLayer.current);
-      return;
-    }
-    if (!layerProjection || !width || !height) return;
-    let canvas = auroraLayer.current?.canvas;
-    if (!canvas || canvas.dataset.w !== `${width}x${height}`) {
-      canvas = document.createElement("canvas");
-      canvas.dataset.w = `${width}x${height}`;
-      scaleCanvas(canvas, width, height);
-    }
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, width, height);
-
-    paintAurora(ctx, {
-      projection: layerProjection,
-      cells: auroraCells,
-      palette,
-      theme,
-      composite,
-      phase: auroraStill ? 0 : auroraPhase(auroraAt),
-      width,
-      height,
-    });
-
-    auroraLayer.current = { canvas, view: settled };
-  }, [
-    auroraCells,
-    auroraAt,
-    auroraStill,
-    layerProjection,
-    palette,
-    theme,
-    composite,
-    settled,
-    spinning,
-    width,
-    height,
-  ]);
+  }, [onFieldHealth, kind]);
 
   // Cumulative density: redrawn twice a second, so the backing canvas is
   // allocated once per resize and cleared rather than reallocated.
@@ -3177,7 +2687,7 @@ const WorldMap = ({
      * unfold costs, which is a price this map already pays sixty times a second
      * on the way in; holding it still costs a `drawImage`.
      */
-    const globeLayers = { land: null, history: null, aurora: null };
+    const globeLayers = { land: null, history: null };
     // Compared part by part rather than joined into a string: one of the parts
     // is the burn-in itself, and the only cheap thing to say about an array of
     // several hundred cells is which array it is. App hands over a new one each
@@ -3240,68 +2750,6 @@ const WorldMap = ({
           height,
           now
         );
-      }
-
-      // Over the weather and under the matrix, which is where it belongs on all
-      // three paths: it is a reading about the strikes rather than a backdrop
-      // for them, so it goes on top of the wash, and still under the land,
-      // because a coverage layer that hid the coastline would be answering a
-      // question about where by taking away the where.
-      if (flash.current) {
-        flash.current.drawWarp(
-          ctx,
-          live,
-          { rotate: sphere.rotate, back: 0, at: sphere.lon },
-          width,
-          height,
-          now
-        );
-      }
-
-      // The oval, under the matrix on this path as on the flat one. The globe
-      // is the mode it is worth being in for: a sphere shows a whole cap at
-      // once, and the oval is a ring around the pole rather than the two
-      // disconnected arcs the top and bottom of a Mercator sheet can make of
-      // it.
-      //
-      // Asked for only when there is one, and handed back when there is not.
-      // `globeBitmap` allocates before it consults `ready`, so calling it for
-      // an empty layer would hold a tube of backing store *and* clear it on
-      // every frame, the signature never being kept, which is the most
-      // expensive way there is to draw nothing.
-      if (auroraRef.current.length) {
-        globeBitmap(
-          "aurora",
-          // By identity, like the matrix and the bins: a new array of cells is
-          // handed over exactly when the service publishes a new frame, so one
-          // `===` is the whole question of whether the sky has moved on.
-          [
-            auroraRef.current,
-            lon,
-            lat,
-            palette,
-            themeRef.current,
-            // The shimmer's step, so the curtain moves on a planet nobody is
-            // turning. Null under stillness, where the bitmap then only depends
-            // on things that are not time and the globe can hold its frame.
-            reduceMotion ? null : Math.floor(now / AURORA_STEP_MS),
-          ],
-          (context) =>
-            paintAurora(context, {
-              projection: live,
-              cells: auroraRef.current,
-              palette,
-              theme: themeRef.current,
-              composite,
-              phase: reduceMotion ? 0 : auroraPhase(now),
-              width,
-              height,
-              // What lets the far half be thrown out before it is projected.
-              sphere: { rotate: sphere.rotate },
-            })
-        );
-      } else if (globeLayers.aurora) {
-        globeLayers.aurora = release(globeLayers.aurora);
       }
 
       globeBitmap(
@@ -3415,9 +2863,6 @@ const WorldMap = ({
       if (sky.current) {
         sky.current.drawWarp(ctx, morph, warpAt, width, height, now);
       }
-      if (flash.current) {
-        flash.current.drawWarp(ctx, morph, warpAt, width, height, now);
-      }
 
       paintLand(ctx, {
         projection: morph,
@@ -3481,10 +2926,9 @@ const WorldMap = ({
       // the layer effects do on the way out to the globe. Nothing here reads
       // them, and tubes of backing store held against a mode that is off is how
       // a phone arrives at a canvas budget it cannot pay.
-      if (globeLayers.land || globeLayers.history || globeLayers.aurora) {
+      if (globeLayers.land || globeLayers.history) {
         globeLayers.land = release(globeLayers.land);
         globeLayers.history = release(globeLayers.history);
-        globeLayers.aurora = release(globeLayers.aurora);
       }
 
       // Kept inside the world. The land and history layers are drawn from
@@ -3499,12 +2943,10 @@ const WorldMap = ({
       const settledAt = unfoldRef.current.doneAt;
       const skyFade = settledAt == null ? 1 : glide((now - settledAt) / SKY_FADE_MS);
 
-      // One clip and one fade for both pyramids. They are the same kind of
-      // thing to this end of the code, a rectangle of the world placed by
-      // asking the live projection where it is now, and the coverage layer
-      // arrives out of the same cold cache on the same unfold, so it has the
-      // same reason to be faded up rather than snapped on.
-      if ((sky.current || flash.current) && live && skyFade > 0) {
+      // One clip and one fade for the pyramid: a rectangle of the world placed
+      // by asking the live projection where it is now, faded up rather than
+      // snapped on because it arrives out of a cold cache on the unfold.
+      if (sky.current && live && skyFade > 0) {
         const [west] = live([-180, 0]);
         const [east] = live([180, 0]);
         const [, top] = live([0, LAT_LIMIT]);
@@ -3523,19 +2965,10 @@ const WorldMap = ({
         // with everything else and snapping back on the settle.
         if (skyFade < 1) ctx.globalAlpha = skyFade;
         sky.current?.draw(ctx, live, width, height, now, TILE_DEBUG);
-        flash.current?.draw(ctx, live, width, height, now, TILE_DEBUG);
         ctx.globalAlpha = 1;
         ctx.restore();
       }
 
-      // Under the matrix, which is where every wash on this tube goes and for
-      // the argument written above `drawSky`: the dot array is how a reader
-      // knows what they are looking at, and anything laid over it takes the
-      // coastline away exactly where the layer has something to say. It is also
-      // the physically odd way round, since the aurora is a hundred kilometres
-      // above the ground and not under it, and the glass wins, as it does for
-      // the cloud.
-      drawLayer(auroraLayer.current);
       drawLayer(landLayer.current);
       drawLayer(historyLayer.current);
     };
@@ -3594,7 +3027,6 @@ const WorldMap = ({
       // Tiles land on the network's schedule and fade in on their own; the
       // pyramid is the only thing that knows, so it is asked.
       if (sky.current?.restless(now)) return null;
-      if (flash.current?.restless(now)) return null;
 
       const view = viewRef.current;
       const config = settingsRef.current;
@@ -3626,20 +3058,6 @@ const WorldMap = ({
         stormsRef.current,
         landLayer.current,
         historyLayer.current,
-        auroraLayer.current,
-        // The cells themselves as well as the bitmap they are drawn into. On
-        // the flat map the bitmap is the whole story, but the globe has no
-        // bitmap of its own out here and paints from these directly, so a
-        // planet sitting still while the service published a new oval would go
-        // on showing the old one until something else moved. This is the same
-        // term the globe's own signature carries, for the same reason.
-        auroraRef.current,
-        // And the shimmer's step, on the same argument the stars' breathing is
-        // in here on: a ramp is time rather than state, and the only way a
-        // resting tube can be made to notice it is to put a coarse clock in the
-        // signature. Null under stillness and null with the layer off, where
-        // there is nothing moving and the hold stays exactly as it was.
-        !reduceMotion && config.aurora ? Math.floor(now / AURORA_STEP_MS) : null,
         sunRef.current,
         themeRef.current,
         config.graticule,
@@ -3648,11 +3066,6 @@ const WorldMap = ({
         config.bounds,
         config.capitals,
         config.field,
-        // Switched off, the pyramid is dropped and the last frame it painted is
-        // still on the glass. Nothing else here would notice: no tile is
-        // arriving, so `restless` says the layer is at rest, and it would be.
-        // It would just also still be visible.
-        config.coverage,
       ];
     };
 

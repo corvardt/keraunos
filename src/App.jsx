@@ -1152,17 +1152,6 @@ function App() {
         </span>
         <span className="flex shrink-0 items-center gap-4">
           <FieldAge kind={settings.field} replayAt={replayAt} health={fieldHealth?.cloud} />
-          {/* The aurora has no age of its own to print. It is a forecast, and
-              the times it carries are the service's, not ours. This is the
-              other question: whether anybody is still keeping it current. */}
-          {settings.aurora && fieldHealth?.aurora?.stale && (
-            <span
-              className="hidden shrink-0 text-text sm:inline"
-              title="The aurora service has not answered for over twenty minutes. What is drawn is the last frame that arrived, and the oval has moved since."
-            >
-              aurora stale
-            </span>
-          )}
           <a
             className="hidden shrink-0 transition-colors hover:text-text sm:inline"
             target="_blank"

@@ -79,7 +79,7 @@ worth changing while you watch, which is why they are not behind a panel.
 | **Tube** | Phosphor (white, green, amber, ice, and the borrowed palettes oil, crimson, demon; dark mode only), contrast, and bloom |
 | **Layout** | Whether the side panel, header and footer are shown at all |
 | **Screen** | Scanlines, refresh sweep, strike shake, detector clicks, thunder |
-| **Map** | Cell bounds, graticule, frontiers, daylight, capitals, detector threads, imager coverage, aurora, how long a strike stays lit |
+| **Map** | Cell bounds, graticule, frontiers, daylight, capitals, detector threads, how long a strike stays lit |
 | **Panel** | Which of the readings above are drawn |
 | **Session** | The two exports: strikes as CSV, the frame as PNG |
 
@@ -122,46 +122,6 @@ ground somebody built and maintains a radar network on, and stops, often
 sharply, at a coastline. So empty means something different on each: on the
 cloud field it means clear, and on the rain field it means unwatched, which over
 most of the planet is what it is.
-
-### Imager coverage
-
-Off by default. It is what MTG's Lightning Imager saw of the same five minutes
-from orbit, over the third of the planet that dish can see.
-
-It is worth turning on because the two instruments disagree, and the
-disagreement is the reading. This network listens for radio from the ground, so
-what it hears depends on where somebody built a detector, and it hears the
-cloud-to-ground stroke far better than the discharge that stays inside the
-cloud. The imager photographs the optical flash instead, and does it as well
-over the middle of the Atlantic as over Berlin. Where both are lit, two
-unrelated instruments agree there is a storm there. Where the layer is lit and
-no strikes arrive, the network is deaf rather than the sky quiet, which over
-central Africa is most of the time.
-
-It runs about fifteen minutes behind the strikes on top of it, because a
-five-minute accumulation has to close before it can be processed and published.
-An unlit patch under a firing cell usually means the satellite has not been
-asked yet.
-
-### The other electricity
-
-Off by default. The auroral oval is where the solar wind is being funnelled down
-the earth's own field lines into the top of the atmosphere, and it is the one
-layer here that can be on beside everything else without arguing with it: it
-lives at the latitudes lightning does not, so it cannot cover a reading. Worth
-turning the globe for, because a sphere shows a whole polar cap at once where a
-flat map cuts the same ring into two unrecognisable arcs along its edges.
-
-It is also the one thing on this instrument that has not happened yet.
-Everything else here was measured; this is NOAA's OVATION model, driven by the
-solar wind as it is read at L1 about an hour upstream of us, which is exactly
-what buys it the lead time. The panel says how far ahead it is looking.
-
-The curtain shimmers, on a slow wave that runs around the oval rather than
-pulsing all at once, which is roughly what a substorm does. The shimmer is
-texture and says nothing: it moves a third of the weight, and where the oval
-sits and how bright it is are the model's to report. It holds still for anyone
-who has asked their system for reduced motion.
 
 ### How far back you can go
 
@@ -311,7 +271,5 @@ the people who collect them.
 
 Cloud field from [RealEarth](https://realearth.ssec.wisc.edu/) (SSEC, University
 of Wisconsin-Madison) and [EUMETSAT](https://www.eumetsat.int/); rain field from
-[RainViewer](https://www.rainviewer.com/); imager coverage from EUMETSAT's
-MTG-I Lightning Imager; the auroral oval from
-[NOAA SWPC](https://www.swpc.noaa.gov/)'s OVATION model. The borrowed phosphor
-palettes are credited in `src/lib/palette.js`.
+[RainViewer](https://www.rainviewer.com/). The borrowed phosphor palettes are
+credited in `src/lib/palette.js`.

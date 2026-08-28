@@ -74,12 +74,7 @@ export function momentFor(kind, replayAt, now) {
 }
 
 /**
- * The same arithmetic, for a fetched layer that is not one of the two fields.
- *
- * The coverage layer is the only such thing so far: it is not weather behind
- * the map and does not take a turn with the others, but it comes off a service
- * on a published step and is exactly as late as they are, so it picks its
- * moment the same way. Written once here rather than twice, because two
+ * The rounding itself, kept separate from the field that asked for it: two
  * roundings that were meant to agree and quietly stopped is the failure this
  * file exists to prevent.
  */

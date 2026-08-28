@@ -125,36 +125,6 @@ const cloudMark = (
   </svg>
 );
 
-// The coverage layer's two passes, in the two tokens it is actually painted in:
-// text for everywhere a flash was seen, strike for the busiest of it. The
-// weather fields above are drawn in the terrain tokens; this one is not
-// terrain, and the mark has to say so or it reads as a third field.
-const coverage = (
-  <svg viewBox="0 0 24 16" className="h-4 w-6">
-    <path d="M4 5h7v3H4zM6 9h9v3H6zM13 4h6v4h-6z" className="fill-text" opacity="0.28" />
-    <rect x="9" y="6" width="4" height="3" className="fill-strike" opacity="0.7" />
-  </svg>
-);
-
-// The oval, as the map draws it: a soft band with no edge anywhere on it. In
-// the reading token, because it is light rather than terrain, the same argument
-// the stars are drawn on.
-const aurora = (
-  <svg viewBox="0 0 24 16" className="h-4 w-6">
-    <defs>
-      <radialGradient id="oval-glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="currentColor" stopOpacity="0.85" />
-        <stop offset="55%" stopColor="currentColor" stopOpacity="0.3" />
-        <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-      </radialGradient>
-    </defs>
-    <g className="text-text">
-      <ellipse cx="12" cy="6" rx="10" ry="4.5" fill="url(#oval-glow)" />
-      <ellipse cx="12" cy="6" rx="5.5" ry="2.2" className="fill-void" opacity="0.55" />
-    </g>
-  </svg>
-);
-
 const station = (
   <svg viewBox="0 0 24 16" className="h-4 w-6">
     {[[3, 3], [2, 9], [6, 14], [21, 5], [22, 11]].map(([x, y]) => (
@@ -308,60 +278,6 @@ export default function Legend({ onClose }) {
           tiles by <span className="text-text">npm run check:rain</span>, since a palette read
           wrongly would draw a plausible field that is quantitatively false, which is the one failure worth
           testing for. From RainViewer, published in ten-minute frames.
-        </Entry>
-        <Entry mark={coverage} term="Imager coverage">
-          Off by default. Where MTG&rsquo;s Lightning Imager saw flashes over the same five minutes,
-          photographed from 0&deg; in the 777.4nm oxygen line, over the third of the planet that
-          dish can see. The faint wash is every pixel it saw a flash in at all &mdash; a floor
-          rather than a fade, because a single flash somewhere the network is deaf is exactly the
-          thing this layer exists to show &mdash; and the harder pass over it is the busiest of
-          them. Under the land and well under the strikes: it is a layer to notice while looking at
-          something else.
-          <br />
-          <br />
-          Everything else on this map is drawn from one instrument, and this is the second. The two
-          disagree, and the disagreement is the reading. The ground network listens for radio, so
-          what it hears depends on where somebody built a detector, and it hears the
-          cloud-to-ground stroke far better than the discharge that never leaves the cloud. The
-          imager photographs the optical flash instead, and does it as well over the middle of an
-          ocean as over Europe. Where both are lit, two unrelated instruments on two unrelated
-          physical effects agree there is a storm there. Where this is lit and no strikes arrive,
-          the network is deaf rather than the sky quiet &mdash; which over central Africa is most of
-          the time, and is a fact about the instrument the rest of this map is built out of.
-          <br />
-          <br />
-          About fifteen minutes behind the dots on top of it, because a five-minute accumulation has
-          to close before it can be processed and published. That lag is why it is asked for rather
-          than assumed: a cell firing over an unlit patch usually means the satellite has not been
-          asked yet, not that it saw nothing. The product is Accumulated Flash Area and it arrives
-          as a picture, so the counts are read back off the published legend, which{" "}
-          <span className="text-text">npm run check:flash</span> holds against live pixels. From
-          EUMETSAT.
-        </Entry>
-        <Entry mark={aurora} term="Aurora">
-          Off by default. The auroral oval: where the solar wind is being funnelled down the
-          earth&rsquo;s own field lines into the top of the atmosphere, brightest in a ring a few
-          degrees wide around each magnetic pole. Drawn as light rather than as terrain &mdash; in
-          the reading token, added to the glass the way the stars are &mdash; and it shimmers,
-          slowly, on a wave that runs round the oval rather than pulsing all at once. The shimmer is
-          texture and nothing more: it moves a third of the weight, and where the curtain sits and
-          how strong it is are the model&rsquo;s to say.
-          <br />
-          <br />
-          It is the other thing the sky does with electricity, and it is the one layer here that can
-          be on beside everything else without arguing with it: the oval lives at the latitudes
-          lightning does not, so it cannot cover a reading. Worth the globe &mdash; a sphere shows a
-          whole polar cap at once, where a Mercator sheet cuts the same ring into two unrecognisable
-          arcs along its top and bottom edges.
-          <br />
-          <br />
-          The one thing on this instrument that has not happened yet. Everything else here was
-          measured; this is NOAA&rsquo;s OVATION model, driven by the solar wind as it is read at L1
-          about an hour upstream of us, which is exactly what buys it the lead time. It is published
-          as a probability of visible aurora, one value per whole degree of the planet, and anything
-          under five percent is dropped as the model&rsquo;s own noise &mdash; a floor on the
-          probability rather than on the latitude, so a severe storm pushing the oval down over
-          places that never see it still draws. From NOAA SWPC, refreshed about every five minutes.
         </Entry>
         <Entry mark={daylight} term="Daylight">
           The terminator, and the hemisphere it divides: in dark mode light is added to the glass,
@@ -549,9 +465,7 @@ export default function Legend({ onClose }) {
           The nearest-strike distance and the thunder countdown are arithmetic on a feed that
           is incomplete by construction. This network hears the stroke that reaches the ground
           far better than the discharge that stays inside the cloud, and where nobody has built
-          a detector it hears nothing at all &mdash; which is what{" "}
-          <span className="text-text">imager coverage</span> above is there to show you. A quiet
-          map is not a safe sky. For a decision, use your national meteorological service.
+          a detector it hears nothing at all. A quiet map is not a safe sky. For a decision, use your national meteorological service.
         </p>
       </Group>
     </Panel>

@@ -282,18 +282,6 @@ export default function Settings({
           value={settings.stations}
           onChange={(v) => set("stations", v)}
         />
-        <Toggle
-          label="Imager coverage"
-          hint="Where MTG's Lightning Imager saw flashes from orbit, over the third of the planet it watches. It sees the discharges inside a cloud that the ground network mostly cannot hear, and sees them as well over an ocean as over Europe, so where it is lit and no strikes arrive, the network is deaf rather than the sky quiet. About fifteen minutes behind the strikes."
-          value={settings.coverage}
-          onChange={(v) => set("coverage", v)}
-        />
-        <Toggle
-          label="Aurora"
-          hint="The auroral oval, where the solar wind is being steered into the atmosphere. The other thing the sky does with electricity, and the only layer here that has not happened yet: it is NOAA's OVATION model running about an hour ahead of the wind that drives it. Brightest on the globe, which shows a whole polar cap at once."
-          value={settings.aurora}
-          onChange={(v) => set("aurora", v)}
-        />
         <Choice
           label="Persistence"
           hint="How long a strike stays lit before it fades."

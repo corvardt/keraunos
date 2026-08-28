@@ -65,26 +65,6 @@ export const DEFAULTS = {
   // Named for the threads because that is all there is to see: the detectors
   // themselves are drawn only in the moment they hear something.
   stations: false,
-  // The other opinion. MTG's Lightning Imager photographs the optical flash
-  // from orbit, so it sees the intracloud discharge the ground network mostly
-  // cannot hear and sees it as well over an ocean as over Europe. Opt-in for
-  // the reason the detector threads are, being a fact about the instrument
-  // rather than about the weather, and additionally because it is a quarter of
-  // an hour behind the dots it is there to be compared with, which is a thing a
-  // reader has to have asked for before it can be explained to them.
-  coverage: false,
-  // The other electricity. OVATION's auroral oval, off NOAA's space weather
-  // service: one value per degree of the planet for the probability of visible
-  // aurora, fetched whole rather than in tiles because at a degree the whole
-  // world is 148 KB.
-  //
-  // Opt-in, and for a plainer reason than the two above: it is not weather. A
-  // reader who came here for lightning should not have the sky over the poles
-  // lit up until they ask for it. It is also the one layer here that has not
-  // happened yet, since the model runs about an hour ahead of the solar wind
-  // that drives it, so it is named as a forecast wherever it appears, and the
-  // panel prints how far ahead it is looking.
-  aurora: false,
   persistence: "normal",
   // Which of the panel's larger groups are folded shut, by name. A map rather
   // than a setting each, because it is one kind of fact about a list that will
