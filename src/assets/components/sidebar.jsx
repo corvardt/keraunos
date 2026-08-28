@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { BINS, STEP_KM } from "../../lib/reach.js";
 
 const TRACE_W = 300;
@@ -299,6 +299,45 @@ function reachExtent(reach) {
   return reach.span * STEP_KM;
 }
 
+/** One half of the sky as a density: each bin's share of that half's strikes. */
+function reachDensity(side, bins) {
+  if (!side.n) return null;
+  return Array.from({ length: bins }, (unused, i) => side.counts[i] / side.n);
+}
+
+/** The tallest bin across both halves, which is what puts them on one axis. */
+function reachPeak(reach, bins) {
+  const lit = reachDensity(reach.day, bins);
+  const dark = reachDensity(reach.night, bins);
+  if (!lit && !dark) return 0;
+  return Math.max(...(lit ?? [0]), ...(dark ?? [0]));
+}
+
+/**
+ * A meter needle with a peak hold on it: up at once, down slowly.
+ *
+ * Named `damp` rather than `hold`, which is what it does and which the panel
+ * already uses for the feed being held under the pointer. Called `hold` here it
+ * was shadowed by that prop inside the component and the call site invoked a
+ * boolean.
+ *
+ * Both ends of the reach frame are derived from the strikes counted so far and
+ * were recomputed from scratch on every read, twice a second. Neither moves
+ * much and both move constantly, which is what made the curve jump: the axis
+ * is quantised to a 200 km bin, so one strike crossing the cut-off rescaled the
+ * whole picture sideways by a bin, and the tallest bin gains and loses strikes
+ * all afternoon. The data was holding still and the frame was not.
+ *
+ * Asymmetric because the two directions are not the same event. A frame that
+ * has become too small is clipping the reading and has to grow this instant; a
+ * frame that has become too large is only wasting glass, and can take its time
+ * about it. Which is also what a real needle does, and why it reads as one.
+ */
+function damp(current, target, fall = 0.08) {
+  if (!current) return target;
+  return target > current ? target : current + (target - current) * fall;
+}
+
 /**
  * The two distributions, over each other, on one scale.
  *
@@ -326,22 +365,11 @@ function reachExtent(reach) {
  * above already uses: the fill is context and the line is the thing being read.
  * Night gets the line because night is the interesting half.
  */
-function ReachChart({ reach, extent }) {
+function ReachChart({ reach, extent, peak }) {
   const bins = Math.max(2, Math.round(extent / STEP_KM));
-
-  const shape = (counts, total) => {
-    if (!total) return null;
-    const density = Array.from({ length: bins }, (unused, i) => counts[i] / total);
-    return density;
-  };
-
-  const lit = shape(reach.day.counts, reach.day.n);
-  const dark = shape(reach.night.counts, reach.night.n);
-  if (!lit && !dark) return null;
-
-  // One peak across both, which is what puts them on the same axis.
-  const peak = Math.max(...(lit ?? [0]), ...(dark ?? [0]));
-  if (!peak) return null;
+  const lit = reachDensity(reach.day, bins);
+  const dark = reachDensity(reach.night, bins);
+  if ((!lit && !dark) || !peak) return null;
 
   const step = TRACE_W / (bins - 1);
   const points = (density) =>
@@ -591,6 +619,10 @@ function Sidebar({
   onHold,
 }) {
   const fmt = (n) => n.toLocaleString("en-US");
+  // The frame the reach group is drawn in, carried between renders. A ref
+  // rather than state: nothing re-renders because it moved, it moves because
+  // something else already caused a render.
+  const reachFrame = useRef({ extent: 0, peak: 0 });
 
   // Folding, for the groups tall enough that folding one is the difference
   // between reading this column and scrolling it. Absent means open, so a panel
@@ -607,10 +639,23 @@ function Sidebar({
       )
     : feed;
   const busiest = Math.max(1, ...regions.map((region) => region.count));
-  // The reach group's one axis, worked out here because three things are drawn
-  // against it and none of them may disagree with the others about how wide the
-  // sky is.
-  const extent = reach ? reachExtent(reach) : 0;
+  // The reach group's frame: one axis and one peak, worked out here because
+  // three things are drawn against them and none may disagree with the others
+  // about how wide the sky is or how tall the tallest bin was. Held across
+  // renders rather than re-derived, so the curve moves and the frame does not.
+  // Cleared with the session, since an archive or a relink is a different sky.
+  if (!reach) {
+    reachFrame.current = { extent: 0, peak: 0 };
+  }
+  const extent = reach
+    ? (reachFrame.current.extent = damp(reachFrame.current.extent, reachExtent(reach)))
+    : 0;
+  const reachTop = reach
+    ? (reachFrame.current.peak = damp(
+        reachFrame.current.peak,
+        reachPeak(reach, Math.max(2, Math.round(extent / STEP_KM)))
+      ))
+    : 0;
   // The same rate the group at the top is showing, in the unit the figure it is
   // about to be compared against was published in.
 
@@ -769,7 +814,7 @@ function Sidebar({
           </Label>
           {!shut.reach && (
             <>
-              <ReachChart reach={reach} extent={extent} />
+              <ReachChart reach={reach} extent={extent} peak={reachTop} />
               <ReachBars reach={reach} extent={extent} />
               <ReachVerdict reach={reach} />
             </>
