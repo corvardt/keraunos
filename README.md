@@ -5,7 +5,7 @@
 **Every lightning strike on earth, as it is detected.**
 [**Open the instrument →**](https://keraunos.corvardt.com)
 
-![The instrument running: storm cells over the Ionian labelled with their flash counts, beside a panel reporting the strike rate, the session count, the state of the link and which regions are firing](docs/shots/hero.png)
+![The instrument running: storm cells over the Gulf and the Caribbean labelled with their flash counts, beside a panel reporting the strike rate, the session curve, the state of the link and which regions are firing](docs/shots/hero.png)
 
 Live strikes from the [Blitzortung](https://www.blitzortung.org/) network, plotted
 on a world map as they arrive. Strikes land at full white and fade, busy cells
@@ -231,10 +231,10 @@ The pictures in this file are captured from the running instrument rather than
 pasted in once, so they can be taken again when it changes:
 
 ```sh
-npm run dev                    # in another terminal
 npm run shots                  # all of them, into docs/shots and public/og.png
 npm run shots -- hero          # one
 VIEW=-99.4/41.2/6 npm run shots -- hero   # framed somewhere else
+URL=http://localhost:5173 npm run shots   # against the dev server rather than production
 ```
 
 Each shot soaks before it fires: grabbed on load, the instrument is a black
