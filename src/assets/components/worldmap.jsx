@@ -907,18 +907,33 @@ function litCapitals(bins) {
 // tints with the medium instead of fighting it, and stays a value ramp on a
 // greyscale one. Alpha alone cannot say this: fading toward the void reads as
 // older, not busier, and it is the busiest cells that have to be findable.
-// Land through text, and deliberately not up to strike: white is a lightning
+// Line through text, and deliberately not up to strike: white is a lightning
 // strike and nothing else, and a cell that has been busy is context for the
 // strikes rather than one of them. So the ramp runs the furniture tokens and
 // stops at the reading, which also puts the layer under the marks it explains
 // instead of level with them.
-const HEAT_STOPS = ["land", "dim", "text"];
+//
+// It starts at the faintest of those tokens rather than at the coastline's,
+// because the count is now the only thing this ramp is carrying: a cell that
+// has barely worked has to be quiet in colour, since the weight below no
+// longer takes it down to nothing for being marginal.
+const HEAT_STOPS = ["line", "land", "dim", "text"];
 const HEAT_STEPS = 12;
 // What the burn-in is damped to when a satellite or radar field is behind it.
 // Cloud, cells and rings all answer "where is the convection", and three
 // answers at full weight is the crowding: the field is the wide one, so the
 // cells step back rather than off.
 const HEAT_OVER_FIELD = 0.55;
+// The weight of a cell, split so that each channel carries one variable: the
+// ramp above says how busy, and these two say how lately. The first is what a
+// cell holds as its burn runs out, the second is what being current adds on top
+// of it. They used to be one product with the count in it as well, which made a
+// busy cell going cold and a quiet cell arriving the same mark, and put the
+// whole layer between grey 15 and 75 on a tube whose coastline sits at 102.
+// Tuning knobs, not constants: the right pair is the one that reads on real
+// weather, and the sum of them is the brightest the layer ever goes.
+const HEAT_ALPHA_FLOOR = 0.08;
+const HEAT_ALPHA_LIFE = 0.16;
 // The count a cell needs before it marks the map, as the view goes out. A
 // degree is two pixels at world zoom and there are hundreds of them, which is
 // gravel rather than a field; further in a cell is a place and can speak for
@@ -976,7 +991,15 @@ function paintHistory(
     const h = sw[1] - ne[1];
     // Ease the fade so a cell holds its mark, then lets go near the end.
     const life = bin.fade * bin.fade;
-    const heat = Math.min(1, Math.log10(bin.count) / burnFull);
+    // The ramp starts where cells start rather than at a count no cell can
+    // have: nothing below `minCount` is drawn at all, so measuring the heat
+    // from zero spent the bottom quarter of the scale on the empty stretch
+    // below the threshold and handed the faintest cell on the map a quarter of
+    // the ramp it had not earned. Measured from the threshold instead, the
+    // dimmest thing drawn is the bottom of the scale, whatever the zoom has
+    // set that threshold to.
+    const floor = Math.log10(minCount);
+    const heat = Math.min(1, Math.max(0, Math.log10(bin.count) - floor) / Math.max(0.3, burnFull - floor));
 
     // The cell itself, not a token standing in for it. Round smudges overlap
     // and pile into one bright blob wherever the weather is actually working,
@@ -985,12 +1008,15 @@ function paintHistory(
     // beading. Stroked with the same paint so adjacent cells meet without an
     // antialiasing seam between them.
     //
-    // Colour carries the count and alpha follows it down to nothing, so a cell
-    // that has barely worked is barely there. A floor was tried and it is what
-    // made the layer gravel: every marginal cell at a readable weight is a
-    // page of cells at a readable weight, and the busy ones stop standing out.
+    // Colour carries the count, alpha carries the age, and neither carries the
+    // other. A floor under the alpha was tried once and made the layer gravel,
+    // but that was before `burnFloor` culled the marginal cells by zoom: what
+    // was littering the map was a page of two-strike cells at world zoom, and
+    // that is now refused before it reaches here. What the floor buys is that a
+    // cell still burning is still legible, so the ramp is read for how busy and
+    // the weight for how lately, instead of both fading into the same smudge.
     ctx.fillStyle = ctx.strokeStyle = ramp[Math.round(heat * (HEAT_STEPS - 1))];
-    ctx.globalAlpha = heat * 0.34 * life * damp;
+    ctx.globalAlpha = (HEAT_ALPHA_FLOOR + HEAT_ALPHA_LIFE * life) * damp;
     ctx.beginPath();
     ctx.moveTo(sw[0], sw[1]);
     for (const [px, py] of [se, ne, nw]) ctx.lineTo(px, py);
@@ -3827,7 +3853,7 @@ const WorldMap = ({
   return (
     <div
       ref={containerRef}
-      className={`relative h-full w-full touch-none overflow-hidden rounded-[14px] ${
+      className={`relative h-full w-full overflow-hidden rounded-[14px] ${
         panning ? "cursor-grabbing" : "cursor-crosshair"
       }`}
       onPointerDown={onPointerDown}
@@ -3850,7 +3876,11 @@ const WorldMap = ({
         );
       }}
     >
-      <div ref={screenRef} className="absolute inset-0">
+      {/* The gesture blocker sits on the map layer rather than on the frame:
+          touch-action is intersected down the whole ancestor chain, so `none`
+          on the frame killed the sideways scroll of the control strip above it
+          and left everything past the region presets unreachable on a phone. */}
+      <div ref={screenRef} className="absolute inset-0 touch-none">
         <canvas
           ref={canvasRef}
           style={{ width, height }}

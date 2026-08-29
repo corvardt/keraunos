@@ -608,11 +608,11 @@ const Row = memo(function Row({ strike, onSelect, onFocus, onHold }) {
         onPointerEnter={() => onFocus(strike)}
         onFocus={() => {
           onFocus(strike);
-          onHold(true); // tabbing through rows holds it too
+          onHold?.(true); // tabbing through rows holds it too
         }}
         onBlur={() => {
           onFocus(null);
-          onHold(false);
+          onHold?.(false);
         }}
         onClick={() => onSelect(strike)}
         className="settle flex w-full items-baseline gap-2 py-[3px] text-left text-xs transition-colors hover:text-text active:text-text touch:py-2"
@@ -650,6 +650,11 @@ function Sidebar({
   onHold,
 }) {
   const fmt = (n) => n.toLocaleString("en-US");
+  // A finger has no hover: the pointer enters the feed and leaves it again in
+  // the same tap, so the hold the pointer route gives is over before it can be
+  // read. There it is a latch on the heading instead, and the pointer handlers
+  // stand down so the two cannot fight over it.
+  const coarse = useCoarse();
   // The frame the reach group is drawn in, carried between renders. A ref
   // rather than state: nothing re-renders because it moved, it moves because
   // something else already caused a render.
@@ -957,7 +962,25 @@ function Sidebar({
         {/* The label carries the hold: a stopped feed must never look like a
             dead one. */}
         <Label
-          trailing={hold ? "held" : "delay"}
+          trailing={
+            coarse ? (
+              <button
+                type="button"
+                aria-pressed={hold}
+                aria-label={hold ? "Release the feed" : "Hold the feed still"}
+                onClick={() => onHold(!hold)}
+                className={`-my-2 py-2 pl-2 uppercase tracking-label transition-colors active:text-text ${
+                  hold ? "text-text glow" : "text-dim"
+                }`}
+              >
+                [ {hold ? "held" : "hold"} ]
+              </button>
+            ) : hold ? (
+              "held"
+            ) : (
+              "delay"
+            )
+          }
           shut={shut.feed}
           onToggle={fold("feed")}
         >
@@ -985,11 +1008,15 @@ function Sidebar({
 
         <ul
           className="feed-mask mt-2 min-h-0 flex-1 overflow-y-auto pb-4 short:max-h-52"
-          onPointerEnter={() => onHold(true)}
-          onPointerLeave={() => {
-            onHold(false);
-            onFocus(null);
-          }}
+          onPointerEnter={coarse ? undefined : () => onHold(true)}
+          onPointerLeave={
+            coarse
+              ? undefined
+              : () => {
+                  onHold(false);
+                  onFocus(null);
+                }
+          }
         >
           {rows.length === 0 && (
             <li className="py-1 text-xs text-dim">
@@ -1002,7 +1029,9 @@ function Sidebar({
               strike={strike}
               onSelect={onSelect}
               onFocus={onFocus}
-              onHold={onHold}
+              // A tap focuses the row it landed on, and the latch above must
+              // not be released by reading one of the rows it is holding still.
+              onHold={coarse ? undefined : onHold}
             />
           ))}
         </ul>
