@@ -78,7 +78,10 @@ const bolt = (
 
 const smudge = (
   <svg viewBox="0 0 24 16" className="h-6 w-9">
-    <circle cx="12" cy="8" r="5" className="fill-text" opacity="0.22" />
+    <rect x="7" y="3" width="5" height="5" className="fill-dim" opacity="0.2" />
+    <rect x="12" y="3" width="5" height="5" className="fill-text" opacity="0.34" />
+    <rect x="7" y="8" width="5" height="5" className="fill-strike" opacity="0.42" />
+    <rect x="12" y="8" width="5" height="5" className="fill-dim" opacity="0.24" />
   </svg>
 );
 

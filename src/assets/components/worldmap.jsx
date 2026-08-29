@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { geoArea, geoBounds, geoPath } from "d3-geo";
 import { distanceKm } from "../../lib/geo.js";
 import { readMedium } from "../../lib/theme.js";
+import { rgbOf } from "../../lib/palette.js";
 import { motion, forecast, surge } from "../../lib/storms.js";
 import { PERSISTENCE, DENSITY } from "../../lib/settings.js";
 import { SPEED_KMS, MAX_KM as THUNDER_MAX_KM } from "../../lib/thunder.js";
@@ -894,6 +895,26 @@ function litCapitals(bins) {
 }
 
 
+// The burn's colour, as a ramp through the palette's own steps: dim where a
+// cell has barely worked, text through the middle, strike at the top. Not an
+// imported heat scale, because a coated tube (green, amber, whatever the
+// reader chose) carries its coating in exactly these three tokens, so the ramp
+// tints with the medium instead of fighting it, and stays a value ramp on a
+// greyscale one. Alpha alone cannot say this: fading toward the void reads as
+// older, not busier, and it is the busiest cells that have to be findable.
+const HEAT_STOPS = ["dim", "text", "strike"];
+const HEAT_STEPS = 12;
+function heatRamp(palette) {
+  const stops = HEAT_STOPS.map((token) => rgbOf(palette[token]));
+  return Array.from({ length: HEAT_STEPS }, (_, i) => {
+    const t = (i / (HEAT_STEPS - 1)) * (stops.length - 1);
+    const lo = Math.min(Math.floor(t), stops.length - 2);
+    const f = t - lo;
+    const rgb = stops[lo].map((c, j) => Math.round(c + (stops[lo + 1][j] - c) * f));
+    return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+  });
+}
+
 /**
  * The burn-in and the names it lights, onto whatever context, through whatever
  * projection.
@@ -915,6 +936,7 @@ function paintHistory(
   ctx.lineWidth = 1;
   ctx.fillStyle = palette.text;
   ctx.strokeStyle = palette.text;
+  const ramp = heatRamp(palette);
 
   for (const bin of bins) {
     // One strike is a flash, not a mark. A cell has to be worked before it
@@ -924,10 +946,11 @@ function paintHistory(
     // Bins are named by their south-west corner, so the cell runs from
     // [lon, lat] to one BIN_SIZE north-east of it.
     const sw = projection([bin.lon, bin.lat]);
+    const se = projection([bin.lon + BIN_SIZE, bin.lat]);
     const ne = projection([bin.lon + BIN_SIZE, bin.lat + BIN_SIZE]);
-    if (!sw || !ne || !isFinite(sw[0]) || !isFinite(sw[1]) || !isFinite(ne[0]) || !isFinite(ne[1])) {
-      continue;
-    }
+    const nw = projection([bin.lon, bin.lat + BIN_SIZE]);
+    const corners = [sw, se, ne, nw];
+    if (corners.some((p) => !p || !isFinite(p[0]) || !isFinite(p[1]))) continue;
 
     const w = ne[0] - sw[0];
     const h = sw[1] - ne[1];
@@ -935,12 +958,24 @@ function paintHistory(
     const life = bin.fade * bin.fade;
     const heat = Math.min(1, Math.log10(bin.count) / burnFull);
 
-    // History is a soft round smudge. A filled rectangle has hard edges and
-    // reads as interface furniture rather than as accumulated density.
-    ctx.globalAlpha = heat * 0.22 * life;
+    // The cell itself, not a token standing in for it. Round smudges overlap
+    // and pile into one bright blob wherever the weather is actually working,
+    // which is exactly where the map has to stay readable; a filled cell keeps
+    // its own extent, and neighbours tile into a continuous field instead of
+    // beading. Stroked with the same paint so adjacent cells meet without an
+    // antialiasing seam between them.
+    //
+    // Weight and colour both ride the count, but the alpha holds a floor so a
+    // quiet cell still shows: past that, it is the ramp that separates a busy
+    // sector from a working one.
+    ctx.fillStyle = ctx.strokeStyle = ramp[Math.round(heat * (HEAT_STEPS - 1))];
+    ctx.globalAlpha = (0.07 + heat * 0.23) * life;
     ctx.beginPath();
-    ctx.arc(sw[0] + w / 2, ne[1] + h / 2, Math.max(1.5, Math.min(Math.abs(w), Math.abs(h)) * 0.55), 0, Math.PI * 2);
+    ctx.moveTo(sw[0], sw[1]);
+    for (const [px, py] of [se, ne, nw]) ctx.lineTo(px, py);
+    ctx.closePath();
     ctx.fill();
+    ctx.stroke();
 
     // Bounds mark a cell that is firing right now, so they clear a few
     // seconds after it goes quiet instead of littering the map.
@@ -950,6 +985,9 @@ function paintHistory(
     // weather, and four marks fix the same extent while leaving the cell
     // itself uncovered.
     if (bounds && bin.hot && w >= 6 && h >= 6) {
+      // Bezel, not weather: it stays the interface's own colour whatever the
+      // cell under it is doing.
+      ctx.strokeStyle = palette.text;
       ctx.globalAlpha = 0.18 + heat * 0.34;
       const x0 = Math.round(sw[0]) + 0.5;
       const y0 = Math.round(ne[1]) + 0.5;
