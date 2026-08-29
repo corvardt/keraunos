@@ -226,8 +226,15 @@ export default function Legend({ onClose }) {
           more={
             <>
               <p>
-                A cell needs 3 strikes before it marks at all, and the window is the burn dial,
-                across the top of the tube from the region presets.
+                A cell needs 3 strikes before it marks at all, and more than that the further out
+                the view is: a degree is two pixels at world zoom, where a page of marginal cells
+                is gravel rather than a field. The window is the burn dial, across the top of the
+                tube from the region presets.
+              </p>
+              <p>
+                The cell is drawn as the cell, not as a disc inside it, so neighbours tile into one
+                field instead of beading, and it steps back when a cloud or rain field is behind it:
+                both layers answer the same question, and the field is the wider answer.
               </p>
               <p>
                 Brighter is busier. The weight is the logarithm of the count, so the first few
@@ -253,10 +260,28 @@ export default function Legend({ onClose }) {
         >
           Where strikes have piled up, fading as the storms move on.
         </Entry>
-        <Entry mark={storm} term="Storm cell">
+        <Entry
+          mark={storm}
+          term="Storm cell"
+          more={
+            <>
+              <p>
+                The ten busiest cells on screen are ringed and the five busiest of those say their
+                count; everything else holds a tick at its centre. Both are limits on what is drawn
+                at once, not on what is tracked: a cell winding up, or the one you picked, is ringed
+                and read out wherever it comes in the order.
+              </p>
+              <p>
+                The ground speed goes with the cell you pick rather than being offered on every
+                ring. A count is one figure and reads at a glance; a count with a speed on it is a
+                phrase, and thirty phrases scattered over the weather is not thirty readings.
+              </p>
+            </>
+          }
+        >
           A ring around a group of strikes big enough to be one storm, grouped by proximity and
-          labelled with its count and, once tracked long enough, its ground speed. The arrow gives
-          the bearing of travel: the direction is to scale, the length is not.
+          labelled with its count. The arrow gives the bearing of travel: the direction is to scale,
+          the length is not.
         </Entry>
         <Entry mark={bolt} term="Bolt">
           Drawn when one 1&deg; cell takes 3 or more strikes within 2.5 seconds. Heavier and twice

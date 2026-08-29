@@ -83,6 +83,11 @@ const ARROW_PX = 17; // storm bearing arrow; a fixed length, not a distance
 // renderer and the hit test read it, because a cell you cannot see is a cell
 // you cannot have meant to pick.
 const STORM_MIN_PX = 3;
+// How many cells are drawn as cells, and how many of those say their count,
+// busiest first. Both are eye budgets rather than data limits: everything the
+// map knows is still on it, at the weight it is worth.
+const STORM_RINGS = 10;
+const STORM_LABELS = 5;
 // The second ring a surging cell wears. Far enough out to read as two rings at
 // the smallest cell that gets drawn at all, close enough that it stays the
 // same cell rather than becoming a halo around it.
@@ -902,8 +907,23 @@ function litCapitals(bins) {
 // tints with the medium instead of fighting it, and stays a value ramp on a
 // greyscale one. Alpha alone cannot say this: fading toward the void reads as
 // older, not busier, and it is the busiest cells that have to be findable.
-const HEAT_STOPS = ["dim", "text", "strike"];
+// Land through text, and deliberately not up to strike: white is a lightning
+// strike and nothing else, and a cell that has been busy is context for the
+// strikes rather than one of them. So the ramp runs the furniture tokens and
+// stops at the reading, which also puts the layer under the marks it explains
+// instead of level with them.
+const HEAT_STOPS = ["land", "dim", "text"];
 const HEAT_STEPS = 12;
+// What the burn-in is damped to when a satellite or radar field is behind it.
+// Cloud, cells and rings all answer "where is the convection", and three
+// answers at full weight is the crowding: the field is the wide one, so the
+// cells step back rather than off.
+const HEAT_OVER_FIELD = 0.55;
+// The count a cell needs before it marks the map, as the view goes out. A
+// degree is two pixels at world zoom and there are hundreds of them, which is
+// gravel rather than a field; further in a cell is a place and can speak for
+// itself.
+const burnFloor = (k) => (k >= 6 ? MIN_BURN : k >= 2.5 ? MIN_BURN * 3 : MIN_BURN * 8);
 function heatRamp(palette) {
   const stops = HEAT_STOPS.map((token) => rgbOf(palette[token]));
   return Array.from({ length: HEAT_STEPS }, (_, i) => {
@@ -931,7 +951,7 @@ function heatRamp(palette) {
  */
 function paintHistory(
   ctx,
-  { projection, bins, palette, burnFull, bounds, capitals: named, width, height }
+  { projection, bins, palette, burnFull, bounds, capitals: named, width, height, minCount = MIN_BURN, damp = 1 }
 ) {
   ctx.lineWidth = 1;
   ctx.fillStyle = palette.text;
@@ -941,7 +961,7 @@ function paintHistory(
   for (const bin of bins) {
     // One strike is a flash, not a mark. A cell has to be worked before it
     // burns in, which is what keeps single strikes from littering the map.
-    if (bin.count < MIN_BURN) continue;
+    if (bin.count < minCount) continue;
 
     // Bins are named by their south-west corner, so the cell runs from
     // [lon, lat] to one BIN_SIZE north-east of it.
@@ -965,11 +985,12 @@ function paintHistory(
     // beading. Stroked with the same paint so adjacent cells meet without an
     // antialiasing seam between them.
     //
-    // Weight and colour both ride the count, but the alpha holds a floor so a
-    // quiet cell still shows: past that, it is the ramp that separates a busy
-    // sector from a working one.
+    // Colour carries the count and alpha follows it down to nothing, so a cell
+    // that has barely worked is barely there. A floor was tried and it is what
+    // made the layer gravel: every marginal cell at a readable weight is a
+    // page of cells at a readable weight, and the busy ones stop standing out.
     ctx.fillStyle = ctx.strokeStyle = ramp[Math.round(heat * (HEAT_STEPS - 1))];
-    ctx.globalAlpha = (0.07 + heat * 0.23) * life;
+    ctx.globalAlpha = heat * 0.34 * life * damp;
     ctx.beginPath();
     ctx.moveTo(sw[0], sw[1]);
     for (const [px, py] of [se, ne, nw]) ctx.lineTo(px, py);
@@ -1217,9 +1238,11 @@ const WorldMap = ({
   const projectionRef = useRef(projection);
   const stormsRef = useRef(storms);
   const replayRef = useRef(replay);
+  const selectionRef = useRef(selection);
   projectionRef.current = projection;
   stormsRef.current = storms;
   replayRef.current = replay;
+  selectionRef.current = selection;
 
   // ── The unfold ───────────────────────────────────────────────────────────
   //
@@ -2511,6 +2534,8 @@ const WorldMap = ({
       capitals: settings.capitals,
       width,
       height,
+      minCount: burnFloor(settled.k),
+      damp: FIELDS[settings.field] ? HEAT_OVER_FIELD : 1,
     });
 
     historyLayer.current = { canvas, view: settled, labels: namePlaced, w: width, h: height };
@@ -2522,6 +2547,7 @@ const WorldMap = ({
     settled,
     settings.bounds,
     settings.capitals,
+    settings.field,
     spinning,
     width,
     height,
@@ -2899,7 +2925,18 @@ const WorldMap = ({
 
       return globeBitmap(
         "history",
-        [lon, lat, r, binsRef.current, palette, config.bounds, config.capitals, burnFullRef.current],
+        [
+          lon,
+          lat,
+          r,
+          binsRef.current,
+          palette,
+          config.bounds,
+          config.capitals,
+          config.field,
+          burnFullRef.current,
+          burnFloor(globeKRef.current),
+        ],
         (context) =>
           paintHistory(context, {
             projection: live,
@@ -2910,6 +2947,8 @@ const WorldMap = ({
             capitals: config.capitals,
             width,
             height,
+            minCount: burnFloor(globeKRef.current),
+            damp: FIELDS[config.field] ? HEAT_OVER_FIELD : 1,
           })
       ).labels;
     };
@@ -3198,12 +3237,28 @@ const WorldMap = ({
 
       // Storm cells: coherent clusters, ringed and labelled with how they are
       // moving. Few enough to draw per frame.
-      ctx.strokeStyle = palette.text;
+      //
+      // Ringed in dim, read in text. The ring is furniture around the weather
+      // and the count is the reading, and drawing both in the reading token is
+      // what let a page of circles compete with the figures inside them.
+      ctx.strokeStyle = palette.dim;
       ctx.fillStyle = palette.text;
       ctx.font = '10px "IBM Plex Mono", ui-monospace, monospace';
       ctx.textBaseline = "middle";
       const labels = [];
-      for (const storm of settings.storms ? stormsRef.current : []) {
+      // Two budgets, both by strike count. Every cell on the planet ringed and
+      // labelled is forty rings and forty readouts over the same weather, and
+      // around a squall they overlap into cross-hatching with figures floating
+      // between them that belong to no ring you can name. So the busiest cells
+      // are drawn as cells and the rest are marked as present, which is all a
+      // 200-strike cluster under a 4000-strike one has to say. A cell winding
+      // up is exempt from both: it is the one thing here about to happen.
+      const active = settings.storms ? stormsRef.current : [];
+      const ranked = [...active].sort((a, b) => b.count - a.count);
+      const ringCut = ranked[STORM_RINGS - 1]?.count ?? 0;
+      const labelCut = ranked[STORM_LABELS - 1]?.count ?? 0;
+      const chosen = selectionRef.current;
+      for (const storm of active) {
         const centre = projection([storm.lon, storm.lat]);
         const edge = projection([storm.lon + storm.radius, storm.lat]);
         // The edge is tested as well as the centre. On the globe a cell can sit
@@ -3217,16 +3272,33 @@ const WorldMap = ({
         const r = Math.abs(edge[0] - centre[0]);
         if (r < STORM_MIN_PX) continue;
 
-        const weight = Math.min(1, Math.log10(storm.count) / 2.4);
-        ctx.globalAlpha = 0.25 + weight * 0.35;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(centre[0], centre[1], r, 0, Math.PI * 2);
-        ctx.stroke();
-
         // Null until the cell has been watched long enough to mean anything.
         const track = motion(storm);
         const rate = surge(storm);
+
+        const weight = Math.min(1, Math.log10(storm.count) / 2.4);
+        const picked = chosen && chosen.lon === storm.lon && chosen.lat === storm.lat;
+        const drawn = storm.count >= ringCut || rate?.jump || picked;
+        ctx.lineWidth = 1;
+
+        if (!drawn) {
+          // Present, and nothing more. A tick at the centroid holds the cell's
+          // position without ruling a circle round it or claiming a radius the
+          // eye then has to separate from three others.
+          ctx.globalAlpha = 0.18 + weight * 0.2;
+          ctx.beginPath();
+          ctx.moveTo(centre[0] - 2.5, centre[1]);
+          ctx.lineTo(centre[0] + 2.5, centre[1]);
+          ctx.moveTo(centre[0], centre[1] - 2.5);
+          ctx.lineTo(centre[0], centre[1] + 2.5);
+          ctx.stroke();
+          continue;
+        }
+
+        ctx.globalAlpha = 0.25 + weight * 0.35;
+        ctx.beginPath();
+        ctx.arc(centre[0], centre[1], r, 0, Math.PI * 2);
+        ctx.stroke();
 
         // A cell whose flash rate is climbing gets a second ring, and gets it
         // at every level of detail: the rest of what a cell carries is context
@@ -3235,10 +3307,14 @@ const WorldMap = ({
         // brighter, because weight already means how much is firing and would
         // then mean two things at once.
         if (rate?.jump) {
+          // At the reading's own weight, unlike the ring it sits outside: this
+          // is the one thing on the map worth interrupting for.
+          ctx.strokeStyle = palette.text;
           ctx.globalAlpha = 0.55 + weight * 0.45;
           ctx.beginPath();
           ctx.arc(centre[0], centre[1], r + JUMP_GAP_PX, 0, Math.PI * 2);
           ctx.stroke();
+          ctx.strokeStyle = palette.dim;
         }
 
         // Where it has been, and where that course takes it. Both are drawn to
@@ -3328,8 +3404,17 @@ const WorldMap = ({
         // It adds no arrow. There was one, and it read as a digit at 10px,
         // where "↑47/min" is "747/min" at a glance, while saying nothing the
         // second ring had not already said more clearly.
+        //
+        // And the speed is asked for rather than offered. A count is one token
+        // wide and reads at a glance; a count with a speed on it is a phrase,
+        // and thirty phrases scattered over the weather is the thing that made
+        // the map unreadable. It comes back on the cell you picked, which is
+        // the moment somebody wanted it, and on a cell winding up, which is the
+        // moment it wants you.
+        if (!(storm.count >= labelCut || rate?.jump || picked)) continue;
+        const verbose = showAhead && (picked || rate?.jump);
         const parts = [`${storm.count}`];
-        if (track && showAhead) parts.push(`${Math.round(track.kmh)}km/h`);
+        if (track && verbose) parts.push(`${Math.round(track.kmh)}km/h`);
         if (rate?.jump && showAhead) parts.push(`${Math.round(rate.rate)}/min`);
         labels.push({
           text: parts.join(" · "),
