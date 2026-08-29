@@ -275,7 +275,20 @@ export function fillThrough(ctx, alpha, colour, samples) {
 // more requests to somebody else's server, and the queue is ordered from the
 // middle of the screen outward, so a low ceiling is not slower in any way the
 // reader can see: it only means the corners arrive after the centre.
-const IN_FLIGHT = 4;
+//
+// Eight rather than four, because what this layer waits on is the round trip
+// and not the bytes. A tile is under two kilobytes and answers in about six
+// hundred milliseconds, so a screenful of a dozen tiles at four in the air is
+// three round trips of dead time before the field is up, and doubling the
+// ceiling halves that. It is not doubling the traffic: the same tiles are
+// fetched either way, and RealEarth's quota is pixels over a rolling day rather
+// than requests at an instant.
+//
+// It cannot run away at shallow zoom, where a tile costs five requests instead
+// of one: the levels where every dish is in every tile are also the levels with
+// only a handful of tiles on the screen, so the product stays about the same
+// wherever the reader is.
+const IN_FLIGHT = 8;
 
 // How many painted tiles are kept. A tile is its samples as a scalar and the
 // same again as a canvas, so this is a few tens of megabytes at the very worst
@@ -1132,7 +1145,26 @@ export function createField(source) {
         queue.push({ ...tile, key, at: targetAt });
       };
 
-      // The floor first. A handful of tiles at most, and until they are down
+      // The detail, centre outward. There is a ceiling on how many of these can
+      // be in the air at once, so the queue's order is the order the field
+      // fills in, and the tile under the reader's eye is worth more than the one
+      // in the corner behind the feed.
+      const detail = tilesFor(frame, z, true, focus);
+
+      // The middle of the screen goes out first, ahead of everything, including
+      // the floor. The floor used to be queued whole before any detail at all,
+      // which is right about what it is for and wrong about when: it is
+      // insurance against a detail tile that fails, and paying for it up front
+      // costs a full round trip before the tile the reader is actually looking
+      // at is even asked for. Cold-starting a shared link at depth, that is the
+      // first second of the map spent fetching the planet at level 0.
+      //
+      // Enough of them to fill the queue's own ceiling, so the floor goes out
+      // with the second wave rather than after all of it, and is down long
+      // before any of these could have failed and been retried.
+      for (const tile of detail.slice(0, IN_FLIGHT)) add(tile);
+
+      // Then the floor. A handful of tiles at most, and until they are down
       // there is nothing under the detail level to cover a request that fails.
       // Cheap enough to ask for on every settle: past the first one they are
       // already held, and the two lookups above skip them.
@@ -1141,12 +1173,8 @@ export function createField(source) {
         for (const tile of tilesFor(frame, level)) add(tile);
       }
 
-      // Then the detail, centre outward. There is a ceiling on how many of
-      // these can be in the air at once, so the queue's order is the order the
-      // field fills in, and the tile under the reader's eye is worth more than
-      // the one in the corner behind the feed.
-      const detail = tilesFor(frame, z, true, focus);
-      for (const tile of detail) add(tile);
+      // And the rest of the screen, still centre outward.
+      for (const tile of detail.slice(IN_FLIGHT)) add(tile);
       // What this view is owed, so `health` can say how much of it arrived.
       // Recorded here rather than counted from the store, because the store
       // holds the floor levels and other moments too, and neither of those is

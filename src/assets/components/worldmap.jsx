@@ -213,6 +213,10 @@ const GLOBE_TURN_MAX_MS = 1100;
 // rate: a frame is a zoom and a pan at once, and there is no single distance to
 // scale it by that means the same thing at both ends of the zoom range.
 const VIEW_EASE_MS = 640;
+// The descent a shared link arrives on, once the world has finished unfolding.
+// Longer than a preset's flight: it follows the unfold rather than a button,
+// and the two read as one movement only if the second is not the quicker.
+const LINK_EASE_MS = 1000;
 // Where the globe stops shading night onto the outline, easing out so that the
 // flat map's wash arrives onto an evenly lit world rather than trading places
 // with a second treatment mid-frame.
@@ -1168,6 +1172,23 @@ const WorldMap = ({
   const recentHits = useRef(new Map());
   const { width, height } = useElementSize(containerRef);
 
+  // Whether the control strip has run out of room, which is not a question the
+  // viewport can answer: the strip is as wide as the map, and the map is the
+  // window minus whatever panel is open beside it.
+  const stripRef = useRef(null);
+  const [stripTight, setStripTight] = useState(false);
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const read = () => setStripTight(el.scrollWidth > el.clientWidth);
+    // The groups are observed too: a dial's value is part of its label, and
+    // `view globe` is wider than `view flat`.
+    const observer = new ResizeObserver(read);
+    observer.observe(el);
+    for (const group of el.children) observer.observe(group);
+    return () => observer.disconnect();
+  }, []);
+
   // Re-resolved on theme change: the stylesheet owns the values. `paletteKey`
   // is in the dependencies because a customised palette changes those values
   // without changing anything React can see: the tokens moved in the DOM, and
@@ -1522,10 +1543,30 @@ const WorldMap = ({
     const { lon, lat, k } = link.current;
     const centre = base([lon, lat]);
     if (!centre || !isFinite(centre[0]) || !isFinite(centre[1])) return;
-    setView(
-      clampView({ k, x: width / 2 - k * centre[0], y: height / 2 - k * centre[1] }, base, width, height)
+    const to = clampView(
+      { k, x: width / 2 - k * centre[0], y: height / 2 - k * centre[1] },
+      base,
+      width,
+      height
     );
-  }, [base, width, height, flat]);
+    if (reduceMotion) {
+      setView(to);
+      return;
+    }
+    // The same flight a preset takes, run once on arrival: the unfold hands
+    // over a whole world, and the link is the place on it to go. Snapped
+    // instead, the globe came apart into a map that was already somewhere else.
+    const from = viewRef.current;
+    const middle = (v) => ({ k: v.k, cx: (width / 2 - v.x) / v.k, cy: (height / 2 - v.y) / v.k });
+    turnRef.current = {
+      view: true,
+      from: middle(from),
+      to: { ...middle(to), view: to },
+      at: performance.now(),
+      ms: LINK_EASE_MS,
+    };
+    setTurning((n) => n + 1);
+  }, [base, width, height, flat, reduceMotion]);
 
   // Written on settle rather than per frame: replaceState during a drag is
   // sixty history writes a second, and the browser is entitled to complain.
@@ -2486,6 +2527,13 @@ const WorldMap = ({
     // globe would be drawing a level nothing had fetched, and `drawTile` only
     // walks up, so it would fall back to the one tile that covers the planet
     // and the sky would be a smudge.
+    //
+    // Except the very first ask, which waits for nothing. The wait is about not
+    // queueing ground a drag is only passing over, and a pyramid that has never
+    // been asked for anything is not mid-drag: it is a reader who has just
+    // arrived and is looking at an empty sky. `health` says so, since `whole` is
+    // what the last settle asked for and there has not been one.
+    const wait = sky.current.health().whole ? IR_SETTLE_MS : 0;
     const id = setTimeout(() => {
       // Where the globe is pointed, read when the settle fires rather than
       // watched: it is the fetch order, not the fetch, so it wants the latest
@@ -2493,7 +2541,7 @@ const WorldMap = ({
       // every frame, and as a dependency it would reset this timer every frame
       // and the layer would never ask for anything at all.
       sky.current.want(skyProjection, width, height, irAt, spinning && spinRef.current);
-    }, IR_SETTLE_MS);
+    }, wait);
     return () => clearTimeout(id);
   }, [kind, skyProjection, spinning, width, height, irAt, irTick]);
 
@@ -3915,19 +3963,29 @@ const WorldMap = ({
           pointer for exactly that reason: a drag begun in the gap between them
           is a drag of the world, not of the strip.
 
-          Below `sm` there is no room for two corners, so they close back up
-          into the one scrolling strip they were, with a gap in place of the
-          hairline. */}
+          The two corners are what the row does when the row fits. It scrolls at
+          every width rather than only below `sm`, because the width the corners
+          need is the strip's, not the viewport's: a 700px window, or a 1100px
+          one with the panel open beside it, is wide enough for the breakpoint
+          and too narrow for the controls, and the dials at the far end were
+          being clipped off the glass with no way to reach them. Over-full,
+          `justify-between` packs to the start on its own, so the row simply
+          becomes the one scrolling strip again. */}
       <div
+        ref={stripRef}
         data-tour="regions"
-        className={`no-bar pointer-events-none absolute inset-x-3 top-2 flex items-start gap-3 overflow-x-auto transition-opacity duration-500 sm:top-3 sm:justify-between sm:overflow-visible ${
+        className={`no-bar pointer-events-none absolute inset-x-3 top-2 flex items-start gap-3 overflow-x-auto transition-opacity duration-500 sm:top-3 sm:justify-between ${
           flat ? "opacity-100" : "opacity-0"
         }`}
         aria-hidden={!flat}
         style={{ touchAction: "pan-x" }}
       >
+      {/* Not squeezed while the row scrolls: a shrunk group spills its buttons
+          outside its own box, and what lies outside the box is not counted in
+          the scroll width, so the last dials stayed unreachable however far the
+          strip was pushed. */}
       <div
-        className={`flex items-center gap-2 ${flat ? "pointer-events-auto" : ""}`}
+        className={`flex shrink-0 items-center gap-2 ${flat ? "pointer-events-auto" : ""}`}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
@@ -3967,13 +4025,20 @@ const WorldMap = ({
       {/* Closed up into one strip, the two groups meet with nothing between
           them and `[ here ]` runs straight into the first dial. The hairline
           that used to separate them comes back for exactly the widths where
-          they share a row; above `sm` they are in opposite corners and a rule
-          in the middle of the tube would be marking nothing. */}
-      <span className="h-2.5 w-px shrink-0 self-center bg-line sm:hidden" aria-hidden="true" />
+          they share a row; given room they are in opposite corners and a rule
+          in the middle of the tube would be marking nothing.
+
+          Hidden rather than unmounted, so its own width is in the measurement
+          either way. A rule that took its 13px back on the way out would make
+          the row fit, which would take the rule away, which would not fit. */}
+      <span
+        className={`h-2.5 w-px shrink-0 self-center bg-line ${stripTight ? "" : "invisible"}`}
+        aria-hidden="true"
+      />
 
       {/* The dials. */}
       <div
-        className={`flex items-center gap-2 ${flat ? "pointer-events-auto" : ""}`}
+        className={`flex shrink-0 items-center gap-2 ${flat ? "pointer-events-auto" : ""}`}
         onPointerDown={(event) => event.stopPropagation()}
         onClick={(event) => event.stopPropagation()}
       >
