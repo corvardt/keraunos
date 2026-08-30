@@ -263,13 +263,33 @@ meteorological service.
 
 ## Sources
 
-Strikes from the [Blitzortung](https://www.blitzortung.org/) network and its
-volunteers, whose data stays under their terms and under CC BY-SA 4.0. The MIT
-licence on this repository covers the code in it and nothing else: the strikes
-are not this project's to relicense, and commercial use of them is prohibited by
-the people who collect them.
+The [MIT licence](LICENSE) on this repository covers the code in it and nothing
+else. Everything below arrives from somewhere else, under terms this project has
+no power to change or to pass on.
 
-Cloud field from [RealEarth](https://realearth.ssec.wisc.edu/) (SSEC, University
-of Wisconsin-Madison) and [EUMETSAT](https://www.eumetsat.int/); rain field from
-[RainViewer](https://www.rainviewer.com/). The borrowed phosphor palettes are
-credited in `src/lib/palette.js`.
+**Strikes** from the [Blitzortung](https://www.blitzortung.org/) network and its
+volunteers, under Blitzortung's own terms: private and non-commercial use only,
+and not for storm warning, overvoltage claims or risk analysis. The strikes are
+not this project's to relicense, and running your own instance puts you under
+those terms directly, not under this one.
+
+**Weather fields** are read live from third parties on their own terms, not
+redistributed here: cloud from [RealEarth](https://realearth.ssec.wisc.edu/)
+(SSEC, University of Wisconsin-Madison) and
+[EUMETSAT](https://www.eumetsat.int/), rain from
+[RainViewer](https://www.rainviewer.com/). Both restrict redistribution and
+commercial use. If you run your own instance you are their client, and their
+terms are the ones that bind you.
+
+**Fonts** are IBM Plex Mono, under the SIL Open Font License 1.1. The licence
+travels with them in `public/fonts/OFL.txt` and must stay there in any copy.
+
+**Geometry.** `src/lib/world.json` is country outlines from
+[Natural Earth](https://www.naturalearthdata.com/) 110m Admin 0, public domain.
+`src/lib/us.json` is the Leaflet choropleth example's US states, derived from US
+Census boundaries, public domain. `src/lib/water.geo.json` and its unused
+predecessor `src/lib/water.json` are named water bodies; their provenance is not
+recorded and is being traced.
+
+**Palettes.** The borrowed phosphor hues are credited to their authors in
+`src/lib/palette.js`, with a link to each.
