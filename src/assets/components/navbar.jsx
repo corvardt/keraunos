@@ -12,7 +12,7 @@ const item =
 /** Splits the controls into what they do: display, panels, elsewhere. */
 const Rule = () => <span className="h-2.5 w-px bg-line" aria-hidden="true" />;
 
-function Navbar({ archive, onLive, theme, onTheme, onConfig, onKey, onGuide }) {
+function Navbar({ archive, onLive, theme, onTheme, onConfig, onKey, onData, onGuide }) {
   return (
     <header className="relative flex h-11 shrink-0 items-center justify-between border-b border-line px-3 sm:px-4">
       <div className="flex min-w-0 items-baseline gap-2.5">
@@ -80,6 +80,12 @@ function Navbar({ archive, onLive, theme, onTheme, onConfig, onKey, onGuide }) {
         </button>
         <button type="button" onClick={onKey} className={item}>
           key
+        </button>
+        {/* The figures the map refuses to carry. Beside the catalogue rather
+            than behind the configuration, because it is a thing to read and
+            not a thing to set. */}
+        <button type="button" onClick={onData} className={item}>
+          data
         </button>
         <button type="button" onClick={onConfig} className={item}>
           cfg

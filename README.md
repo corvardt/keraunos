@@ -31,8 +31,9 @@ Open it and watch. If you want to drive it, this is the whole of it:
 | **Save** | Configuration holds two exports: the retained strikes as CSV, and the frame as drawn, rewound or live, as a PNG |
 | **Hold** | The feed stops advancing while the pointer rests on it, and queues arrivals behind |
 | **Guide** | Seven steps that light each control on the running map in turn. Opens itself once on a first visit; `g` or `guide` afterwards, `esc` to skip |
+| **Data** | `data` or `d`: every figure the session holds, in three groups — what the sky is doing, what the network is doing, what the instrument is doing. The map refuses most numbers because they would compete with the weather; this is where they go, each one next to what it is counted over and where it stops being a measurement |
 
-**Keys.** `k` key panel · `c` configuration · `g` guide · `t` dark/light ·
+**Keys.** `k` key panel · `c` configuration · `d` data · `g` guide · `t` dark/light ·
 `esc` close a panel, or clear the current selection. With the map focused, `+`
 and `-` zoom (or spin the globe) and `0` returns to the whole world. The rewind
 track takes arrow keys, `home` and `end`.

@@ -9,6 +9,7 @@ import Crt from "./assets/components/crt.jsx";
 import Boot from "./assets/components/boot.jsx";
 import Settings from "./assets/components/settings.jsx";
 import Legend from "./assets/components/legend.jsx";
+import Data from "./assets/components/data.jsx";
 import Clock from "./assets/components/clock.jsx";
 import FieldAge from "./assets/components/fieldage.jsx";
 import Tour from "./assets/components/tour.jsx";
@@ -250,6 +251,9 @@ function App() {
   const paletteKey = usePalette(theme, settings.phosphor, settings.contrast, settings.bloom);
   const [configOpen, setConfigOpen] = useState(false);
   const [keyOpen, setKeyOpen] = useState(false);
+  // The figures, on their own page. Mounted only while it is open, which is
+  // what lets it walk the retained window on every render.
+  const [dataOpen, setDataOpen] = useState(false);
   // The walk through the instrument. First visit only, and not until the boot
   // readout has cleared: it points at controls, and there are none before then.
   const { open: tourOpen, start: startTour, close: closeTour } = useTour(booted);
@@ -298,14 +302,20 @@ function App() {
     setKeyOpen(true);
   }, []);
   const closeKey = useCallback(() => setKeyOpen(false), []);
+  const openData = useCallback(() => {
+    setConfigOpen(false);
+    setKeyOpen(false);
+    setDataOpen(true);
+  }, []);
+  const closeData = useCallback(() => setDataOpen(false), []);
 
   // The guide's last step lights the header and leaves it clickable, so `key`
   // and `cfg` can be pressed straight out of it. A panel opening over the guide
   // would leave two things wanting Escape, and the guide has done its job by
   // then anyway: reaching the catalogue is where it was pointing.
   useEffect(() => {
-    if (configOpen || keyOpen) closeTour();
-  }, [configOpen, keyOpen, closeTour]);
+    if (configOpen || keyOpen || dataOpen) closeTour();
+  }, [configOpen, keyOpen, dataOpen, closeTour]);
 
   const worldIndex = useMemo(() => indexFeatures(geoData.features), []);
 
@@ -1165,14 +1175,20 @@ function App() {
       const key = event.key.toLowerCase();
       if (key === "escape") {
         // Panels close themselves; with none open, Escape drops the filter.
-        if (configOpen || keyOpen) return;
+        if (configOpen || keyOpen || dataOpen) return;
         setSelection(null);
       } else if (key === "k" || event.key === "?") {
         setConfigOpen(false);
+        setDataOpen(false);
         setKeyOpen((open) => !open);
       } else if (key === "c") {
         setKeyOpen(false);
+        setDataOpen(false);
         setConfigOpen((open) => !open);
+      } else if (key === "d") {
+        setKeyOpen(false);
+        setConfigOpen(false);
+        setDataOpen((open) => !open);
       } else if (key === "g") {
         startTour();
       } else if (key === "t") {
@@ -1184,7 +1200,7 @@ function App() {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [booted, configOpen, keyOpen, theme, setTheme, startTour]);
+  }, [booted, configOpen, keyOpen, dataOpen, theme, setTheme, startTour]);
 
   return (
     <div className="flex h-full flex-col bg-void">
@@ -1201,6 +1217,21 @@ function App() {
           rather than over it, and the scanlines cross it too. */}
       {tourOpen && <Tour onClose={closeTour} />}
       {keyOpen && <Legend onClose={closeKey} />}
+      {dataOpen && (
+        <Data
+          stats={stats}
+          day24={day24}
+          reach={reach}
+          regions={regions}
+          storms={replayAt === null ? storms : replayStorms}
+          status={status}
+          fieldHealth={fieldHealth}
+          history={history}
+          replaying={replayAt !== null}
+          archiveRange={archiveRange}
+          onClose={closeData}
+        />
+      )}
       {configOpen && (
         <Settings
           settings={settings}
@@ -1231,6 +1262,7 @@ function App() {
           onTheme={setTheme}
           onConfig={openConfig}
           onKey={openKey}
+          onData={openData}
           onGuide={startTour}
         />
       )}

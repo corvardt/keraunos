@@ -676,6 +676,7 @@ export default function Legend({ onClose }) {
           <span className="text-text">k</span> or <span className="text-text">?</span> this panel
           &middot;{" "}
           <span className="text-text">c</span> configuration &middot;{" "}
+          <span className="text-text">d</span> data &middot;{" "}
           <span className="text-text">g</span> guide &middot; <span className="text-text">t</span>{" "}
           dark / light &middot; <span className="text-text">+</span>{" "}
           <span className="text-text">&minus;</span> <span className="text-text">0</span> zoom
