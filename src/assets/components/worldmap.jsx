@@ -3974,8 +3974,17 @@ const WorldMap = ({
       <div
         ref={stripRef}
         data-tour="regions"
-        className={`no-bar pointer-events-none absolute inset-x-3 top-2 flex items-start gap-3 overflow-x-auto transition-opacity duration-500 sm:top-3 sm:justify-between ${
+        className={`no-bar absolute inset-x-3 top-2 flex items-start gap-3 overflow-x-auto transition-opacity duration-500 sm:top-3 sm:justify-between ${
           flat ? "opacity-100" : "opacity-0"
+        } ${
+          // A pointer-events:none scroller is not what a touch pans: the finger
+          // lands on a button that takes the pointer, and the strip it sits in
+          // is invisible to the gesture, so the row never moved and everything
+          // past the region presets stayed off the phone. Transparent only
+          // while the row fits, which is the only time there is a gap between
+          // the corners for a drag of the world to begin in. Over-full there is
+          // no gap: the strip is content edge to edge, and it takes the touch.
+          flat && stripTight ? "pointer-events-auto" : "pointer-events-none"
         }`}
         aria-hidden={!flat}
         style={{ touchAction: "pan-x" }}
