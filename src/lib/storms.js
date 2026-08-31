@@ -100,13 +100,33 @@ function slope(points, key) {
   return (n * sumTV - sumT * sumV) / denominator;
 }
 
-export function detectStorms(strikes, now, windowMs) {
+// A bin's key, as a number rather than as `${cx},${cy}`.
+//
+// The window is minutes of a planet's lightning — tens of thousands of strikes
+// — and it is rebuilt twice a second, and once per step of the replay's walk.
+// A string key is an allocation per strike, so a cold scrub was over a million
+// of them for an answer that is arithmetic.
+//
+// Unique because the row index is bounded: ±90° over CELL_DEG is ±225, well
+// inside the 1024 the column is multiplied by, so no two bins can collide.
+const binKey = (cx, cy) => cx * 1024 + cy;
+
+/**
+ * The clusters in a window of the strike history.
+ *
+ * `lo` and `hi` bound the window inside `strikes` rather than the caller
+ * slicing it out: every caller already has the two indices from a binary
+ * search, and the slice was a copy of tens of thousands of entries made to be
+ * read once and dropped.
+ */
+export function detectStorms(strikes, now, windowMs, lo = 0, hi = strikes.length) {
   const cells = new Map();
-  for (const strike of strikes) {
+  for (let i = lo; i < hi; i++) {
+    const strike = strikes[i];
     if (now - strike.t > windowMs) continue;
     const cx = Math.floor(strike.lon / CELL_DEG);
     const cy = Math.floor(strike.lat / CELL_DEG);
-    const key = `${cx},${cy}`;
+    const key = binKey(cx, cy);
     let cell = cells.get(key);
     if (!cell) {
       cells.set(key, (cell = { cx, cy, n: 0, sumLon: 0, sumLat: 0, rn: 0, rLon: 0, rLat: 0 }));
@@ -141,7 +161,7 @@ export function detectStorms(strikes, now, windowMs) {
       for (let dx = -1; dx <= 1; dx++) {
         for (let dy = -1; dy <= 1; dy++) {
           if (!dx && !dy) continue;
-          const neighbour = `${current.cx + dx},${current.cy + dy}`;
+          const neighbour = binKey(current.cx + dx, current.cy + dy);
           if (cells.has(neighbour) && !seen.has(neighbour)) {
             seen.add(neighbour);
             stack.push(neighbour);
@@ -249,8 +269,19 @@ export function trackStorms(previous, current, now) {
  * reading to mean anything. Speeds outside weather's range are tracking errors
  * (a cluster merging or being matched to its neighbour) and are withheld
  * rather than displayed.
+ *
+ * Worked out once per cell and kept on it, here and in `surge`. A cell is a new
+ * object on every pass of the tracker, so the answer cannot go stale; what it
+ * stops is the render loop asking the same question of the same object sixty
+ * times a second, and `surge` in particular is two filters and a regression
+ * over a trail that has not moved since it was last asked.
  */
 export function motion(storm) {
+  if (storm.track === undefined) storm.track = trackOf(storm);
+  return storm.track;
+}
+
+function trackOf(storm) {
   if (storm.baseline < MIN_BASELINE_S) return null;
   const lonKm = storm.vlon * KM_PER_DEG * Math.cos((storm.lat * Math.PI) / 180);
   const latKm = storm.vlat * KM_PER_DEG;
@@ -285,6 +316,11 @@ export function motion(storm) {
  * is doing, and reading a jump off that would fire on every cell at birth.
  */
 export function surge(storm) {
+  if (storm.rate === undefined) storm.rate = surgeOf(storm);
+  return storm.rate;
+}
+
+function surgeOf(storm) {
   const now = storm.t;
   // Points whose own window lies entirely within the cell's life, so the ramp
   // of a filling boxcar is never mistaken for a rising storm.

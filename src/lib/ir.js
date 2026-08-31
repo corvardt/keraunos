@@ -769,10 +769,18 @@ async function fetchTile(z, x, y, at) {
  * are CSS colours and stay CSS colours, so whatever the stylesheet and the
  * phosphor between them decided a token is, is what gets drawn.
  */
+// The two channels, reused. `fillThrough` copies each into the sheet before it
+// returns, so nothing here outlives the call, and a tile that allocated them
+// fresh was thirty-two kilobytes of garbage per paint against a pyramid that
+// repaints whole whenever the medium changes.
+const warm = new Uint8ClampedArray(SAMPLES * SAMPLES * 4);
+const cold = new Uint8ClampedArray(SAMPLES * SAMPLES * 4);
+
 function paintTile({ field, lat }, body, tops, ground) {
-  const size = SAMPLES * SAMPLES;
-  const warm = new Uint8ClampedArray(size * 4);
-  const cold = new Uint8ClampedArray(size * 4);
+  // Cleared, unlike a fresh allocation: the loop below writes only the samples
+  // that have something in them, so what it does not write is last tile's sky.
+  warm.fill(0);
+  cold.fill(0);
   let anyCold = false;
 
   for (let row = 0; row < SAMPLES; row++) {

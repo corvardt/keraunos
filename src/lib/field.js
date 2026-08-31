@@ -248,6 +248,11 @@ const SEAM_PX = 1;
 // life of the page.
 let sheet = null;
 let sheetCtx = null;
+// And one ImageData with it, for the same reason and on the same key. A tile is
+// two of these, a change of medium repaints the whole pyramid, and three
+// hundred tiles at four bytes a sample is twenty megabytes of buffers allocated
+// to be written once, in one frame.
+let sheetImage = null;
 
 export function fillThrough(ctx, alpha, colour, samples) {
   if (!sheet) {
@@ -257,12 +262,15 @@ export function fillThrough(ctx, alpha, colour, samples) {
     sheet.width = samples;
     sheet.height = samples;
     sheetCtx = sheet.getContext("2d");
+    sheetImage = null;
   }
+  if (!sheetImage) sheetImage = sheetCtx.createImageData(samples, samples);
   // `putImageData` replaces rather than composites, so the sheet needs no
-  // clearing between uses: every byte of it is written before it is read.
-  const image = sheetCtx.createImageData(samples, samples);
-  image.data.set(alpha, 0);
-  sheetCtx.putImageData(image, 0, 0);
+  // clearing between uses: every byte of it is written before it is read. The
+  // same holds of the buffer itself, which is why it can be the same one every
+  // time: `set` writes all four channels of every sample.
+  sheetImage.data.set(alpha, 0);
+  sheetCtx.putImageData(sheetImage, 0, 0);
   sheetCtx.globalCompositeOperation = "source-in";
   sheetCtx.fillStyle = colour;
   sheetCtx.fillRect(0, 0, samples, samples);

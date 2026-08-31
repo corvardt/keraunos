@@ -306,10 +306,17 @@ const CORE = (CORE_DBZ - FLOOR_DBZ) / (TOP_DBZ - FLOOR_DBZ);
  * the fraction of the ground somebody has a radar on, so it is not competing
  * for the same screen and can afford to be read.
  */
+// Reused between tiles: `fillThrough` copies each into the sheet before it
+// returns, so nothing here outlives the call. See the same pair in `ir.js`.
+const wet = new Uint8ClampedArray(SAMPLES * SAMPLES * 4);
+const core = new Uint8ClampedArray(SAMPLES * SAMPLES * 4);
+
 function paintTile({ field }, body, tops, ground) {
   const size = SAMPLES * SAMPLES;
-  const wet = new Uint8ClampedArray(size * 4);
-  const core = new Uint8ClampedArray(size * 4);
+  // Cleared, unlike a fresh allocation: only the samples with rain in them are
+  // written, and the rest would otherwise be the last tile's.
+  wet.fill(0);
+  core.fill(0);
   let anyCore = false;
 
   for (let p = 0; p < size; p++) {
