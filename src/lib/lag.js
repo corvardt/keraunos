@@ -39,14 +39,26 @@ const LEAK = 0.05;
  * milliseconds, giving when the flash happened as this machine's clock reads
  * it, or null where the frame carried no time of its own. Never later than the
  * arrival: the sound cannot have set off after we heard about it.
+ *
+ * The floor it is working from is carried on the function itself, because it is
+ * worth reading and there is nowhere else it exists. It is the offset between
+ * the two clocks plus the one hop nothing can remove, and those two cannot be
+ * told apart from here, so it is not a latency: a browser five seconds off UTC
+ * reads five seconds of floor and is not five seconds from the relay. What it
+ * honestly is, is the correction this session is applying, and therefore how
+ * far out the arrival time would be without it. Infinity until the first frame
+ * that carried a time of its own.
  */
 export function clock(leak = LEAK) {
   let floor = Infinity;
   let last = 0;
-  return (struck, arrived) => {
+  const at = (struck, arrived) => {
     if (!Number.isFinite(struck)) return null;
     floor = Math.min(arrived - struck, floor + (arrived - last) * leak);
     last = arrived;
+    at.floor = floor;
     return struck + floor;
   };
+  at.floor = Infinity;
+  return at;
 }

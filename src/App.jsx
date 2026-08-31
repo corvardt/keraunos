@@ -119,7 +119,16 @@ const EMPTY = [];
 // What the panel reads before anything has arrived. Hoisted out of the state
 // declaration because a session can now start twice: loading an archive, and
 // leaving one, both put the instrument back to exactly this.
-const NO_STATS = { rate: 0, total: 0, storms: 0, surging: 0, delay: null, stations: null };
+const NO_STATS = {
+  rate: 0,
+  total: 0,
+  storms: 0,
+  surging: 0,
+  delay: null,
+  stations: null,
+  trip: null,
+  repeats: 0,
+};
 
 // Strikes are appended in arrival order, so any window over them is a
 // contiguous run and its start can be found rather than scanned for.
@@ -409,6 +418,11 @@ function App() {
   // Held for the session, because it is a running measurement of the trip a
   // frame makes to get here and one strike says nothing about that.
   const struckAt = useRef(clock());
+  // Strikes the repeat filter turned away, counted where the flush can read
+  // them. Written by the socket, which is upstream of everything else here, so
+  // this is the one figure the instrument holds about work it did before
+  // anything downstream was told anything.
+  const repeats = useRef(0);
   // True while the backfill's tracker walk is still being carried across idle
   // frames. The clustering pass below stands down for as long as it is: both
   // write the tracked cells, and a pass landing mid-walk would replace a
@@ -681,6 +695,12 @@ function App() {
         // of the detection geometry rather than of the weather, which is why
         // it sits beside latency and not beside the rate.
         stations: batch.length ? median(batch.map((data) => data.stations)) : null,
+        // The correction the session clock is applying, and the repeats that
+        // never reached any of the figures above it. Neither is weather; both
+        // are the instrument describing itself, and the data page is the only
+        // reader of either.
+        trip: Number.isFinite(struckAt.current.floor) ? struckAt.current.floor : null,
+        repeats: repeats.current,
       });
 
       // Burn-in releases: cells untouched for the burn window are dropped, and
@@ -1253,7 +1273,14 @@ function App() {
       {/* Unmounted rather than ignored while an archive is playing. Holding a
           socket open to drop everything that comes down it would take a share
           of the relay's one upstream link for a map that is not showing it. */}
-      {!archive && <Seeker onDataReceived={handleDataReceived} onBackfill={absorb} onStatus={setStatus} />}
+      {!archive && (
+        <Seeker
+          onDataReceived={handleDataReceived}
+          onBackfill={absorb}
+          onStatus={setStatus}
+          repeats={repeats}
+        />
+      )}
       {settings.chrome && (
         <Navbar
           archive={archiveRange}

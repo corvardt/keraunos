@@ -326,6 +326,17 @@ export default function Data({
             unit="s"
             note="Median, as the network reports it. It stops counting before the frame leaves the network, so the trip here is longer than this says."
           />
+          <Row
+            label="Clock correction"
+            value={stats.trip === null ? DASH : (stats.trip / 1000).toFixed(1)}
+            unit="s"
+            note="The smallest gap seen lately between a strike's own moment and its arrival here. It is this browser's offset from UTC and the one hop nothing can remove, together, and nothing here can separate them: it is what the countdown is corrected by, not a measurement of the relay."
+          />
+          <Row
+            label="Repeats turned away"
+            value={num(stats.repeats)}
+            note="The feed reports about one strike in forty twice. Caught at the socket, so the map, the rate, the cells and the thunder each counted it once."
+          />
           <Row label="Watched" value={span(day24?.watchedMs)} />
           <Row
             label="Handed over on arrival"

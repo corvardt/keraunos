@@ -25,7 +25,7 @@ const GIVE_UP_AFTER = 4; // failed attempts before the feed is reported down
  * or the effect tears the socket down and reconnects on every parent render.
  * `onBackfill` gets the relay's window, once, before any live strike.
  */
-function Seeker({ onDataReceived, onBackfill, onStatus }) {
+function Seeker({ onDataReceived, onBackfill, onStatus, repeats }) {
   useEffect(() => {
     let socket = null;
     let retry = null;
@@ -109,7 +109,14 @@ function Seeker({ onDataReceived, onBackfill, onStatus }) {
           // rather than the nanosecond, because that is the resolution the
           // backfill carries and the same strike has to key the same way
           // whichever of the two doors it came in by.
-          if (!fresh(Math.round(time / 1e6), lon, lat)) return;
+          if (!fresh(Math.round(time / 1e6), lon, lat)) {
+            // Counted on the way out. It is the one thing the instrument does
+            // that nothing downstream can see the effect of: a repeat caught
+            // here leaves no trace anywhere, which is the point of catching it,
+            // and the count is the only evidence the filter is working at all.
+            if (repeats) repeats.current++;
+            return;
+          }
           const date = new Date(time / 1000000);
           // UTC, matching the footer clock. Local time would be the viewer's,
           // which says nothing useful about a strike over Java.
@@ -185,6 +192,10 @@ function Seeker({ onDataReceived, onBackfill, onStatus }) {
         socket.close();
       }
     };
+    // `repeats` is a ref and so is stable by construction; it is out of the
+    // array for the same reason the callbacks are in it, which is that this
+    // effect holds the socket and must not be torn down by a render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onDataReceived, onBackfill, onStatus]);
 
   return null;
