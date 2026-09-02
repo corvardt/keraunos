@@ -3976,7 +3976,7 @@ const WorldMap = ({
         data-tour="regions"
         className={`no-bar absolute inset-x-3 top-2 flex items-start gap-3 overflow-x-auto transition-opacity duration-500 sm:top-3 sm:justify-between ${
           flat ? "opacity-100" : "opacity-0"
-        } ${
+        } ${stripTight ? "strip-mask" : ""} ${
           // A pointer-events:none scroller is not what a touch pans: the finger
           // lands on a button that takes the pointer, and the strip it sits in
           // is invisible to the gesture, so the row never moved and everything

@@ -194,6 +194,27 @@ a {
   mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
 }
 
+/* The control strip says it continues the same way: the row dissolves at both
+   ends rather than being cut off at them. Only worn while it overflows, and at
+   both ends rather than the one with more behind it, because tracking which end
+   that is means watching the scroll on a row that is otherwise inert. */
+.strip-mask {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 16px,
+    #000 calc(100% - 16px),
+    transparent 100%
+  );
+}
+
 /* ── The picked shape ───────────────────────────────────────────────────────
    The outline of the country, state or sea a pick landed in. It is drawn
    rather than switched on: the stroke runs round the coast once, and the wash
