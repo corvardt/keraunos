@@ -115,8 +115,8 @@ const REALEARTH = "https://realearth.ssec.wisc.edu/cgi-bin/mapserv";
 const EUMETVIEW = "/msg";
 
 export const DISCS = [
-  { id: "goes-west", lon: -137.0, service: REALEARTH, layer: "G18-ABI-FD-BAND13", invert: true },
-  { id: "goes-east", lon: -75.2, service: REALEARTH, layer: "G19-ABI-FD-BAND13", invert: true },
+  { id: "goes-west", lon: -137.0, service: REALEARTH, layer: "G18-ABI-FD-BAND13" },
+  { id: "goes-east", lon: -75.2, service: REALEARTH, layer: "G19-ABI-FD-BAND13" },
   { id: "msg-0deg", lon: 0.0, service: EUMETVIEW, layer: "msg_fes:ir108" },
   { id: "msg-iodc", lon: 45.5, service: EUMETVIEW, layer: "msg_iodc:ir108" },
   { id: "himawari", lon: 140.7, service: REALEARTH, layer: "HIMAWARI-B13" },
@@ -374,13 +374,17 @@ export const STRETCH = {
 /**
  * The byte to read a pixel at, which is not always the byte that arrived.
  *
- * RealEarth serves the two GOES mapfiles with the ramp the other way round:
+ * RealEarth has served the two GOES mapfiles with the ramp the other way round:
  * warm ground bright, cold tops dark, the reverse of Himawari on the same
  * service and of both EUMETSAT layers. It drew as a solid deck of cloud over
  * everything from the dateline to the mid-Atlantic and clear sky exactly where
  * the storms were. Read from the other end the same three anchors hold: over
  * the Atlantic, where GOES-East and Meteosat see the same sky, the two
  * distributions agree to a hundredth of the scale at every quantile.
+ *
+ * They have since been served the normal way round again, so no dish is flagged
+ * today. The flag stays because the flip has happened in both directions and is
+ * not announced either time.
  *
  * Which way each dish runs is a live property of somebody else's service, so
  * `scripts/check-polarity.cjs` asks it rather than trusting these flags, and
