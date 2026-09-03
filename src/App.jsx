@@ -19,7 +19,7 @@ import { useTheme } from "./lib/theme.js";
 import { usePalette } from "./lib/palette.js";
 import { useSettings, DENSITY } from "./lib/settings.js";
 import { useTour } from "./lib/tour.js";
-import { detectStorms, trackStorms, surge } from "./lib/storms.js";
+import { detectStorms, trackStorms, measureMotion, surge } from "./lib/storms.js";
 import { binStrikes } from "./lib/burn.js";
 import { createDay } from "./lib/day.js";
 import { createRate } from "./lib/rate.js";
@@ -556,6 +556,11 @@ function App() {
       const lo = since(list, at - STORM_WINDOW_MS);
       const hi = since(list, at);
       tracked = trackStorms(tracked, detectStorms(list, at, STORM_WINDOW_MS, lo, hi), at);
+      // Only where the walk stops. The heading is measured from the strike
+      // record rather than accumulated from the trail, so it does not need to
+      // be taken at every step of the way to be right at the end of it, and
+      // taking it at every step is what a cold scrub cannot afford.
+      if (at + SEED_STEP_MS > to) measureMotion(tracked, list, at);
     }
     return tracked;
   }, []);
@@ -820,6 +825,9 @@ function App() {
         since(history.current, now - STORM_WINDOW_MS)
       );
       tracked.current = trackStorms(tracked.current, found, now);
+      // Reads further back than the clustering window: the two fields it lines
+      // up are fifteen minutes apart.
+      measureMotion(tracked.current, history.current, now);
       setStorms(tracked.current);
 
       // Distance to the closest strike still in the window. Only ever computed

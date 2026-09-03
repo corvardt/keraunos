@@ -15,29 +15,79 @@ const RECENT_MS = 180000;
 const MIN_RECENT = 20; // below this the recent centroid is too noisy to use
 const MIN_CELL_STRIKES = 2; // a bin below this is noise, not a cell
 const MIN_STORM_STRIKES = 12; // a cluster below this is not worth tracking
+const COVER = 0.9; // share of a cluster's strikes the drawn ring encloses
 const MATCH_DEG = 1.2; // how far a cell may move between passes and stay itself
 const KM_PER_DEG = 111.32;
 
-// Velocity needs a long baseline. A 50 km/h cell moves ~28 m in 2 s, while one
-// new strike joining a 130-strike cluster drags the centroid ~430 m: fifteen
-// times further. Measured sample-to-sample, the reading is pure noise, so
-// displacement is taken across minutes instead.
-// How long a baseline has to be is set by geometry, not preference. A 45 km/h
-// cell covers 3.75 km in five minutes while being ~100 km across, three per
-// cent of its own width, which no centroid is accurate enough to resolve. Over
-// ten minutes it moves far enough to measure, so that is the wait.
-// Retention and fitting are two different jobs and want two different windows.
-// The drawn track wants to be long: a 50 km/h cell covers 21 km in 25 minutes,
-// which is a smudge on its own ring at any zoom you would actually use. The
-// velocity fit wants to be short: `slope` is a straight line, and storms curve,
-// so regressing an hour of a turning cell reports a heading it no longer has.
 const TRAIL_MS = 3600000; // centroid history retained per cell, for drawing (60 min)
-const FIT_MS = 1500000; // recent window the velocity is regressed over (25 min)
 const TRAIL_STEP_MS = 20000; // how often a centroid is recorded
-const MIN_BASELINE_S = 600; // observation span before speed is reported
-const MIN_TRAIL_POINTS = 15; // samples the regression needs to be meaningful
 const MIN_KMH = 8; // below this a cell is drifting, not tracking
 const MAX_KMH = 140; // above this it is a tracking error, not weather
+
+// Where the cell is going, and why it is not read off the centroid.
+//
+// The heading used to be the least-squares slope of the cluster's centroid
+// against time. That is the obvious reading and it does not work, which took a
+// recorded hour to see: scored against where the cells actually went, the
+// centroid fit was worse than assuming they did not move at all. Placing a
+// cell's ring fifteen minutes ahead by its own reported velocity put it 20.6 km
+// from the cell; leaving the ring where it was put it 16.0 km away.
+//
+// The reason is that a cluster's centroid is a mean over strikes, so it tracks
+// where the cluster is *firing*, and inside a storm the firing migrates from
+// flank to flank faster than the storm translates. One recorded complex over
+// western New York tracked southeast for an hour while its heading read
+// northwest, because a flank on the west side had lit up and taken the mean
+// with it. This is not noise and no amount of averaging removes it: the slope
+// was strongly significant, and gating on its own standard error kept the wrong
+// arrows (at four sigma the moved ring still lost, 52% against 59%).
+//
+// So the motion is measured the way radar measures it, by alignment rather than
+// by mass. The cell's strikes are splatted onto a small grid at two times and
+// the offset that best lines the later field up with the earlier one is the
+// displacement. A migrating flank changes what the field weighs; it does not
+// move the pattern, so the correlation stays where the storm is. Same recording,
+// same scoring: 11.4 km against the field's own measured drift, against 16.0 km
+// for leaving the ring alone, so this is the first version of the reading that
+// beats standing still.
+//
+// The lag is the whole sensitivity. A cell 100 km across moving 60 km/h covers
+// 15 km in fifteen minutes, a seventh of its own width, and shorter lags do not
+// resolve it: at five minutes the gain over persistence was 15.2 to 14.2 km,
+// at fifteen it is 16.0 to 11.4, and it keeps improving out to twenty-five.
+// Fifteen buys most of it while still giving a cell a heading inside half an
+// hour of being found.
+const XCORR_LAG_MS = 900000; // time between the two fields compared
+const XCORR_HALF_MS = 450000; // strikes gathered into each field
+const XCORR_GRID = 0.15; // degrees per grid cell
+const XCORR_BLUR = 1.2; // grid cells: the gaussian each strike is laid down with
+const XCORR_SPLAT = 2; // how far that gaussian is carried before it is dropped
+// A dense complex fires thousands of times in seven minutes and the shape of
+// its field is settled long before that, so the field is built from a stride
+// through the strikes rather than all of them. This is the only figure here
+// chosen for cost rather than for accuracy, and it did not cost accuracy.
+const XCORR_CAP = 800;
+const XCORR_MIN_CELLS = 40; // occupied grid cells before a field can be matched
+// The peak of a normalised correlation is a cosine, so this is a real
+// threshold and not a tuned one: below it the two fields are not the same
+// storm, which is what a cell that has split, merged or died looks like.
+const XCORR_MIN_CORR = 0.5;
+// A fresh reading is one measurement of a noisy thing. Held against the last
+// one it is worth about half a kilometre of the fifteen-minute error, which is
+// small but free.
+const XCORR_EMA = 0.3;
+// The field is matched on its shape, not on its brightest patch.
+//
+// A gaussian laid down per strike makes a grid cell's weight proportional to
+// the local strike density, and a correlation is a dot product, so without this
+// a compact core fires far above the rest of the storm and the alignment
+// follows the core: exactly the failure the centroid had, arrived at by a
+// different route. Measured on a synthetic cell holding still while a dense
+// core swept a hundred kilometres across it, the raw field read 122 km/h and
+// the square root reads 47. It costs nothing on the recordings, which is the
+// other half of the case for it: 13.2 km against 13.3, and 6.4 against 6.9.
+const XCORR_POWER = 0.5;
+const XCORR_MASK = 1.3; // radii of the cell whose strikes take part
 
 // The lightning jump.
 //
@@ -110,6 +160,166 @@ function slope(points, key) {
 // Unique because the row index is bounded: ±90° over CELL_DEG is ±225, well
 // inside the 1024 the column is multiplied by, so no two bins can collide.
 const binKey = (cx, cy) => cx * 1024 + cy;
+
+// The first strike at or after `t`. The history is appended in arrival order,
+// so the field windows are a range rather than a scan.
+function lowerBound(strikes, t) {
+  let lo = 0;
+  let hi = strikes.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (strikes[mid].t < t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/**
+ * The cell's strikes between two times, as a grid of weights.
+ *
+ * Laid down with a gaussian rather than counted into buckets: a strike falling
+ * a millimetre either side of a boundary would otherwise move a whole cell's
+ * worth of weight, and the correlation below is read to a fraction of a cell,
+ * which needs a surface with no steps in it. Offsets are from the cell's own
+ * centre, so the two fields being compared share an origin.
+ */
+function fieldOf(strikes, from, to, lon, lat, mask) {
+  const start = lowerBound(strikes, from);
+  const end = lowerBound(strikes, to);
+  const stride = Math.max(1, Math.ceil((end - start) / XCORR_CAP));
+  const field = new Map();
+  for (let i = start; i < end; i += stride) {
+    const strike = strikes[i];
+    if (Math.hypot(strike.lon - lon, strike.lat - lat) > mask) continue;
+    const gx = (strike.lon - lon) / XCORR_GRID;
+    const gy = (strike.lat - lat) / XCORR_GRID;
+    const cx = Math.round(gx);
+    const cy = Math.round(gy);
+    for (let dx = -XCORR_SPLAT; dx <= XCORR_SPLAT; dx++) {
+      for (let dy = -XCORR_SPLAT; dy <= XCORR_SPLAT; dy++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        const w = Math.exp(-((x - gx) ** 2 + (y - gy) ** 2) / (2 * XCORR_BLUR * XCORR_BLUR));
+        if (w < 0.02) continue;
+        const key = binKey(x, y);
+        field.set(key, (field.get(key) || 0) + w);
+      }
+    }
+  }
+  for (const [key, w] of field) field.set(key, w ** XCORR_POWER);
+  return field;
+}
+
+function magnitude(field) {
+  let sum = 0;
+  for (const w of field.values()) sum += w * w;
+  return Math.sqrt(sum);
+}
+
+// The cosine between the later field and the earlier one slid by (sx, sy).
+// Normalised against only the part of the earlier field that is overlapped, so
+// a shift is not rewarded for covering more of it.
+function align(later, earlier, energy, sx, sy) {
+  let dot = 0;
+  let seen = 0;
+  for (const [key, w] of later) {
+    const x = Math.floor(key / 1024);
+    const y = key - x * 1024;
+    const previous = earlier.get(binKey(x - sx, y - sy));
+    if (previous) {
+      dot += w * previous;
+      seen += previous * previous;
+    }
+  }
+  return seen > 0 ? dot / (energy * Math.sqrt(seen)) : 0;
+}
+
+/**
+ * The offset, in grid cells, that best lines the two fields up.
+ *
+ * Searched no further than weather can travel in the lag, and refined below a
+ * whole cell by fitting a parabola to the peak and its two neighbours on each
+ * axis: at this grid a cell is 17 km, and a storm covers a fraction of that
+ * between the two fields, so an answer rounded to the grid would be mostly
+ * quantisation.
+ */
+function bestShift(later, earlier, span) {
+  const energy = magnitude(later);
+  if (!energy) return null;
+  const scores = new Map();
+  let best = 0;
+  let bx = 0;
+  let by = 0;
+  for (let sx = -span; sx <= span; sx++) {
+    for (let sy = -span; sy <= span; sy++) {
+      if (Math.hypot(sx, sy) > span) continue;
+      const score = align(later, earlier, energy, sx, sy);
+      scores.set(binKey(sx, sy), score);
+      if (score > best) {
+        best = score;
+        bx = sx;
+        by = sy;
+      }
+    }
+  }
+  if (best < XCORR_MIN_CORR) return null;
+  const at = (x, y) => scores.get(binKey(x, y)) ?? 0;
+  const refine = (low, high) => {
+    const curve = low - 2 * best + high;
+    if (Math.abs(curve) < 1e-9) return 0;
+    return Math.max(-0.5, Math.min(0.5, (0.5 * (low - high)) / curve));
+  };
+  return {
+    x: bx + refine(at(bx - 1, by), at(bx + 1, by)),
+    y: by + refine(at(bx, by - 1), at(bx, by + 1)),
+  };
+}
+
+/**
+ * Measures how each cell is moving, from the strikes themselves.
+ *
+ * Called by whoever holds the history, once per pass, after `trackStorms`: the
+ * cells carry identity across passes and this reads the raw strike record
+ * behind them, which is a longer window than the one they were detected in.
+ * Cells younger than the lag are left unmeasured rather than matched against a
+ * stretch of sky they were not in yet.
+ */
+export function measureMotion(storms, strikes, now) {
+  const span = Math.ceil(((MAX_KMH / 3600) * (XCORR_LAG_MS / 1000)) / KM_PER_DEG / XCORR_GRID);
+  for (const storm of storms) {
+    if (storm.age * 1000 < XCORR_LAG_MS) continue;
+    // The fields are minutes wide and the callers ask twice a second. Taken at
+    // the cadence the trail is sampled on, which is as often as the answer can
+    // have changed.
+    if (storm.measured && now - storm.measuredAt < TRAIL_STEP_MS) continue;
+    const mask = storm.radius * XCORR_MASK;
+    const earlier = fieldOf(
+      strikes,
+      now - XCORR_LAG_MS - XCORR_HALF_MS,
+      now - XCORR_LAG_MS,
+      storm.tlon,
+      storm.tlat,
+      mask
+    );
+    if (earlier.size < XCORR_MIN_CELLS) continue;
+    const later = fieldOf(strikes, now - XCORR_HALF_MS, now, storm.tlon, storm.tlat, mask);
+    if (later.size < XCORR_MIN_CELLS) continue;
+
+    const shift = bestShift(later, earlier, span);
+    if (!shift) continue;
+
+    const seconds = XCORR_LAG_MS / 1000;
+    const vlon = (shift.x * XCORR_GRID) / seconds;
+    const vlat = (shift.y * XCORR_GRID) / seconds;
+    storm.vlon = storm.measured ? storm.vlon + XCORR_EMA * (vlon - storm.vlon) : vlon;
+    storm.vlat = storm.measured ? storm.vlat + XCORR_EMA * (vlat - storm.vlat) : vlat;
+    storm.measured = true;
+    storm.measuredAt = now;
+    // The reading `motion` memoised was taken before this pass had one.
+    storm.track = undefined;
+  }
+  return storms;
+}
 
 /**
  * The clusters in a window of the strike history.
@@ -191,11 +401,26 @@ export function detectStorms(strikes, now, windowMs, lo = 0, hi = strikes.length
     // Where the cell is now, as opposed to where it has been.
     const tlon = recent >= MIN_RECENT ? rLon / recent : lon;
     const tlat = recent >= MIN_RECENT ? rLat / recent : lat;
+    // The ring holds the bulk of the cell, not its furthest bin. Drawn to the
+    // outermost bin it was a ring around a two-strike straggler forty-five
+    // kilometres off the storm: measured over two recorded hours, ninety per
+    // cent of a cell's strikes sat inside eighty per cent of that radius, so
+    // the ring was enclosing a third more area than the cell occupied, and for
+    // the worst tenth two thirds. Bins are taken nearest first until they carry
+    // COVER of the strikes, which is the same density argument the centroid
+    // already makes by being a mean over strikes rather than over bins.
+    const ranked = group
+      .map((cell) => ({
+        n: cell.n,
+        d: Math.hypot((cell.cx + 0.5) * CELL_DEG - lon, (cell.cy + 0.5) * CELL_DEG - lat),
+      }))
+      .sort((a, b) => a.d - b.d);
     let radius = CELL_DEG;
-    for (const cell of group) {
-      const dx = (cell.cx + 0.5) * CELL_DEG - lon;
-      const dy = (cell.cy + 0.5) * CELL_DEG - lat;
-      radius = Math.max(radius, Math.hypot(dx, dy) + CELL_DEG * 0.5);
+    let held = 0;
+    for (const cell of ranked) {
+      radius = Math.max(radius, cell.d + CELL_DEG * 0.5);
+      held += cell.n;
+      if (held >= count * COVER) break;
     }
 
     storms.push({ lon, lat, tlon, tlat, count, recent, radius, extent: group.length });
@@ -232,7 +457,8 @@ export function trackStorms(previous, current, now) {
         trail: [sample],
         vlon: 0,
         vlat: 0,
-        baseline: 0,
+        measured: false,
+        measuredAt: 0,
         age: 0,
         t: now,
       };
@@ -246,21 +472,21 @@ export function trackStorms(previous, current, now) {
     const latest = trail[trail.length - 1];
     if (!latest || now - latest.t >= TRAIL_STEP_MS) trail.push(sample);
 
-    // The whole trail is kept, but only its recent end is fitted.
-    const fit = trail.filter((p) => now - p.t <= FIT_MS);
-    let vlon = 0;
-    let vlat = 0;
-    let baseline = 0;
-    if (fit.length >= MIN_TRAIL_POINTS) {
-      baseline = (fit[fit.length - 1].t - fit[0].t) / 1000;
-      if (baseline >= MIN_BASELINE_S) {
-        vlon = slope(fit, "lon");
-        vlat = slope(fit, "lat");
-      }
-    }
-
+    // The velocity is not read off this trail: it is measured from the strikes
+    // by `measureMotion`, and carried across the match so a fresh reading has
+    // something to be held against.
     const dt = (now - match.t) / 1000;
-    return { ...storm, id: match.id, trail, vlon, vlat, baseline, age: match.age + dt, t: now };
+    return {
+      ...storm,
+      id: match.id,
+      trail,
+      vlon: match.vlon,
+      vlat: match.vlat,
+      measured: match.measured,
+      measuredAt: match.measuredAt,
+      age: match.age + dt,
+      t: now,
+    };
   });
 }
 
@@ -282,7 +508,7 @@ export function motion(storm) {
 }
 
 function trackOf(storm) {
-  if (storm.baseline < MIN_BASELINE_S) return null;
+  if (!storm.measured) return null;
   const lonKm = storm.vlon * KM_PER_DEG * Math.cos((storm.lat * Math.PI) / 180);
   const latKm = storm.vlat * KM_PER_DEG;
   const kmh = Math.hypot(lonKm, latKm) * 3600;
@@ -348,9 +574,10 @@ function surgeOf(storm) {
  * from the recent centroid rather than the windowed one: the forecast starts
  * from where the cell is, not from where it has been on average.
  *
- * Gated on `motion` deliberately: a course too short-baselined to state as a
- * speed is too short-baselined to extrapolate, and drawing it anyway would put
- * a confident line on the map that the readout beside it declines to back.
+ * Gated on `motion` deliberately: a cell whose field would not align well
+ * enough to state a speed is one whose course cannot be extrapolated either,
+ * and drawing it anyway would put a confident line on the map that the readout
+ * beside it declines to back.
  */
 export function forecast(storm, seconds) {
   if (!motion(storm)) return null;
