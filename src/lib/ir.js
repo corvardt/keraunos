@@ -115,8 +115,8 @@ const REALEARTH = "https://realearth.ssec.wisc.edu/cgi-bin/mapserv";
 const EUMETVIEW = "/msg";
 
 export const DISCS = [
-  { id: "goes-west", lon: -137.0, service: REALEARTH, layer: "G18-ABI-FD-BAND13" },
-  { id: "goes-east", lon: -75.2, service: REALEARTH, layer: "G19-ABI-FD-BAND13" },
+  { id: "goes-west", lon: -137.0, service: REALEARTH, layer: "G18-ABI-FD-BAND13", invert: true },
+  { id: "goes-east", lon: -75.2, service: REALEARTH, layer: "G19-ABI-FD-BAND13", invert: true },
   { id: "msg-0deg", lon: 0.0, service: EUMETVIEW, layer: "msg_fes:ir108" },
   { id: "msg-iodc", lon: 45.5, service: EUMETVIEW, layer: "msg_iodc:ir108" },
   { id: "himawari", lon: 140.7, service: REALEARTH, layer: "HIMAWARI-B13" },
@@ -371,6 +371,23 @@ export const STRETCH = {
   [REALEARTH]: { warm: 50, break: 113, cold: 190 },
 };
 
+/**
+ * The byte to read a pixel at, which is not always the byte that arrived.
+ *
+ * RealEarth serves the two GOES mapfiles with the ramp the other way round:
+ * warm ground bright, cold tops dark, the reverse of Himawari on the same
+ * service and of both EUMETSAT layers. It drew as a solid deck of cloud over
+ * everything from the dateline to the mid-Atlantic and clear sky exactly where
+ * the storms were. Read from the other end the same three anchors hold: over
+ * the Atlantic, where GOES-East and Meteosat see the same sky, the two
+ * distributions agree to a hundredth of the scale at every quantile.
+ *
+ * Which way each dish runs is a live property of somebody else's service, so
+ * `scripts/check-polarity.cjs` asks it rather than trusting these flags, and
+ * `--apply` sets them from the answer.
+ */
+const reading = (disc, l) => (disc.invert ? 255 - l : l);
+
 export function scalarFor(stretch, l) {
   if (l <= stretch.warm) return 0;
   if (l <= stretch.break) {
@@ -566,7 +583,7 @@ export function url(disc, frame, at) {
  */
 const ENOUGH = (SAMPLES * SAMPLES) / 4;
 
-export function flat(data, stretch) {
+export function flat(data, stretch, disc) {
   let seen = -1;
   let opaque = 0;
   for (let j = 0; j < data.length; j += 4) {
@@ -576,7 +593,7 @@ export function flat(data, stretch) {
     opaque++;
   }
   if (opaque < ENOUGH) return false;
-  return scalarFor(stretch, seen) > FLOOR;
+  return scalarFor(stretch, reading(disc, seen)) > FLOOR;
 }
 
 /**
@@ -688,7 +705,7 @@ async function fetchTile(z, x, y, at) {
     // the difference between asking this tile again and throwing away the four
     // dishes that did answer. It is also the honest description: something came
     // back, and there was no sky in it.
-    if (flat(data, stretch)) {
+    if (flat(data, stretch, disc)) {
       short = true;
       return;
     }
@@ -702,7 +719,7 @@ async function fetchTile(z, x, y, at) {
         const p = row * SAMPLES + col;
         const j = p * 4;
         if (!data[j + 3]) continue; // outside this disc's horizon
-        const t = scalarFor(stretch, data[j]);
+        const t = scalarFor(stretch, reading(disc, data[j]));
         sum[p] += t * weight;
         total[p] += weight;
       }
