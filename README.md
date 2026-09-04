@@ -7,86 +7,72 @@
 
 ![The instrument running: storm cells over the Gulf and the Caribbean labelled with their flash counts, beside a panel reporting the strike rate, the session curve, the state of the link and which regions are firing](docs/shots/hero.png)
 
-Live strikes from the [Blitzortung](https://www.blitzortung.org/) network, plotted
-on a world map as they arrive. Strikes land at full white and fade, busy cells
-burn into the map, and clusters are tracked as storm cells with a heading, a
-ground speed, and a second ring when their flash rate is climbing.
+Live strikes from [Blitzortung](https://www.blitzortung.org/), plotted on a world
+map as they arrive. Strikes flash and fade, busy cells burn into the map, and
+clusters are tracked as storm cells with heading, speed, and a jump ring when
+flash rate spikes.
 
-No account and no key. A small relay holds one connection to Blitzortung and
-passes the frames on unchanged. It stores nothing and remembers nothing, and
-everything the page works out from them goes when the tab does.
+No account, no key. A relay holds one upstream connection to Blitzortung and
+passes frames through unchanged. Nothing is stored server-side; everything the
+page derives is lost when the tab closes.
 
 ## Using it
 
-Open it and watch. If you want to drive it, this is the whole of it:
-
 | | |
 | --- | --- |
-| **Point** | The map reads out the place under the pointer, its coordinates, and the strike count for that 1° cell |
-| **Pick** | Click the map, a feed row, or a ranked place to narrow everything to it; click a storm cell to narrow to the cell rather than the country. Click again or press `esc` to clear |
-| **Move** | Drag to pan, wheel or pinch to zoom in to about 200 km across. The region names along the top of the map jump straight there |
-| **Rewind** | The track along the bottom is an hour of roll, and the relay hands it over full at the start of a session rather than making you wait for it. Its bars are how busy each slice was. Drag anywhere on it to set the clock down at that moment; at ×8 or ×30 it runs forward until it catches up and hands back to live, and at life size it keeps pace with the present instead |
-| **Here** | Asks the browser for your location (only when pressed), frames the map on it, and reads out how far away the nearest strike is and how long until its thunder. Session only: not stored, not sent anywhere |
-| **Link** | Zoomed in, the address carries the view as `#lon/lat/zoom`, so a view can be handed to someone |
-| **Save** | Configuration holds two exports: the retained strikes as CSV, and the frame as drawn, rewound or live, as a PNG |
-| **Hold** | The feed stops advancing while the pointer rests on it, and queues arrivals behind |
-| **Guide** | Seven steps that light each control on the running map in turn. Opens itself once on a first visit; `g` or `guide` afterwards, `esc` to skip |
-| **Data** | `data` or `d`: every figure the session holds, in three groups — what the sky is doing, what the network is doing, what the instrument is doing. The map refuses most numbers because they would compete with the weather; this is where they go, each one next to what it is counted over and where it stops being a measurement |
+| **Point** | Reads out place, coordinates and strike count for the 1° cell under the pointer |
+| **Pick** | Click the map, a feed row, or a place to narrow to it; click a cell to narrow to the cell. `esc` clears |
+| **Move** | Drag to pan, wheel/pinch to zoom to ~200 km across. Region names along the top jump there |
+| **Rewind** | An hour of history on the bottom track, handed over full at session start. Drag to scrub; ×8/×30 catch up to live, life size keeps pace |
+| **Here** | Browser geolocation on request, frames the map on it, shows distance and thunder countdown to the nearest strike. Session only |
+| **Link** | Zoomed in, the URL carries `#lon/lat/zoom` |
+| **Save** | Configuration exports retained strikes as CSV, or the current frame as PNG |
+| **Hold** | Feed stops advancing while the pointer rests on it, queues arrivals behind |
+| **Guide** | Seven-step walkthrough, opens itself on first visit; `g` afterwards, `esc` to skip |
+| **Data** | `d`: every session figure, grouped by sky / network / instrument |
 
 **Keys.** `k` key panel · `c` configuration · `d` data · `g` guide · `t` dark/light ·
-`esc` close a panel, or clear the current selection. With the map focused, `+`
-and `-` zoom (or spin the globe) and `0` returns to the whole world. The rewind
-track takes arrow keys, `home` and `end`.
-
-The guide is the way in; the key panel (`k`) is the reference. The guide runs
-on the live map, dimming everything except the control it is talking about and
-leaving that control working, so pressing `here` while it explains `here` is
-the short version of the explanation. It covers the seven things you need
-before you can read the map at all, and then stops. The key panel is the full
-catalogue: every mark on the map and every figure beside it.
+`esc` close panel or clear selection. `+`/`-` zoom, `0` resets view. Rewind
+track takes arrow keys, `home`, `end`.
 
 ![The key panel open over a running map, cataloguing every mark on it](docs/shots/key.png)
 
 ## Four dials on the map
 
-Beside the region presets, showing the setting they are on. These are the ones
-worth changing while you watch, which is why they are not behind a panel.
-
 | Dial | Stops | |
 | --- | --- | --- |
-| **view** | flat · globe | Flat is the whole planet at once, which is what this is mostly for. Globe is the same data on a sphere: half a world at a time, turned by dragging |
-| **field** | off · cloud · rain | What sits behind the map; see below |
-| **cells** | off · ring · track · full | How much a storm cell carries. Ring is the cell and its flash count, track adds where it has been, full adds where it is going and how fast |
-| **burn** | 4m · 20m · 1h | How far back the burn-in reaches. Four minutes is where it is raining lightning *now*; an hour is where it has been this session |
+| **view** | flat · globe | Flat map, or the same data on a draggable sphere |
+| **field** | off · cloud · rain | Background layer; see below |
+| **cells** | off · ring · track · full | Ring: cell + count. Track: + history. Full: + heading and speed |
+| **burn** | 4m · 20m · 1h | How far back the burn-in reaches |
 
-## What the panel is telling you
+## Panel readings
 
 | Reading | |
 | --- | --- |
-| **Rate** | Strikes a minute over the last 60 seconds, with a trace, and the number of storm cells being tracked. An `↑` counts the cells whose flash rate is climbing sharply |
-| **Session** | Arrivals by the minute for as long as the tab has been open, the hairline at midnight UTC, and the hardest minute of it. Lightning runs on a schedule: the planet fires hardest over land in the afternoon, so the global rate rises and falls about three times a day as Africa, the Americas and Asia come round into the sun. An hour of history cannot show that; a day of it can |
-| **Link** | Median delay from a strike happening to this browser hearing about it, and the median number of detectors used to place recent strikes |
-| **Reach** | How far each strike was heard, split into daylight paths and darkness. The far end should be longer at night: sunlight makes a lossy layer at 60 to 70 km that the signal has to bounce off, and after sunset the reflection moves up to 85 to 90 km, where less is lost at every hop |
-| **Here** | Present once you have pressed `here`: distance to the nearest strike, and a countdown to its thunder |
-| **Most active** | Places holding the cells still burning right now, not session totals. Click one to narrow the map to it |
-| **Strike feed** | Each arrival as it lands, named. Click a row to narrow to that place |
+| **Rate** | Strikes/min over the last 60s, with trace, and cell count. `↑` marks cells in a lightning jump |
+| **Session** | Arrivals by the minute for the tab's lifetime, midnight UTC marked, peak minute called out |
+| **Link** | Median delay strike→browser, median detector count per strike |
+| **Reach** | How far strikes were heard, day vs night. Night runs longer: ionospheric reflection height rises from ~60-70 km (day) to ~85-90 km (night) |
+| **Here** | Distance to nearest strike and thunder countdown, once `here` is pressed |
+| **Most active** | Places with cells currently burning, click to narrow |
+| **Strike feed** | Each arrival as it lands; click to narrow |
 
 ## Configuration
 
-`c` opens it. Everything is stored in this browser and nowhere else.
+`c` opens it. Stored in-browser only.
 
 | Group | What it holds |
 | --- | --- |
-| **Tube** | Phosphor (white, green, amber, ice, and the borrowed palettes oil, crimson, demon; dark mode only), contrast, and bloom |
-| **Layout** | Whether the side panel, header and footer are shown at all |
-| **Screen** | Scanlines, refresh sweep, strike shake, detector clicks, thunder |
-| **Map** | Cell bounds, graticule, frontiers, daylight, capitals, detector threads, how long a strike stays lit |
-| **Panel** | Which of the readings above are drawn |
-| **Session** | The two exports: strikes as CSV, the frame as PNG |
+| **Tube** | Phosphor colour (white/green/amber/ice/oil/crimson/demon, dark only), contrast, bloom |
+| **Layout** | Side panel, header, footer visibility |
+| **Screen** | Scanlines, sweep, strike shake, detector clicks, thunder |
+| **Map** | Cell bounds, graticule, frontiers, daylight, capitals, detector threads, strike persistence |
+| **Panel** | Which readings are shown |
+| **Session** | CSV / PNG exports |
 
-Both sounds are off until asked for, and thunder needs a position before it can
-do anything: it is the delay between a strike and its sound reaching where you
-said you are.
+Thunder needs a position set first: it's the delay between a strike and its
+sound reaching there.
 
 ![The same map on the crimson phosphor](docs/shots/crimson.png)
 
@@ -94,109 +80,53 @@ said you are.
 
 ### Who heard it
 
-Blitzortung is volunteer hardware. Every strike here is a time-of-arrival fix
-from stations somebody built, powers and hosts, and the instrument will show you
-which ones heard each discharge: turn on **detector threads** and each strike
-throws a line back to every station that helped place it, for under a second.
+Blitzortung is volunteer hardware; each strike is a time-of-arrival fix from
+stations someone hosts. **Detector threads** draw a line from a strike to every
+station that helped place it. A full sheaf means the strike was pinned from all
+sides; a fan means it was heard from one direction. Typical strikes have a gap
+past 200° in their ring of stations. Detector positions aren't published; the
+map infers them from strikes over ~30s of listening.
 
 ![Detector threads running from a strike to each station that heard it](docs/shots/network.png)
 
-The shape of that sheaf is how well the strike was placed. A strike caught in a
-full sheaf was pinned from every side; one wearing a fan was heard from a single
-direction, and is drawn a little softer for it. Most of what this network sees,
-it sees from one side: on a typical strike the widest gap in the ring of
-stations around it runs past 200°.
-
-Nobody publishes where the detectors are. The ones on the map are assembled from
-the strikes themselves, over about half a minute of listening, which is also why
-the map has more on it a minute in than it does on arrival.
-
 ### The two fields
 
-Infrared reads the top of the storm column from orbit; radar reads what is
-falling out of the bottom of it from the ground. They are alternatives rather
-than layers, because where they overlap they are drawing the same storm.
-
-Their footprints are nearly complementary, and that is the interesting half of
-the choice. Cloud covers the whole planet including every ocean. Rain covers the
-ground somebody built and maintains a radar network on, and stops, often
-sharply, at a coastline. So empty means something different on each: on the
-cloud field it means clear, and on the rain field it means unwatched, which over
-most of the planet is what it is.
+Infrared (cloud) reads storm tops from orbit; radar (rain) reads what's falling,
+from ground stations. Alternatives, not layers — they draw the same storm where
+they overlap. Cloud covers the whole planet; rain only where ground radar
+exists, so empty means "clear" on one and "unwatched" on the other.
 
 ### How far back you can go
 
-An hour, if an hour fits. The rewind track is as long as the history actually
-held: up to 120,000 strikes are retained, so at the quiet end of the world's
-rate the full hour is comfortable, and at the peak the ceiling binds first and
-the window is shorter. A session opens on the hour the relay was holding, so
-the track is normally full from the first frame; a relay with less than an hour
-to give leaves the far end of it bare, showing what it has rather than what it
-wishes it had.
-
-Setting the clock down starts it running forward again, rather than freezing a
-frame: what you want from a map of a storm is to watch the storm move. Life size
-is the reading, and it is exactly that: the replayed clock and the present
-advance together, so the gap between them holds and the mark stands still on the
-roll until you move it. Closing that gap is what the speed switch is for, ×8 or
-×30, which also puts the whole window under a minute, about the pace a cell's
-own movement reads at.
-
-Storm rings are replayed too, which they were not before. A track cannot be read
-off an instant, so the tracker is walked across the window to the moment being
-shown, at the twenty-second cadence it samples a centroid on: a running replay
-advances it a step at a time, and a scrub pays one forty-millisecond walk when
-it settles. Bolts and the chassis knock are still not replayed, because an event
-does not happen twice, and nothing is lost behind you, so returning to live
-finds the present already there.
+Up to an hour, capped at 120,000 retained strikes (shorter at high global rate).
+A session opens on whatever window the relay is holding. Scrubbing resumes
+forward playback rather than freezing a frame; ×8/×30 speed catches up to live.
+Storm rings and tracks are replayed too, walked to the scrub position at their
+own 20s sampling cadence. Bolts and the chassis knock aren't replayed.
 
 ### Place names
 
-Capitals are lit by the weather rather than drawn as furniture. A name surfaces
-when a burning cell is within 400 km of it and fades with the smudge underneath,
-so a quiet map carries no names at all. Pointing at the map already names
-whatever is under the cursor, in the corner, on demand.
+Capitals light up only while a burning cell is within 400 km, fading with it.
+Pointing at the map names whatever's under the cursor on demand.
 
 ### Leaving with something
 
-Everything here comes from a stream nobody archives and is held for an hour in a
-tab. Closing it loses the hour, which is right for a live map and wrong for the
-one afternoon the storm was worth keeping.
+The stream isn't archived; closing the tab loses the retained hour.
 
-The **CSV** is exactly what is retained: `flash_utc`, `received_utc`, `lon`,
-`lat`, one row per strike, nothing reconstructed. The gap between the two times
-is the network's own delay, strike by strike. It is the figure the panel only
-ever shows you the median of.
-
-The **PNG** is the frame as drawn, read off the canvas: scrub to the squall and
-save, and what you get is the squall. It is the one way a moment can be handed
-to somebody. A link cannot do it: the address carries the view, but the strikes
-under it belong to this session and cannot travel, so a shared URL opens on the
-right coordinates with whatever weather happens to be there.
+**CSV**: `flash_utc`, `received_utc`, `lon`, `lat`, one row per retained strike.
+**PNG**: the frame as drawn, at whatever scrub position — a link can't carry
+strikes, only coordinates, so a shared URL opens on live weather instead.
 
 ## One socket, not one per reader
 
-Blitzortung asks that a project using their data take it from its own server
-rather than from theirs, and it is easy to see why: every open tab used to hold
-its own connection, so a hundred people watching was a hundred connections to
-hardware that volunteers buy, power and host.
+Blitzortung asks that consumers relay from their own server rather than
+connecting per-client. `relay/` is that server: a single Cloudflare Durable
+Object with one upstream connection, fanning frames out to every visitor.
 
-`relay/` is that server. It is a single Cloudflare Durable Object holding one
-upstream connection however many people are watching, fanning the frames out
-untouched.
-
-It also keeps the last hour: three numbers a strike, where and when, a few
-hundred kilobytes of it, handed to a visitor as one binary frame before the live
-feed starts. Without it a new tab is an empty map that takes twelve minutes to find a
-storm cell and ten more to say where it is going, which is most of what this
-instrument does and all of it withheld from anybody who did not stay. It is held
-in memory and written down every ten seconds, in five-minute buckets, so that a
-deploy or an eviction costs the next visitor nothing: a restarted relay reads
-its own window back and carries on. Nothing about a reader is stored, or could
-be: the relay knows nothing about anybody watching, and the hour is the same
-public lightning for everyone. The instrument is still built entirely in
-your own tab, from a feed that now arrives by way of one socket instead of
-thousands.
+It also retains the last hour (a few hundred KB) and hands it to a new tab as
+one binary frame before the live feed starts, so a fresh session doesn't open
+on an empty map. Persisted every 10s in 5-minute buckets so a deploy or
+eviction costs nothing; no reader state is stored anywhere.
 
 ## Running it yourself
 
@@ -208,8 +138,8 @@ npm run lint
 npm run check    # checks the palette, the geometry and the fetched fields against live data
 ```
 
-The page needs a relay to get its strikes from. Deploy one to your own
-Cloudflare account, or run it locally:
+Needs a relay for strikes. Deploy to your own Cloudflare account, or run
+locally:
 
 ```sh
 cd relay && npm install
@@ -217,19 +147,17 @@ npm run dev      # serves ws://localhost:8787/feed
 npm run deploy   # to your account, once wrangler is logged in
 ```
 
-Then point the site at it: copy `.env.example` to `.env.local` and set
-`VITE_FEED_URL`. Set `ALLOWED_ORIGINS` in `relay/wrangler.jsonc` before the
-relay is reachable from the internet, or anyone who finds the hostname can use
-it and the single-socket property becomes theirs to spend.
+Then point the site at it: copy `.env.example` to `.env.local`, set
+`VITE_FEED_URL`. Set `ALLOWED_ORIGINS` in `relay/wrangler.jsonc` before exposing
+the relay publicly, or anyone who finds the hostname can spend its single
+socket.
 
 No API keys anywhere.
 
-`node scripts/KeraunosSeeker.cjs` is a standalone Node client that prints the same
-stream to the terminal. It connects to Blitzortung directly, so it is a tool for
-one person at a terminal rather than something to put behind a website.
+`node scripts/KeraunosSeeker.cjs`: standalone Node client, connects to
+Blitzortung directly and prints the stream to the terminal.
 
-The pictures in this file are captured from the running instrument rather than
-pasted in once, so they can be taken again when it changes:
+Screenshots in this file are captured from the running instrument:
 
 ```sh
 npm run shots                  # all of them, into docs/shots and public/og.png
@@ -238,59 +166,40 @@ VIEW=-99.4/41.2/6 npm run shots -- hero   # framed somewhere else
 URL=http://localhost:5173 npm run shots   # against the dev server rather than production
 ```
 
-Each shot soaks before it fires: grabbed on load, the instrument is a black
-rectangle and a fair picture of nothing. Pick a `VIEW` that is firing at the
-time of the run (the panel's activity ranking says which), or the hero shows an
-empty ocean at three in the morning.
+Each shot soaks briefly before firing (a fresh load is a black rectangle).
+Pick a `VIEW` that's active at run time, or the shot shows nothing happening.
 
 ## Not a warning system
 
-This is an instrument for watching the weather, not for deciding what to do
-about it. Blitzortung is a volunteer network and says so plainly: the data is
-for private and entertainment purposes, and explicitly not for storm warning,
-for checking overvoltage claims, or for risk analysis. It is not for the
-protection of life or property, and neither is this.
+For watching weather, not deciding what to do about it. Blitzortung's data is
+for private/entertainment use only, explicitly not for storm warning,
+overvoltage claims, or risk analysis, and not for protection of life or
+property — neither is this. The distance-to-nearest-strike and thunder
+countdown readings are arithmetic on a feed that misses most cloud-to-cloud
+discharge and anything outside detector range. A quiet map is not a safe sky.
 
-That matters here more than it would on a plain map, because the instrument
-will tell you the distance to the nearest strike and count down to its thunder.
-Those are the two readings most easily mistaken for a safety tool. They are
-arithmetic on a feed that is incomplete by construction: the network hears the
-cloud-to-ground stroke far better than the discharge that stays inside a cloud,
-and it hears nothing at all where nobody has built a detector. A quiet map is
-not a safe sky.
-
-If you need lightning data to make a decision with, use your national
-meteorological service.
+For decisions, use your national meteorological service.
 
 ## Sources
 
-The [MIT licence](LICENSE) on this repository covers the code in it and nothing
-else. Everything below arrives from somewhere else, under terms this project has
-no power to change or to pass on.
+The [MIT licence](LICENSE) covers the code here only.
 
-**Strikes** from the [Blitzortung](https://www.blitzortung.org/) network and its
-volunteers, under Blitzortung's own terms: private and non-commercial use only,
-and not for storm warning, overvoltage claims or risk analysis. The strikes are
-not this project's to relicense, and running your own instance puts you under
-those terms directly, not under this one.
+**Strikes**: [Blitzortung](https://www.blitzortung.org/) and its volunteers,
+under Blitzortung's own terms (private/non-commercial, no storm warning). Not
+this project's to relicense; a self-hosted instance is bound directly by those
+terms.
 
-**Weather fields** are read live from third parties on their own terms, not
-redistributed here: cloud from [RealEarth](https://realearth.ssec.wisc.edu/)
-(SSEC, University of Wisconsin-Madison) and
-[EUMETSAT](https://www.eumetsat.int/), rain from
+**Weather fields**: read live, not redistributed. Cloud from
+[RealEarth](https://realearth.ssec.wisc.edu/) (SSEC, UW-Madison) and
+[EUMETSAT](https://www.eumetsat.int/); rain from
 [RainViewer](https://www.rainviewer.com/). Both restrict redistribution and
-commercial use. If you run your own instance you are their client, and their
-terms are the ones that bind you.
+commercial use.
 
-**Fonts** are IBM Plex Mono, under the SIL Open Font License 1.1. The licence
-travels with them in `public/fonts/OFL.txt` and must stay there in any copy.
+**Fonts**: IBM Plex Mono, SIL OFL 1.1, licence in `public/fonts/OFL.txt`.
 
-**Geometry.** `src/lib/world.json` is country outlines from
-[Natural Earth](https://www.naturalearthdata.com/) 110m Admin 0, public domain.
-`src/lib/us.json` is the Leaflet choropleth example's US states, derived from US
-Census boundaries, public domain. `src/lib/water.geo.json` and its unused
-predecessor `src/lib/water.json` are named water bodies; their provenance is not
-recorded and is being traced.
+**Geometry**: `src/lib/world.json` — Natural Earth 110m Admin 0, public domain.
+`src/lib/us.json` — Leaflet's US states example, derived from US Census
+boundaries, public domain. `src/lib/water.geo.json` and unused predecessor
+`src/lib/water.json` — named water bodies, provenance untraced.
 
-**Palettes.** The borrowed phosphor hues are credited to their authors in
-`src/lib/palette.js`, with a link to each.
+**Palettes**: borrowed phosphor hues credited in `src/lib/palette.js`.
