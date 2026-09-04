@@ -14,9 +14,8 @@ export const DEFAULTS = {
   scanlines: true,
   sweep: true,
   // A tube does not emit evenly. The faintest layer on the glass and the most
-  // expensive to composite, so it is the first thing worth taking off on a
-  // machine that is struggling.
-  drift: true,
+  // expensive to composite, so it ships off and is opt-in.
+  drift: false,
   shake: true,
   // Silent unless asked for. A page that makes noise on arrival is a page that
   // gets closed on arrival.
