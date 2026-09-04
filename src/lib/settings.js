@@ -52,6 +52,8 @@ export const DEFAULTS = {
   // default; the longer windows turn the same layer into where the lightning
   // has been over the session's own hour.
   density: "4m",
+  // Kilometres or miles. Readouts only: everything measured stays metric.
+  units: "km",
   // The one layer that is fetched rather than derived, and the only thing on
   // this map that comes from outside the strike feed. Cloud by default, because
   // it is the context the strikes are missing, it covers the whole planet, and

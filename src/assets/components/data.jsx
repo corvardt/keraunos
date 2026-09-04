@@ -4,6 +4,7 @@ import { motion, surge } from "../../lib/storms.js";
 import { fixSpreadKm } from "../../lib/fix.js";
 import { stations } from "../../lib/stations.js";
 import { STEP_KM } from "../../lib/reach.js";
+import { distance, distanceUnit, speedUnit } from "../../lib/units.js";
 
 /**
  * Everything the instrument knows, as figures.
@@ -115,6 +116,7 @@ export default function Data({
   history,
   replaying,
   archiveRange,
+  units,
   onClose,
 }) {
   // The retained window, read once. `history` is a ref rather than state
@@ -204,8 +206,8 @@ export default function Data({
           />
           <Row
             label="Fastest cell"
-            value={cells.fastest ? Math.round(cells.fastest.kmh) : DASH}
-            unit="km/h"
+            value={cells.fastest ? Math.round(distance(cells.fastest.kmh, units)) : DASH}
+            unit={speedUnit(units)}
             note={
               cells.fastest
                 ? `bearing ${Math.round((cells.fastest.bearing + 360) % 360)}°`
@@ -272,22 +274,28 @@ export default function Data({
           />
           <Row
             label="Position may be out by"
-            value={held?.spread ? Math.round(held.spread) : DASH}
-            unit="km"
+            value={held?.spread ? Math.round(distance(held.spread, units)) : DASH}
+            unit={distanceUnit(units)}
             note="What that gap costs. A strike heard from every side is pinned; one heard from a single quarter is not."
           />
           <Row
             label="Reach by day"
-            value={day?.median ? num(Math.round(day.median)) : DASH}
-            unit="km"
-            note={day?.tail ? `p90 ${num(Math.round(day.tail))} km · ${num(day.n)} strikes` : "listening"}
+            value={day?.median ? num(Math.round(distance(day.median, units))) : DASH}
+            unit={distanceUnit(units)}
+            note={
+              day?.tail
+                ? `p90 ${num(Math.round(distance(day.tail, units)))} ${distanceUnit(units)} · ${num(day.n)} strikes`
+                : "listening"
+            }
           />
           <Row
             label="Reach by night"
-            value={night?.median ? num(Math.round(night.median)) : DASH}
-            unit="km"
+            value={night?.median ? num(Math.round(distance(night.median, units))) : DASH}
+            unit={distanceUnit(units)}
             note={
-              night?.tail ? `p90 ${num(Math.round(night.tail))} km · ${num(night.n)} strikes` : "listening"
+              night?.tail
+                ? `p90 ${num(Math.round(distance(night.tail, units)))} ${distanceUnit(units)} · ${num(night.n)} strikes`
+                : "listening"
             }
           />
           <Row
@@ -298,8 +306,8 @@ export default function Data({
           />
           <Row
             label="Farthest bin reached"
-            value={reach?.span ? num(reach.span * STEP_KM) : DASH}
-            unit="km"
+            value={reach?.span ? num(Math.round(distance(reach.span * STEP_KM, units))) : DASH}
+            unit={distanceUnit(units)}
             note="Distance to the most distant station that helped place a strike. A floor on the reach, not a measurement of it: where it stops is mostly a fact about where volunteers live."
           />
         </Columns>

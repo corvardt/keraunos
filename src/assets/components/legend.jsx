@@ -1,4 +1,5 @@
 import Panel, { Group } from "./panel.jsx";
+import { about, distanceUnit, speedUnit } from "../../lib/units.js";
 
 /**
  * Draws the mark itself, so the key shows the thing rather than describing it.
@@ -179,7 +180,7 @@ const daylight = (
   </svg>
 );
 
-export default function Legend({ onClose }) {
+export default function Legend({ units, onClose }) {
   return (
     <Panel title="Key" width={420} onClose={onClose}>
       {/* Ordered by what a reader is looking at, not by what is most
@@ -362,7 +363,8 @@ export default function Legend({ onClose }) {
           Borders between countries, a step under the coastline.
         </Entry>
         <Entry mark={capital} term="Capital">
-          Named only while a cell within 400 km of it is burning. The map is an instrument rather
+          Named only while a cell within {about(400, units).toLocaleString("en-US")}{" "}
+          {distanceUnit(units)} of it is burning. The map is an instrument rather
           than an atlas, and a place name earns its space at exactly one moment: when something is
           happening there. A quiet map carries none; point at it instead.
         </Entry>
@@ -484,7 +486,7 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry term="Storm cells">
           Clusters currently being tracked. Not grid squares: a cluster needs at least 12 strikes
-          across adjacent ~45 km bins to count. A trailing{" "}
+          across adjacent ~{about(45, units)} {distanceUnit(units)} bins to count. A trailing{" "}
           <span className="text-text">&uarr;n</span> is how many of them are in a lightning jump.
         </Entry>
         <Entry
@@ -579,7 +581,8 @@ export default function Legend({ onClose }) {
         </Entry>
         <Entry term="Nearest strike">
           How far away the closest strike of the last few minutes fell, once you have pressed{" "}
-          <span className="text-text">here</span>. A dash means nothing has landed within 2,000 km,
+          <span className="text-text">here</span>. A dash means nothing has landed within{" "}
+          {about(2000, units).toLocaleString("en-US")} {distanceUnit(units)},
           at which point the figure has stopped being about your weather.
         </Entry>
         <Entry
@@ -614,7 +617,8 @@ export default function Legend({ onClose }) {
           <span className="text-text">esc</span>, to let it go.
         </Entry>
         <Entry term="Moving">
-          Drag to pan, wheel or pinch to zoom, up to about a 200 km span. The named regions across
+          Drag to pan, wheel or pinch to zoom, up to about a {about(200, units)}{" "}
+          {distanceUnit(units)} span. The named regions across
           the top of the tube jump straight there. At world zoom a storm over the Alps is four
           pixels across, which is the whole reason for it.
         </Entry>
@@ -690,10 +694,21 @@ export default function Legend({ onClose }) {
           more={
             <>
               <p>
-                A speed appears only after a cell has been watched for 10 minutes. That wait is set
-                by geometry: a 45 km/h cell moves 3.75 km in five minutes while being roughly 100 km
-                across, which is too small a shift to measure against its own size. Speeds outside 8
-                to 140 km/h are withheld as tracking errors rather than shown.
+                A course is not read off the cell&rsquo;s centre. Inside a storm the firing migrates
+                from flank to flank faster than the storm itself travels, so the mean position of
+                the strikes can walk northwest for an hour while the cell tracks southeast, and a
+                heading taken that way is worse than assuming the cell never moved at all. What is
+                drawn instead is the offset that best lines the cell&rsquo;s present pattern of
+                strikes up against the pattern fifteen minutes ago. A migrating flank changes what
+                that pattern weighs; it does not move the pattern.
+              </p>
+              <p>
+                Hence the wait: a speed appears only after a cell has been watched for 15 minutes,
+                because there is no earlier pattern to match it against until then. A cell whose two
+                fields will not line up is given no course at all, which is what a cell that has
+                split, merged or died looks like from here. Speeds outside {about(8, units)} to{" "}
+                {about(140, units)} {speedUnit(units)} are withheld as tracking errors rather than
+                shown.
               </p>
               <p>
                 A jump needs six minutes of a cell before it can be read at all, and the cell&rsquo;s

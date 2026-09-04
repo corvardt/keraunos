@@ -1243,8 +1243,8 @@ function App() {
       )}
       {/* Under the glass, like the panels: the guide is drawn on the tube
           rather than over it, and the scanlines cross it too. */}
-      {tourOpen && <Tour onClose={closeTour} />}
-      {keyOpen && <Legend onClose={closeKey} />}
+      {tourOpen && <Tour units={settings.units} onClose={closeTour} />}
+      {keyOpen && <Legend units={settings.units} onClose={closeKey} />}
       {dataOpen && (
         <Data
           stats={stats}
@@ -1257,6 +1257,7 @@ function App() {
           history={history}
           replaying={replayAt !== null}
           archiveRange={archiveRange}
+          units={settings.units}
           onClose={closeData}
         />
       )}

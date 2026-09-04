@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { about, distanceUnit } from "../../lib/units.js";
 
 /**
  * The guided pass.
@@ -34,7 +35,7 @@ const Key = ({ children }) => <span className="text-text">{children}</span>;
  * walked through the feed. `side` is where the card would rather sit; it gives
  * way when there is no room there.
  */
-const STEPS = [
+const stepsFor = (units) => [
   {
     id: "tube",
     title: "The tube",
@@ -72,7 +73,8 @@ const STEPS = [
     side: "below",
     body: (
       <>
-        Drag to pan, wheel or pinch to zoom in to about a 200 km span; these
+        Drag to pan, wheel or pinch to zoom in to about a {about(200, units)}{" "}
+        {distanceUnit(units)} span; these
         names jump straight there, and <Key>+</Key> <Key>&minus;</Key>{" "}
         <Key>0</Key> do it from the keyboard. <Key>here</Key> asks this browser
         where you are (only when pressed, held for the session, sent
@@ -192,7 +194,7 @@ function measure(anchor) {
   return w > 0 && h > 0 ? { x, y, w, h } : null;
 }
 
-export default function Tour({ onClose }) {
+export default function Tour({ units, onClose }) {
   const [index, setIndex] = useState(0);
   const [spot, setSpot] = useState(null);
   const [place, setPlace] = useState(null);
@@ -202,15 +204,19 @@ export default function Tour({ onClose }) {
   // Settled after the first commit rather than during it, because a step is
   // dropped for the absence of its elements and during render the document is
   // still the one from before this component existed; anything mounting in the
-  // same commit would read as switched off. Settled once and not again, because
-  // nothing the guide does changes which panels are on screen, and re-filtering
-  // underneath the reader would renumber the steps mid-pass.
-  const [steps, setSteps] = useState(STEPS);
+  // same commit would read as switched off. Re-run only for the unit the
+  // figures are quoted in, which the configuration panel cannot reach while the
+  // guide is over it: nothing the guide itself does changes which panels are on
+  // screen, and re-filtering underneath the reader would renumber the steps
+  // mid-pass.
+  const [steps, setSteps] = useState(() => stepsFor(units));
   useLayoutEffect(() => {
     setSteps(
-      STEPS.filter((s) => s.anchor.some((name) => document.querySelector(`[data-tour="${name}"]`)))
+      stepsFor(units).filter((s) =>
+        s.anchor.some((name) => document.querySelector(`[data-tour="${name}"]`))
+      )
     );
-  }, []);
+  }, [units]);
   const step = steps[index];
   const last = index === steps.length - 1;
 

@@ -297,6 +297,13 @@ export default function Settings({
       </Group>
 
       <Group title="Panel">
+        <Choice
+          label="Distance"
+          hint="What every reading is printed in, the scale bar included. Only the printing changes: the instrument measures in kilometres either way."
+          value={settings.units}
+          options={["km", "mi"]}
+          onChange={(v) => set("units", v)}
+        />
         <Toggle label="Rate trace" value={settings.trace} onChange={(v) => set("trace", v)} />
         <Toggle label="Session day" value={settings.day} onChange={(v) => set("day", v)} />
         <Toggle label="Reach" value={settings.reach} onChange={(v) => set("reach", v)} />

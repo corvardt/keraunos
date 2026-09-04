@@ -1,5 +1,6 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { BINS, STEP_KM } from "../../lib/reach.js";
+import { about, distance, distanceUnit } from "../../lib/units.js";
 
 const TRACE_W = 300;
 const TRACE_H = 34;
@@ -393,7 +394,7 @@ function damp(current, target, fall = 0.04) {
  * above already uses: the fill is context and the line is the thing being read.
  * Night gets the line because night is the interesting half.
  */
-function ReachChart({ reach, extent, peak }) {
+function ReachChart({ reach, extent, peak, units }) {
   const bins = Math.max(2, Math.round(extent / STEP_KM));
   const lit = reachDensity(reach.day, bins);
   const dark = reachDensity(reach.night, bins);
@@ -411,7 +412,7 @@ function ReachChart({ reach, extent, peak }) {
       preserveAspectRatio="none"
       className="mt-2 h-[34px] w-full"
       role="img"
-      aria-label={`How far strikes were heard, over paths in daylight against paths in darkness, out to ${Math.round(extent / 1000)} thousand kilometres`}
+      aria-label={`How far strikes were heard, over paths in daylight against paths in darkness, out to ${Math.round(distance(extent, units) / 1000)} thousand ${units === "mi" ? "miles" : "kilometres"}`}
     >
       {lit && (
         <path
@@ -453,7 +454,7 @@ function ReachChart({ reach, extent, peak }) {
  * a histogram wore on its face and a length cannot: a thin half looks as
  * confident as a full one unless it says how thin it is.
  */
-function ReachBars({ reach, extent }) {
+function ReachBars({ reach, extent, units }) {
   const sides = [
     { key: "day", label: "Day", side: reach.day },
     { key: "night", label: "Night", side: reach.night },
@@ -489,7 +490,9 @@ function ReachBars({ reach, extent }) {
               what the claim is, so it has gone to the verdict, which is the
               claim. */}
           <span className="w-20 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-text">
-            {side.tail === null ? "\u2014" : `${Math.round(side.tail).toLocaleString("en-US")} km`}
+            {side.tail === null
+              ? "\u2014"
+              : `${Math.round(distance(side.tail, units)).toLocaleString("en-US")} ${distanceUnit(units)}`}
           </span>
         </div>
       ))}
@@ -558,7 +561,7 @@ function ReachVerdict({ reach }) {
  * Nothing is known about the spread there, and inventing one would be the same
  * fault the band exists to fix.
  */
-const Thunder = memo(function Thunder({ thunder }) {
+const Thunder = memo(function Thunder({ thunder, units }) {
   const [, tick] = useState(0);
   useEffect(() => {
     if (!thunder) return;
@@ -590,7 +593,11 @@ const Thunder = memo(function Thunder({ thunder }) {
     <Readout
       label="Thunder"
       value={band ?? (left <= 0 ? "now" : Math.ceil(left))}
-      unit={band === null && left <= 0 ? "" : `s · ${Math.round(thunder.km)}km`}
+      unit={
+        band === null && left <= 0
+          ? ""
+          : `s · ${Math.round(distance(thunder.km, units))}${distanceUnit(units)}`
+      }
       hint="The sound of a strike already seen, still travelling, at 343 m/s. The range is the network's own uncertainty about where the strike fell, carried through at the speed of sound."
     />
   );
@@ -738,7 +745,7 @@ function Sidebar({
           label="Storm cells"
           value={fmt(stats.storms)}
           unit={stats.surging ? `↑${stats.surging}` : ""}
-          hint="Clusters of 12 strikes or more in adjacent ~45 km bins. The arrow counts those whose flash rate is climbing sharply."
+          hint={`Clusters of 12 strikes or more in adjacent ~${about(45, settings.units)} ${distanceUnit(settings.units)} bins. The arrow counts those whose flash rate is climbing sharply.`}
         />
         {/* The session total belongs with the rate rather than with the curve
             it used to sit under. Both are counts of what this tab has heard,
@@ -852,7 +859,11 @@ function Sidebar({
       {settings.reach && reach && (
         <section className="border-b border-line px-4 pb-4 pt-4">
           <Label
-            trailing={extent ? `0-${Math.round(extent / 1000)}k km` : null}
+            trailing={
+              extent
+                ? `0-${Math.round(distance(extent, settings.units) / 1000)}k ${distanceUnit(settings.units)}`
+                : null
+            }
             hint="How far each strike was heard, counted to the most distant station that helped place it. The curve is the shape, as a share of each half's own strikes; the rules under it are the ninth strike in ten, with the middle marked inside. Sunlight makes a lossy layer at 60 to 70 km that the sferic has to bounce off; after sunset it decays and the reflection moves up to 85 to 90 km, where less is lost at every hop, so night should be the longer rule. Both are floors: the most distant station that heard a strike is not as far as it went."
             shut={shut.reach}
             onToggle={fold("reach")}
@@ -861,8 +872,8 @@ function Sidebar({
           </Label>
           {!shut.reach && (
             <>
-              <ReachChart reach={reach} extent={extent} peak={reachTop} />
-              <ReachBars reach={reach} extent={extent} />
+              <ReachChart reach={reach} extent={extent} peak={reachTop} units={settings.units} />
+              <ReachBars reach={reach} extent={extent} units={settings.units} />
               <ReachVerdict reach={reach} />
             </>
           )}
@@ -876,11 +887,11 @@ function Sidebar({
           <Label>Here</Label>
           <Readout
             label="Nearest strike"
-            value={watch.nearest === null ? "—" : fmt(Math.round(watch.nearest))}
-            unit={watch.nearest === null ? "" : "km"}
-            hint="The closest strike still inside the retained window, from where you said you are. A dash means nothing has fallen within 2,000 km of you in that time."
+            value={watch.nearest === null ? "—" : fmt(Math.round(distance(watch.nearest, settings.units)))}
+            unit={watch.nearest === null ? "" : distanceUnit(settings.units)}
+            hint={`The closest strike still inside the retained window, from where you said you are. A dash means nothing has fallen within ${about(2000, settings.units).toLocaleString("en-US")} ${distanceUnit(settings.units)} of you in that time.`}
           />
-          <Thunder thunder={watch.thunder} />
+          <Thunder thunder={watch.thunder} units={settings.units} />
         </section>
       )}
 

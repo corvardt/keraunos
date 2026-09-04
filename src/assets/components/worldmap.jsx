@@ -5,6 +5,7 @@ import { readMedium } from "../../lib/theme.js";
 import { rgbOf } from "../../lib/palette.js";
 import { motion, forecast, surge } from "../../lib/storms.js";
 import { PERSISTENCE, DENSITY } from "../../lib/settings.js";
+import { distance, distanceUnit, speedUnit } from "../../lib/units.js";
 import { SPEED_KMS, MAX_KM as THUNDER_MAX_KM } from "../../lib/thunder.js";
 import {
   LAT_LIMIT,
@@ -382,7 +383,7 @@ const SCALE_PX = 110;
  * head. So the distance is chosen first and the bar is drawn to it, rather
  * than the other way round.
  */
-function niceKm(span) {
+function nice(span) {
   const pow = 10 ** Math.floor(Math.log10(span));
   for (const step of [5, 2, 1]) {
     if (step * pow <= span) return step * pow;
@@ -3488,7 +3489,8 @@ const WorldMap = ({
         if (!(storm.count >= labelCut || rate?.jump || picked)) continue;
         const verbose = showAhead && (picked || rate?.jump);
         const parts = [`${storm.count}`];
-        if (track && verbose) parts.push(`${Math.round(track.kmh)}km/h`);
+        if (track && verbose)
+          parts.push(`${Math.round(distance(track.kmh, settings.units))}${speedUnit(settings.units)}`);
         if (rate?.jump && showAhead) parts.push(`${Math.round(rate.rate)}/min`);
         labels.push({
           text: parts.join(" · "),
@@ -3856,6 +3858,7 @@ const WorldMap = ({
     settings.stations,
     settings.storms,
     settings.cells,
+    settings.units,
     statesAt,
     history,
     width,
@@ -3894,9 +3897,11 @@ const WorldMap = ({
     if (!west || !east) return null;
     const span = distanceKm(west[0], west[1], east[0], east[1]);
     if (!(span > 0)) return null;
-    const km = niceKm(span);
-    return { km, px: Math.round((km / span) * SCALE_PX) };
-  }, [flat, projection, width, height]);
+    // Rounded in the unit it is printed in. Nicing the kilometres and then
+    // converting gives a bar reading 311 mi, which is not a ruler.
+    const shown = nice(distance(span, settings.units));
+    return { shown, px: Math.round((shown / distance(span, settings.units)) * SCALE_PX) };
+  }, [flat, projection, width, height, settings.units]);
 
   return (
     <div
@@ -4278,7 +4283,9 @@ const WorldMap = ({
             <span className="h-px flex-1 self-end bg-land" />
             <span className="h-1.5 w-px bg-land" />
           </div>
-          <div className="mt-1 text-right">{scale.km.toLocaleString("en-US")} km</div>
+          <div className="mt-1 text-right">
+            {scale.shown.toLocaleString("en-US")} {distanceUnit(settings.units)}
+          </div>
         </div>
       )}
       {/* Tracking band drifting up the tube, then the curved glass falloff. */}
