@@ -28,6 +28,8 @@
     "check:storms": "node scripts/check-storms.cjs",
     "check:day": "node scripts/check-day.cjs",
     "check:rate": "node scripts/check-rate.cjs",
+    "fanout": "node scripts/fanout.cjs",
+    "fanout:check": "node scripts/fanout.cjs --check",
     "shots": "node scripts/shots.cjs",
     "preview": "vite preview"
   },

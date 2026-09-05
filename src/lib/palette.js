@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { CONTRASTS } from "./contrast.js";
 import { TOKENS } from "./theme.js";
 
 // Customising the medium.
@@ -124,11 +125,6 @@ export const PHOSPHOR = {
 export const phosphorsFor = (medium) => (medium === "dark" ? Object.keys(PHOSPHOR) : []);
 
 const isPalette = (entry) => Boolean(entry) && !Array.isArray(entry);
-
-// Distance from the background, scaled. Everything that is not the ground moves
-// away from it or toward it together, so the hierarchy the palette was built
-// with survives at every setting: line under land under dim under text.
-export const CONTRAST = { soft: 0.82, normal: 1, hard: 1.18, max: 1.36 };
 
 // How far a lit pixel bleeds into the glass.
 export const BLOOM = { off: 0, soft: 0.5, normal: 1, heavy: 1.7 };
@@ -267,7 +263,7 @@ export function derive(colours, { phosphor, contrast, medium = "dark" }) {
   const entry = tube ? (PHOSPHOR[phosphor] ?? null) : null;
   const given = isPalette(entry) ? entry.dark : null;
   const ratio = Array.isArray(entry) ? entry : null;
-  const reach = CONTRAST[contrast] ?? 1;
+  const reach = CONTRASTS[contrast] ?? 1;
   const plain = parse(colours.void);
 
   // What the instrument asks of each token: its own distance from its own
