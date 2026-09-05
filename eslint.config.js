@@ -6,7 +6,9 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 
 export default [
   // Build output, wherever it lands, plus what wrangler writes while it runs.
-  { ignores: ['dist', '**/dist/', '**/.wrangler/'] },
+  // `.claude/worktrees` holds whole copies of this repo, where `relay/**` no
+  // longer matches the override below and every worker global is undefined.
+  { ignores: ['dist', '**/dist/', '**/.wrangler/', '.claude/'] },
   {
     files: ['**/*.{js,jsx}'],
     languageOptions: {

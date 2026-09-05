@@ -23,7 +23,7 @@
 // browser uses, and a format written out twice is a format that drifts.
 import { decode } from "../../src/lib/lzw.js";
 import { pack, unpack } from "../../src/lib/backfill.js";
-import { createFilter } from "../../src/lib/repeat.js";
+import { createFilter, WINDOW } from "../../src/lib/repeat.js";
 
 const HOSTS = ["ws1", "ws7", "ws8"];
 const HELLO = JSON.stringify({ a: 111 }); // the subscription the feed expects
@@ -82,6 +82,26 @@ const BUCKET_MS = 2 * 60 * 1000;
 // Buckets kept: the window, the one being filled, and one of slack.
 const BUCKETS = Math.ceil(HISTORY_MS / BUCKET_MS) + 2;
 
+// How many times one address may be handed the window.
+//
+// The hour is the expensive thing here: up to MAX_HISTORY records, about 1.4 MB
+// on a busy night, sent to every socket the moment it connects. In front of it
+// there is only an `Origin` header, which a browser writes honestly and
+// anything else writes for itself, so the hour can be drawn as fast as sockets
+// can be opened by whoever finds the hostname.
+//
+// A reader reloading a tab, or a flapping train connection, is a handful of
+// connections a minute and stays well under this. Past it the socket is still
+// accepted and still gets the live feed: what is withheld is the backfill, so
+// abuse costs the same as an ordinary reader rather than being refused
+// outright, and a real reader who somehow trips it sees a map that fills from
+// now instead of one that fails.
+const CATCHUPS_PER_IP = 8;
+const CATCHUP_WINDOW_MS = 60000;
+// A ceiling on the table itself, since one entry per address is a table sized
+// by whoever is connecting.
+const ADDRESSES = 4096;
+
 export class Feed {
   constructor(state) {
     this.state = state;
@@ -94,6 +114,7 @@ export class Feed {
     this.since = 0;
     this.saved = 0;
     this.fresh = createFilter();
+    this.catchups = new Map();
     // Before anything can be served from it. A reader arriving in the first
     // moments of a new instance is exactly the reader this is for, and handing
     // them an empty window while the read was still in flight would waste the
@@ -123,8 +144,36 @@ export class Feed {
     this.state.acceptWebSocket(server);
     await this.ensure();
     this.tell(server);
-    this.catchUp(server);
+    if (this.mayCatchUp(request.headers.get("cf-connecting-ip"))) this.catchUp(server);
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /**
+   * Whether this address has already been handed the window often enough.
+   *
+   * Counted in the object rather than in the worker in front of it, because the
+   * worker is request-scoped and this is the one thing on the platform that
+   * sees every connection. It is memory only: an eviction forgets everybody,
+   * which costs one window each to whoever was over the line at the time.
+   *
+   * ponytail: fixed window per address, not a sliding one, so a burst either
+   * side of a boundary can be twice the allowance. Move to a token bucket if
+   * that is ever the shape of the abuse; it would not change the storage.
+   */
+  mayCatchUp(ip) {
+    // No address to count against: `wrangler dev` locally. Not a state a
+    // deployed request reaches, since Cloudflare sets this header itself.
+    if (!ip) return true;
+
+    const now = Date.now();
+    const seen = this.catchups.get(ip);
+    if (seen && now - seen.at < CATCHUP_WINDOW_MS) return ++seen.n <= CATCHUPS_PER_IP;
+
+    // Only ever forgotten by the next request from the same address, so the
+    // table is emptied wholesale when it grows rather than swept.
+    if (this.catchups.size >= ADDRESSES) this.catchups.clear();
+    this.catchups.set(ip, { at: now, n: 1 });
+    return true;
   }
 
   /** Brings the single upstream link up, if it is not already. */
@@ -307,9 +356,15 @@ export class Feed {
       }
       if (stale.length) this.state.storage.delete(stale).catch(() => {});
       this.history.sort((a, b) => a.at - b.at);
-      // Re-seeded, so a strike restored from storage and then reported again by
-      // the feed is still only handed over once.
-      for (const strike of this.history) this.fresh(strike.at, strike.lon, strike.lat);
+      // Re-seeded from the newest end, so a strike restored from storage and
+      // then reported again by the feed is still only handed over once. Only
+      // the filter's own length is worth walking: it holds the last WINDOW keys
+      // and feeding it the whole hour would push all but those back out again
+      // for nothing. A repeat arrives within 2.4s of its first copy, so this
+      // covers the overlap a restart can actually have. See repeat.js.
+      for (const strike of this.history.slice(-WINDOW)) {
+        this.fresh(strike.at, strike.lon, strike.lat);
+      }
       this.trim();
     } catch {
       // A window that cannot be read is a window this instance does not have.

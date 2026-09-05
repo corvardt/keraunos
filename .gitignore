@@ -35,4 +35,9 @@ dist-ssr
 /docs/*.md
 /tests.md
 
-/scripts
+# Excluded one level down rather than as a directory: git does not descend into
+# an excluded directory, so a negation under one never matches.
+/scripts/*
+# ...except the fan-out, which the other projects' copies are written by and
+# which DESIGN.txt tells the next person to run.
+!/scripts/fanout.cjs

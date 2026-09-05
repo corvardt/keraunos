@@ -23,3 +23,13 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+      # The relay is deployed on its own but is not independent: it imports
+      # lzw.js, backfill.js and repeat.js out of src/lib, so a change made for
+      # the browser can break the worker while the build above stays green. The
+      # dry run bundles it exactly as a deploy would, and needs no credentials
+      # to do it.
+      - run: npm ci
+        working-directory: relay
+      - run: npx wrangler deploy --dry-run --outdir=dist
+        working-directory: relay

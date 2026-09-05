@@ -1,0 +1,29 @@
+# The creed, enforced rather than promised. `default-src 'none'` denies every
+# fetch this page could make, and what is named below is the whole of what it
+# is allowed to reach: this host, one relay, and four services that answer with
+# pictures of weather.
+#
+# Unlike Oikos, this instrument does leave the origin, and the list is the
+# honest statement of where. Tiles arrive through `fetch` rather than through an
+# `<img>` (see field.js: the watermark and the exception body are headers and a
+# content type, which an image element cannot see), so they are connect-src and
+# not img-src.
+#
+#   view.eumetsat.int      is absent on purpose: EUMETSAT sends no CORS header,
+#                          so those two dishes are proxied by functions/msg.js
+#                          and arrive as 'self'.
+#   tilecache.rainviewer   is where api.rainviewer.com's index points today. It
+#                          is returned by the API rather than fixed, so if the
+#                          radar layer ever goes quiet with a console full of
+#                          CSP refusals, that is what moved.
+#   keraunos-relay         is VITE_FEED_URL. A different deploy, a different
+#                          line: this file is static and cannot read the env.
+#
+# The hash is of the medium script in the head, which is inline because it has
+# to run before first paint and cannot afford a round trip. Edit that script and
+# recompute:
+#   python3 -c "import re,hashlib,base64;s=re.search(r'<script>(.*?)</script>',open('index.html').read(),re.S).group(1);print(base64.b64encode(hashlib.sha256(s.encode()).digest()).decode())"
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self' 'sha256-QNyuDIuqVkPrfDaueOEu/DGWK5AtSrH4Hx66rRKci/4='; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self' wss://keraunos-relay.covardt.workers.dev https://realearth.ssec.wisc.edu https://gibs.earthdata.nasa.gov https://api.rainviewer.com https://tilecache.rainviewer.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer

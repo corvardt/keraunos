@@ -30,7 +30,7 @@
 // a feed that reports a strike up to twelve seconds late and out of order. The
 // margin is deliberate: the rate is what the sky is doing, and an hour of storm
 // over Java is not the two quiet minutes this was measured in.
-const WINDOW = 512;
+export const WINDOW = 512;
 
 /**
  * A filter for one session.
